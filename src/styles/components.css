@@ -53,6 +53,30 @@
   animation: mascot-cooking-idle 1.6s ease-in-out infinite;
 }
 
+/* ── BusinessStateBadge (Task 2.8) — CLOSED + shouldBeOpen 시 빨간 깜박 ──
+   결정 h: 세션 상태 없음 — 매 mount 마다 새로 재생 (사장님이 즉시 인지하도록).
+   1.2s ease-in-out infinite — opacity 50% 까지 떨어졌다 복귀. */
+@keyframes business-badge-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+.business-badge-blink {
+  animation: business-badge-blink 1.2s ease-in-out infinite;
+}
+
+/* ── StartBusinessCTA (Task 2.8) — 클릭 시 200ms scale(0.96) → 1 ──
+   tap 피드백. JS 측에서 setTimeout 200ms 후 클래스 해제 → 단발 모션. */
+@keyframes start-business-cta-press {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(0.96); }
+  100% { transform: scale(1); }
+}
+
+.start-business-cta-press {
+  animation: start-business-cta-press 200ms ease-out;
+}
+
 /* ── reduced motion — 모션 일괄 정적화 ──
    globals.css 가 animation-duration 0.01ms 강제하지만, 명시적 'none' 으로 한 번 더 차단.
    (DESIGN §9.5 · §9.6) */
@@ -60,7 +84,9 @@
   .dogtag-drop,
   .dogtag-pulse,
   .mascot-fade,
-  .mascot-cooking-idle {
+  .mascot-cooking-idle,
+  .business-badge-blink,
+  .start-business-cta-press {
     animation: none;
   }
 }
