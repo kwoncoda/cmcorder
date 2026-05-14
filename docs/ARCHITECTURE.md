@@ -935,7 +935,7 @@ Docker volume `chickenedak-data` (호스트 경로 = `/var/lib/docker/volumes/..
     └── logs/                   # pino 출력 (선택, 표준출력 권장)
 ```
 
-**중요:** `backups/`와 `db.sqlite`에 PII(학번·이름·이체정보) 포함. 호스트 노트북 자체 disk encryption 권장 (BitLocker / FileVault). 정산 후 N일 폐기 정책 (ADR-019, ADR-016, ADR-022)을 운영 가이드에 명시.
+**중요:** `backups/`와 `db.sqlite`에 PII(학번·이름·이체정보) 포함. 호스트 노트북 자체 disk encryption 권장 (BitLocker / FileVault). **D+7일 운영자 수동 폐기** (ADR-027 변경, 2026-05-15 · `docs/operations/pii-deletion.md`). ZIP은 학생회 클라우드 1년 보존 (감사 대비).
 
 ---
 

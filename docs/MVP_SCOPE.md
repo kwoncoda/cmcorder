@@ -87,7 +87,7 @@
 | **자동 ZIP 2시간 스냅샷** | 6개 회전 (= 12시간 보존창), Docker volume `backups/` | ADR-022 (2026-05-13 A 결정: 30분 → 2시간) |
 | **수동 ZIP 정산 백업** | manifest + orders + coupons + menu-snapshot + PDF + images | ADR-016 |
 | **Docker compose** | `up -d / restart / logs -f / ps`, `restart: always`, named volume | ADR-023 |
-| **PII 자동 삭제** | 정산 후 N일 (7-14일) | ADR-021 |
+| ~~**PII 자동 삭제**~~ → **PII 수동 폐기** | 정산 후 7일 내 운영자 수동 (ADR-027 변경, 2026-05-15) · `docs/operations/pii-deletion.md` | ADR-021 · ADR-027 |
 | **헬스체크** | `/healthz` 엔드포인트 | ADR-023 |
 | **회귀 테스트** | Pattern B 4 케이스 + 쿠폰 거부 10+ + 상태 전이 13 + 정산 마감 가드 4 + SSE 누수 | ADR-025 |
 | **영업 상태 머신 (G13, 신규)** | 2-state (CLOSED/OPEN). CLOSED → OPEN: 관리자 "장사 시작" 클릭. OPEN → CLOSED: 정산 마감 트리거 시 자동 (ADR-012 가드 통과 후). CLOSED 상태에서 모든 사용자 API 거부 (HTTP 423) + 사용자 진입 시 안내 화면 redirect (middleware) | G13 (2026-05-13 신규) |

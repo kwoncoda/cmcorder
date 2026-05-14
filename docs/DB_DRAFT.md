@@ -12,7 +12,7 @@
 1. **SQLite + WAL 모드** — `PRAGMA journal_mode=WAL`로 동시 읽기 허용. 30 동시 사용자 + 5-10 관리자 환경에 적합.
 2. **Raw SQL only** — ORM 미사용. `db/repositories/*.js`가 prepared statement로 쿼리 실행.
 3. **마이그레이션 = 정렬된 SQL 파일** — `db/migrations/NNN-name.sql`을 부팅 시 `_migrations` 테이블 검사 후 미적용분 순차 실행.
-4. **PII 컬럼 명시** — 학번·이름·이체정보·은행·테이블 번호·외부인 토큰. 정산 후 N일 자동 삭제 정책 대상 (ADR-019, ADR-021).
+4. **PII 컬럼 명시** — 학번·이름·이체정보·은행·테이블 번호·access/external 토큰. 정산 후 7일 내 **운영자 수동 폐기** 대상 (ADR-027 변경, 2026-05-15 — `docs/operations/pii-deletion.md`).
 5. **금액은 정수(원)** — Float 미사용. 결제 정확도 보장.
 6. **시각은 UTC ISO 8601 + business_date 별도 컬럼** — 일자 기준 집계는 `business_date`로 (KST 기준 마감 가변, ADR-014, ADR-018).
 7. **외래 키 강제** — `PRAGMA foreign_keys=ON` 부팅 시 설정.
@@ -723,22 +723,24 @@ INSERT INTO system_settings (key, value) VALUES
 
 ---
 
-## 6. PII 분류 + 보존 정책
+## 6. PII 분류 + 보존 정책 (ADR-027 변경, 2026-05-15)
 
-| 컬럼 | PII 등급 | 보존 정책 |
+**변경:** 자동 cron 잡 도입 보류. 일회성 2일 운영이므로 운영자 D+7일 수동 폐기로 대체. 절차: `docs/operations/pii-deletion.md`.
+
+| 컬럼 | PII 등급 | 보존 정책 (수동 폐기) |
 |---|---|---|
-| `orders.student_id` | 높음 (개인 식별) | 정산 후 N일 (권장 7~14일) 후 NULL 처리 |
-| `orders.customer_name` | 높음 | 동일 |
-| `orders.transfer_bank`, `transfer_alt_name` | 중간 | 동일 |
-| `orders.external_token` | 낮음 (랜덤) | `token_expires_at` 24h 후 NULL 처리 |
-| `orders.table_no` | 낮음 | 보관 |
-| `used_coupons.*` | 높음 | 정산 후 N일 후 행 삭제 |
-| `rejected_coupons.student_id, name, ip` | 높음 | 정산 후 N일 후 행 삭제 |
-| `order_events` | 낮음 | 보관 (인수인계 가치) |
-| `settlement_snapshots.summary_json` | 중간 (집계 PII) | 영구 보관 (학생회 회의 자료) — JSON에 학번/이름은 *집계 후 제외* 권장 |
-| `backups/*.zip` | 높음 | 정산 후 N일 USB 회수·폐기 (운영 가이드) |
+| `orders.student_id` | 높음 (개인 식별) | D+7일 수동 NULL 처리 |
+| `orders.name` | 높음 | D+7일 수동 NULL/(폐기) 마킹 |
+| `orders.bank`, `custom_bank`, `other_name`, `depositor_name` | 중간 | D+7일 수동 NULL |
+| `orders.external_token`, `access_token` | 낮음 (랜덤) | D+7일 수동 NULL |
+| `orders.table_no` | 낮음 | 보관 (집계용) |
+| `used_coupons.*` | 높음 | D+7일 수동 DELETE |
+| `order_events` (있을 시) | 낮음 | 보관 (인수인계 가치) |
+| `settlement_snapshots.summary_json` | 중간 (집계 PII) | 영구 보관 — JSON에 학번/이름은 *집계 후 제외* |
+| `backups/*.zip` (PII 포함) | 높음 | D+7일 학생회 클라우드 1년 보존 (감사 대비), 이후 폐기 |
 
-**삭제 작업:** `jobs/pii-purge.js`를 정산 마감 + N일 후 1회 실행. 또는 운영진이 `node scripts/purge-pii.js --before=YYYY-MM-DD` 수동 실행 (1차 운영은 수동 권장).
+**실행:** `docs/operations/pii-deletion.md` §4 sqlite3 명령 + named volume 백업 + 삭제.
+~~`jobs/pii-purge.js`~~ — 자동 잡 도입 보류 (ADR-027).
 
 ---
 
@@ -816,6 +818,6 @@ if (result !== 'ok') {
 ## 10. 미정·후속 검토
 
 - **메뉴 이미지 저장:** 파일 시스템(`/app/data/images/`) vs DB BLOB. **추천: 파일 시스템** (간단·CDN 불필요).
-- **PII purge 자동화:** 1차 운영은 수동, 2차에 자동화 권장.
+- **PII purge 자동화:** 일회성 운영 — Phase 2 가정상 X. 운영자 수동 폐기 확정 (ADR-027).
 - **`order_events` 채택 여부:** MVP 부담이면 Phase 2로 미룸. *추천: MVP 포함* (인수인계 가치 큼, 비용 INSERT 1건/상태변경).
 - **`settlement_snapshots.summary_json` 스키마:** 변경 가능성 있음. JSON 안에 schema_version 필드 권장.

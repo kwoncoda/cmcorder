@@ -268,7 +268,7 @@
 | F-I-003 | Docker named volume 영속화 (db·backups·images·logs) | P0 | ADR-023 |  |
 | F-I-004 | 헬스체크 `/healthz` | P0 | ADR-023 |  |
 | F-I-005 | 구조화 로그 (pino 9.x → Docker logs) | P0 | ADR-024 |  |
-| F-I-006 | PII 자동 삭제 (정산 후 N일) | P0 | ADR-021 | cron 또는 startup task |
+| ~~F-I-006~~ | ~~PII 자동 삭제 (cron)~~ → **운영자 수동 폐기 절차 (ADR-027 변경, 2026-05-15)** | P0 | ADR-021 · ADR-027 | `docs/operations/pii-deletion.md` |
 
 ### 5.2 테스트·QA
 
