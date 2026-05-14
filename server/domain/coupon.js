@@ -1,0 +1,91 @@
+// ============================================================
+// Task 6.3 — 쿠폰 검증 (ADR-019 변경).
+//
+// 학번 정규식 — ADR-019 변경 (prefix `202637` → 학과 코드 `37`만):
+//   `^\d{2}\d{2}37\d{3}$`
+//   - [시작년 2자리] [입학년 2자리] [학과 37] [일련번호 3자리] = 9자리
+//   - 예: 202637001, 192237012, 222537199
+//
+// 4단계 검증:
+//   1. format (정규식)
+//   2. department (학과 코드 37 — 정규식에 포함)
+//   3. name (비어있지 않음, trim 후)
+//   4. duplicate (used_coupons UNIQUE)
+//
+// 절대 깨지면 안 되는 ADR (CLAUDE.md):
+//   - ADR-019/021 학번 정규식 + 이름 + used_coupons UNIQUE
+// ============================================================
+
+/**
+ * 학번 정규식 (ADR-019 변경).
+ * 9자리, 5-6번째 자리가 `37`.
+ */
+export const STUDENT_ID_PATTERN = /^\d{2}\d{2}37\d{3}$/;
+
+/**
+ * CouponError — 쿠폰 검증 실패.
+ * @property {string} code — INVALID_FORMAT · NAME_REQUIRED · ALREADY_USED
+ */
+export class CouponError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'CouponError';
+    this.code = code;
+  }
+}
+
+/**
+ * 쿠폰 검증 — 4단계.
+ * 통과 시 { ok, studentId, name(trimmed) } 반환. 실패 시 CouponError throw.
+ *
+ * @param {object} input
+ * @param {string} input.studentId
+ * @param {string} input.name
+ * @param {import('better-sqlite3').Database} db
+ */
+export function validateCoupon({ studentId, name }, db) {
+  // 1. format + 2. department (정규식이 둘 다 검증)
+  if (!STUDENT_ID_PATTERN.test(studentId)) {
+    throw new CouponError(
+      '학번 형식이 올바르지 않습니다 (학과 코드 37 필요)',
+      'INVALID_FORMAT',
+    );
+  }
+  // 3. name
+  if (!name?.trim()) {
+    throw new CouponError('이름이 필요합니다', 'NAME_REQUIRED');
+  }
+  const trimmedName = name.trim();
+  // 4. duplicate
+  const existing = db
+    .prepare('SELECT id FROM used_coupons WHERE student_id = ? AND name = ?')
+    .get(studentId, trimmedName);
+  if (existing) {
+    throw new CouponError('이미 사용된 쿠폰입니다', 'ALREADY_USED');
+  }
+  return { ok: true, studentId, name: trimmedName };
+}
+
+/**
+ * 쿠폰 소비 — validateCoupon 후 used_coupons INSERT.
+ * UNIQUE 위반 시 CouponError로 변환 (race condition 가드).
+ *
+ * @param {object} input
+ * @param {string} input.studentId
+ * @param {string} input.name
+ * @param {number} input.orderId
+ * @param {import('better-sqlite3').Database} db
+ */
+export function consumeCoupon({ studentId, name, orderId }, db) {
+  const { name: trimmedName } = validateCoupon({ studentId, name }, db);
+  try {
+    db.prepare(
+      'INSERT INTO used_coupons (student_id, name, order_id) VALUES (?, ?, ?)',
+    ).run(studentId, trimmedName, orderId);
+  } catch (err) {
+    if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      throw new CouponError('이미 사용된 쿠폰입니다', 'ALREADY_USED');
+    }
+    throw err;
+  }
+}
