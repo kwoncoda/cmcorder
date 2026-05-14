@@ -102,6 +102,17 @@ describe('OrderDetailPage', () => {
     expect(screen.queryByTestId('action-start_cooking')).not.toBeInTheDocument();
   });
 
+  it('★ HOLD 상태일 때 "이체 확인" + "취소" 표시 — ADR-025 HOLD → PAID 회귀', async () => {
+    apiFetch.mockResolvedValue({ ...SAMPLE_TRANSFER_REPORTED, status: 'HOLD' });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('action-confirm_transfer')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('action-cancel')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-hold')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-start_cooking')).not.toBeInTheDocument();
+  });
+
   it('★ 액션 클릭 시 apiFetch POST 호출 (transition 페이로드)', async () => {
     apiFetch.mockResolvedValueOnce(SAMPLE_PAID);
     renderPage();
