@@ -241,8 +241,8 @@
 
 | ID | 기능 | 우선순위 | 관련 ADR | 비고 |
 |---|---|:---:|---|---|
-| F-S-010 | SSE `/api/orders/:id/stream` (snapshot, status, keepalive) | P0 | ADR-015 | EventSource 자동 재연결 |
-| F-S-011 | SSE 30 동시 연결 메모리 누수 방지 | P0 | ADR-015 | ADR-025 회귀 |
+| ~~F-S-010~~ | ~~SSE `/api/orders/:id/stream`~~ → **5초 폴링 fallback (ADR-015 변경, 2026-05-15)** | P0 | ADR-015 변경 | `useOrderPolling` hook |
+| ~~F-S-011~~ | ~~SSE 30 동시 연결 메모리 누수 방지~~ → 폴링 부담 모니터 (5초 × 30명 ≤ 6 req/s) | P0 | ADR-015 변경 | 운영 가이드 §정산 모니터 |
 | F-S-012 | 입력 검증 (zod 스키마 일관) | P0 | ADR-024 |  |
 | F-S-013 | 보안 헤더 (helmet 8.x 기본) | P0 | ADR-024 |  |
 | **F-S-015** | 영업 외 사용자 middleware (G13, 신규) — CLOSED 상태 시 사용자 GET 경로 → /closed redirect, POST /api/orders·/api/orders/:id/transfer-report → HTTP 423 거부. /admin/* 경로는 영향 X | **P0** | G13 (2026-05-13 신규) | Express middleware |
