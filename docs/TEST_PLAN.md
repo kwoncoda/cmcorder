@@ -401,49 +401,26 @@ describe('POST /api/orders (통합)', () => {
 
 ---
 
-## 7. SSE 통합 테스트 (특수)
+## 7. ~~SSE 통합 테스트~~ → **폴링 hook 테스트 (ADR-015 변경, 2026-05-15)**
 
-SSE는 supertest로 단순 GET이 안 되므로:
+**상태:** SSE 미구현. SSE 통합 테스트 → `src/hooks/__tests__/useOrderPolling.test.jsx`로 대체.
 
 ```javascript
-import { EventSource } from 'eventsource';   // 또는 Node 21+ 내장
-import { createServer } from 'http';
-
-it('상태 변경 시 클라가 SSE 이벤트 수신', async () => {
-  const app = createApp({ db });
-  const server = createServer(app).listen(0);
-  const port = server.address().port;
-
-  const order = createTestOrder(db);
-  const url = `http://localhost:${port}/api/orders/${order.id}/stream?student_id=${order.student_id}&order_no=${order.order_no}`;
-  const es = new EventSource(url);
-
-  const events = [];
-  es.addEventListener('snapshot', e => events.push({ type: 'snapshot', data: JSON.parse(e.data) }));
-  es.addEventListener('status', e => events.push({ type: 'status', data: JSON.parse(e.data) }));
-
-  await waitFor(() => events.length >= 1);   // snapshot 수신
-  expect(events[0].type).toBe('snapshot');
-
-  // 상태 변경 트리거
-  await transitionOrder(db, order.id, 'PAID');
-  await transitionOrder(db, order.id, 'COOKING');
-
-  await waitFor(() => events.length >= 3);
-  expect(events[1].data.status).toBe('PAID');
-  expect(events[2].data.status).toBe('COOKING');
-
-  es.close();
-  server.close();
-});
+// 실제 회귀: src/hooks/__tests__/useOrderPolling.test.jsx
+// - 5초 폴링 + AbortController + cleanup
+// - status 전이 시 onStatusChange 콜백
+// - BusinessClosedError(423) → 전역 위임
+// - 인증 실패(401/403) → error state
 ```
 
-**테스트 대상 케이스:**
-- snapshot 이벤트 1회 수신
-- 상태 변경 시 status 이벤트 push
-- 인증 실패 시 401 (SSE 시작 전)
-- keepalive 15초 주기 (fake timer)
-- 연결 끊김 시 hub Set에서 제거 (메모리 누수 방지)
+**테스트 대상 케이스 (현행):**
+- 첫 fetch 후 snapshot 표시 (`useOrderPolling`)
+- status 전이 시 콜백 발화 (READY 진동 등)
+- `enabled=false` 시 폴링 X
+- StrictMode mount-unmount-mount 시 활성 폴링 1개
+- BusinessClosedError 전역 위임
+
+SSE 도입 시 (Phase 2) 동일 시그니처 hook으로 무중단 전환 가능.
 
 ---
 
