@@ -1,0 +1,32 @@
+# 치킨이닭 운영 compose — ADR-023.
+# 단일 컨테이너: Vite 빌드 결과 + Express + SQLite (named volume).
+# 운영 절차: `docker compose up -d` → `docker compose logs -f` → `docker compose restart`.
+
+services:
+  app:
+    build: .
+    image: chickenedak:latest
+    container_name: chickenedak
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # .env의 NODE_ENV(=development for 로컬)를 운영에서는 production으로 override.
+      NODE_ENV: production
+      PORT: 3000
+      # SQLite 파일은 named volume 안쪽 경로로 강제 — 컨테이너 재기동에도 데이터 보존.
+      DB_PATH: /data/order.sqlite
+    volumes:
+      - chickenedak-data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  chickenedak-data:
+    driver: local
