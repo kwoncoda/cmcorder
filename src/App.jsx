@@ -4,7 +4,7 @@
 // - 관리자 6 페이지: 학생회 5명만 진입이라 React.lazy 로 코드 스플릿
 //   (USER_FLOW §3.5 8조 — 번들 위생).
 // - ErrorBoundary 가 렌더 단계 throw 를 잡아 ErrorPage(code=500) 로 대체.
-// - Suspense fallback 은 임시 PageLoading. Phase 2.11 LoadingState 컴포넌트로 교체 예정.
+// - Suspense fallback: Task 2.11 LoadingState 위임. PageLoading 은 testid 호환 유지 래퍼.
 // - 라우터 비포함 형태 `AppRoutes` 를 별도 export → 테스트는 MemoryRouter 로 감싸 격리.
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -20,6 +20,7 @@ import ClosedPage from './pages/customer/ClosedPage.jsx';
 import ErrorPage from './pages/customer/ErrorPage.jsx';
 
 import ErrorBoundary from './components/ErrorBoundary.jsx';
+import LoadingState from './components/state/LoadingState.jsx';
 
 // 관리자 6 페이지 — React.lazy 로 별도 chunk 분리.
 const AdminLoginPage = lazy(() => import('./pages/admin/LoginPage.jsx'));
@@ -33,13 +34,17 @@ const AdminSettlementPage = lazy(() =>
   import('./pages/admin/SettlementPage.jsx'),
 );
 
-// 임시 로딩 placeholder — Phase 2.11 에서 LoadingState 컴포넌트로 교체.
-// 테스트에서 직접 검증할 수 있도록 named export.
+// Suspense fallback — Task 2.11 LoadingState 위임 래퍼.
+// minimumDelay=0 — Suspense fallback 은 시점이 명확하므로 깜박 회피 지연 불필요.
+// data-testid="page-loading" — 기존 App.test.jsx 회귀 호환 (...rest 로 전달).
 export function PageLoading() {
   return (
-    <div data-testid="page-loading" role="status" aria-live="polite">
-      로딩 중…
-    </div>
+    <LoadingState
+      variant="page"
+      label="로딩 중…"
+      minimumDelay={0}
+      data-testid="page-loading"
+    />
   );
 }
 
