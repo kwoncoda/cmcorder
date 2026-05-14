@@ -42,14 +42,24 @@ describe('pricing — ADR-020 ★★★ 4 회귀', () => {
     );
   });
 
-  it('★★★ 회귀 4: 쿠폰 적용 시 10% 할인', () => {
+  it('★★★ 회귀 4: 쿠폰 적용 시 1,000원 정액 할인 (ADR-019)', () => {
     const r = calculatePrice(
       { items: [{ menu_id: 1, quantity: 1 }], coupon: { used: true } },
       db,
     );
-    // 18000 − floor(18000 * 0.1) = 18000 − 1800 = 16200
-    expect(r.total_price).toBe(16200);
-    expect(r.discount).toBe(1800);
+    // 18000 − 1000 = 17000 (정액)
+    expect(r.total_price).toBe(17000);
+    expect(r.discount).toBe(1000);
+  });
+
+  it('★ 쿠폰 정액 할인 — subtotal이 1000 미만이어도 음수 방어', () => {
+    // 가장 싼 메뉴(콜라 2000원)도 1000원 할인 적용 가능 — 음수 X 회귀
+    const r = calculatePrice(
+      { items: [{ menu_id: 7, quantity: 1 }], coupon: { used: true } },
+      db,
+    );
+    expect(r.total_price).toBe(1000); // 2000 - 1000
+    expect(r.discount).toBe(1000);
   });
 });
 

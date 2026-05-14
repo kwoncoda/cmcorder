@@ -126,7 +126,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
 });
 
 describe('사용자 API — POST /api/orders + 쿠폰', () => {
-  it('쿠폰 사용 학생 — 10% 할인 + used_coupons 등록', async () => {
+  it('쿠폰 사용 학생 — 1,000원 정액 할인 + used_coupons 등록 (ADR-019)', async () => {
     const db = freshDb();
     const app = createApp({ db });
     const res = await request(app)
@@ -139,8 +139,8 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         coupon: { used: true },
       });
     expect(res.status).toBe(200);
-    // 18000 - floor(18000 * 0.1) = 18000 - 1800 = 16200
-    expect(res.body.total_price).toBe(16200);
+    // 18000 - 1000 = 17000 (정액 ADR-019)
+    expect(res.body.total_price).toBe(17000);
 
     // used_coupons 확인
     const used = db

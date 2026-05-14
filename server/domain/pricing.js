@@ -4,14 +4,14 @@
 // 책임:
 //   - 클라이언트가 보낸 가격·합계·할인을 *전혀 받지 않는다*. 시그니처가 차단.
 //   - 서버는 menu_id + quantity만 받아 DB lookup으로 가격을 자체 계산.
-//   - 쿠폰 적용 시 10% 할인 (floor 정수 원 단위).
+//   - 쿠폰 적용 시 1,000원 정액 할인 (ADR-019).
 //   - 트랜잭션 시점 DB 가격을 사용 — 메뉴 단가 변경 시 주문 시점 값으로 스냅샷.
 //
 // 회귀 보호 (server/domain/__tests__/pricing.test.js):
 //   1) 정상: menu_id+qty → total 계산
 //   2) 클라 total 무시: noise 필드 끼워도 재계산
 //   3) 존재 X menu_id 거부
-//   4) 쿠폰 10% 할인
+//   4) 쿠폰 1,000원 정액 할인 (subtotal 미만 보장 — 음수 방어)
 //
 // 절대 깨지면 안 되는 ADR (CLAUDE.md):
 //   - ADR-020 4 회귀 케이스
@@ -35,7 +35,7 @@ export class PricingError extends Error {
  *
  * @param {object} input
  * @param {Array<{menu_id: number, quantity: number}>} input.items
- * @param {object|null} [input.coupon] — { used: true } 시 10% 할인
+ * @param {object|null} [input.coupon] — { used: true } 시 1,000원 정액 할인 (ADR-019)
  * @param {import('better-sqlite3').Database} db
  * @returns {{ total_price: number, items_priced: Array, discount: number }}
  */
@@ -82,11 +82,12 @@ export function calculatePrice({ items, coupon }, db) {
     });
   }
 
-  // 쿠폰 — 단순화: 10% 할인 (Phase 4 명세 미정 — 단순 한정).
-  // floor로 정수 원 단위 보존 (ADR-020 정수 원 가드).
+  // 쿠폰 — 1,000원 정액 할인 (ADR-019).
+  // Math.min으로 subtotal 초과 방지 (음수 total 회귀).
+  const COUPON_DISCOUNT = 1000;
   let discount = 0;
   if (coupon?.used) {
-    discount = Math.floor(subtotal * 0.1);
+    discount = Math.min(COUPON_DISCOUNT, subtotal);
   }
 
   return {

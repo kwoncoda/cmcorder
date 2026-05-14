@@ -479,7 +479,7 @@
 2. 학과 코드 '37' 위치 강제 (컴퓨터모바일융합과)
 3. 이름이 비어있지 않음
 4. 같은 (학번, 이름) 조합이 used_coupons UNIQUE에 없는지
-모두 통과 → 1,000원 할인 적용 (또는 10% 할인 — Task 6.2 단순 구현)
+모두 통과 → 1,000원 정액 할인 적용 (server/domain/pricing.js — Math.min(1000, subtotal) 음수 방어)
 ```
 
 **테스트 회귀:** `server/domain/__tests__/coupon.test.js` 12 케이스.
