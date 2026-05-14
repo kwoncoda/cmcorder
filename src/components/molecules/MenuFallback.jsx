@@ -18,10 +18,12 @@ const CATEGORY_EMOJI = {
 };
 
 // size → Tailwind 클래스 매핑 (이모지 크기).
+// 토큰: text-2xl=32px / text-3xl=48px / text-4xl=64px.
+// md = 일반 카드 (48px), lg = 강조용 (64px) — React/web 컨벤션상 lg > md.
 const SIZE_CLASSES = {
-  sm: 'text-2xl',
-  md: 'text-4xl',
-  lg: 'text-3xl', // 메뉴 카드 — 64px 이모지 + 작은 이름
+  sm: 'text-2xl', // 32px — 리스트 small
+  md: 'text-3xl', // 48px — 일반 메뉴 카드
+  lg: 'text-4xl', // 64px — 강조 (상세·CTA)
 };
 
 const MenuFallback = forwardRef(function MenuFallback(

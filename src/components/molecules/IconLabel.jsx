@@ -3,7 +3,7 @@
 // - 이모지 string 은 자동 aria-hidden 처리 (decorative).
 // - ReactNode 는 호출자가 a11y 직접 처리 (Icon atom 사용 권장).
 // - text 는 일반 텍스트 — SR이 읽음.
-// gap: 'xs' (2px), 'sm' (8px), 'md' (12px) — spacing 토큰 매핑.
+// gap: 'xs' (4px = --space-2xs), 'sm' (8px = --space-xs), 'md' (12px = --space-sm).
 // inline: true 시 inline-flex (텍스트 흐름 내), false 시 flex (블록).
 import { forwardRef } from 'react';
 
