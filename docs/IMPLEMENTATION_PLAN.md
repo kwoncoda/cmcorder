@@ -417,7 +417,7 @@ chickenedak/
 
 ## Task 2.7: TransferReportForm + AdminCardColumn
 
-- [ ] **목적:** 이체 확인 폼 (은행 콤보 + "다른 이름 이체" 체크박스) + 본부 대시보드 칸반 컬럼.
+- [x] **목적:** 이체 확인 폼 (은행 콤보 + "다른 이름 이체" 체크박스) + 본부 대시보드 칸반 컬럼.
 - **완료 기준:**
   - 은행 6개 옵션 + "기타" 직접 입력
   - "다른 이름 이체" 체크 시 추가 이름 input 활성 — react-hook-form `watch('useOtherName')` (Controller X — re-render 최소화)
