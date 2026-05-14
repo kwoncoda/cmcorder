@@ -56,12 +56,23 @@ describe('BoothMinimapModal', () => {
     expect(onClose).toHaveBeenCalledWith('top-x');
   });
 
-  it('외부(backdrop) 클릭 시 onClose("backdrop")', () => {
+  it('★ 외부 backdrop 클릭 시 onClose("backdrop") — 별도 backdrop 레이어 (리뷰 fix I-2)', () => {
     const onClose = vi.fn();
     render(<BoothMinimapModal open myTableNo={5} onClose={onClose} />);
-    // backdrop = dialog 컨테이너 자기 자신 (e.target === e.currentTarget).
-    fireEvent.click(screen.getByTestId('booth-minimap-modal'));
+    // backdrop 은 별도 absolute 레이어 (data-testid="modal-backdrop").
+    fireEvent.click(screen.getByTestId('modal-backdrop'));
     expect(onClose).toHaveBeenCalledWith('backdrop');
+  });
+
+  it('★ 콘텐츠 영역(footer) 클릭은 backdrop 닫기 발동 X (리뷰 fix I-2)', () => {
+    const onClose = vi.fn();
+    render(<BoothMinimapModal open myTableNo={5} onClose={onClose} />);
+    // footer (콘텐츠 컨테이너 내부) 클릭은 backdrop 으로 새지 않아야 한다.
+    // 하단 닫기 버튼의 부모 footer 영역을 클릭.
+    const footer = screen.getByTestId('modal-close-bottom').closest('footer');
+    fireEvent.click(footer);
+    // backdrop reason 으로 호출되지 않아야 함 (다른 reason 은 무관).
+    expect(onClose).not.toHaveBeenCalledWith('backdrop');
   });
 
   it('Esc 키 시 onClose("escape")', () => {
@@ -162,6 +173,59 @@ describe('BoothMinimapModal', () => {
       <BoothMinimapModal open={false} myTableNo={5} onClose={() => {}} />,
     );
     expect(document.body.style.overflow).toBe('auto');
+  });
+
+  it('★ 부모가 onClose 를 매 렌더 새 함수로 전달해도 effect 재실행 X (리뷰 fix I-1)', () => {
+    // 안티패턴 부모 시뮬: 매 렌더 새 onClose 함수 — latest ref 패턴 검증.
+    function Parent({ open }) {
+      return (
+        <BoothMinimapModal
+          open={open}
+          myTableNo={5}
+          onClose={() => {}}
+        />
+      );
+    }
+    const { rerender } = render(<Parent open={true} />);
+    // 최초 마운트: 닫기 버튼 포커스 + body overflow=hidden.
+    expect(screen.getByTestId('modal-close-bottom')).toHaveFocus();
+    expect(document.body.style.overflow).toBe('hidden');
+
+    // 다른 요소로 포커스 이동 — effect 가 재실행되면 다시 닫기 버튼으로 끌려감.
+    const otherBtn = document.createElement('button');
+    otherBtn.textContent = '딴 곳';
+    document.body.appendChild(otherBtn);
+    otherBtn.focus();
+    expect(document.activeElement).toBe(otherBtn);
+
+    // rerender 여러 번 — 매 렌더 새 onClose, effect 가 재실행되면 안 됨.
+    rerender(<Parent open={true} />);
+    rerender(<Parent open={true} />);
+    rerender(<Parent open={true} />);
+
+    // 검증 1: 포커스가 그대로 유지 (effect 재실행 X → 닫기 버튼으로 안 끌려감).
+    expect(document.activeElement).toBe(otherBtn);
+    // 검증 2: body overflow 그대로 'hidden' (effect cleanup → reapply 흔적 X).
+    expect(document.body.style.overflow).toBe('hidden');
+
+    document.body.removeChild(otherBtn);
+  });
+
+  it('★ Esc 키 핸들러는 항상 최신 onClose 사용 (latest ref — 리뷰 fix I-1)', () => {
+    // 부모가 onClose 를 교체해도 Esc 핸들러는 최신 콜백을 호출해야 한다.
+    const firstOnClose = vi.fn();
+    const secondOnClose = vi.fn();
+    const { rerender } = render(
+      <BoothMinimapModal open myTableNo={5} onClose={firstOnClose} />,
+    );
+    // 첫 onClose 교체 — effect 는 재실행되면 안 되지만 ref 는 최신을 가리킨다.
+    rerender(
+      <BoothMinimapModal open myTableNo={5} onClose={secondOnClose} />,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // 최신 onClose 만 호출되어야 함.
+    expect(firstOnClose).not.toHaveBeenCalled();
+    expect(secondOnClose).toHaveBeenCalledWith('escape');
   });
 
   it('a11y 위반 없음 (axe-core)', async () => {
