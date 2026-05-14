@@ -32,12 +32,15 @@ export function nextOrderNo(db, operating_date) {
 export function createOrder(db, meta) {
   const tx = db.transaction(() => {
     const no = nextOrderNo(db, meta.operating_date);
+    // P0-4 (Codex 리뷰): 모든 주문에 access_token 발급. 외부인은 external_token과
+    // 동일 값 재사용(QR 공유 호환), 학생은 신규 UUID. token은 sessionStorage/URL로 전달.
+    const access_token = meta.access_token ?? null;
     const result = db
       .prepare(
         `INSERT INTO orders
          (no, operating_date, name, student_id, is_external, external_token,
-          delivery_type, table_no, total_price)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          access_token, delivery_type, table_no, total_price)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         no,
@@ -46,6 +49,7 @@ export function createOrder(db, meta) {
         meta.student_id ?? null,
         meta.is_external ? 1 : 0,
         meta.external_token ?? null,
+        access_token,
         meta.delivery_type ?? 'dineIn',
         meta.table_no ?? null,
         meta.total_price,

@@ -90,7 +90,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
     expect(res.body.total_price).toBe(18000);
   });
 
-  it('외부인 + 토큰 생성', async () => {
+  it('외부인 + 토큰 생성 (P0-4: external_token 응답 미노출, access_token만 노출)', async () => {
     const app = createApp({ db: freshDb() });
     const res = await request(app)
       .post('/api/orders')
@@ -101,7 +101,10 @@ describe('사용자 API — POST /api/orders (정상)', () => {
       });
     expect(res.status).toBe(200);
     expect(res.body.is_external).toBe(true);
-    expect(res.body.external_token).toBeTruthy();
+    // P0-4: external_token은 응답에서 노출 X. POST 응답에만 access_token 포함.
+    expect(res.body.external_token).toBeUndefined();
+    expect(typeof res.body.access_token).toBe('string');
+    expect(res.body.access_token.length).toBeGreaterThan(10);
   });
 
   it('items 비어있으면 400', async () => {
@@ -287,25 +290,98 @@ describe('사용자 API — 영업 외 가드', () => {
 });
 
 describe('사용자 API — GET /api/orders/:id', () => {
-  it('생성 후 조회', async () => {
+  it('생성 후 access_token 으로 조회', async () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     expect(create.status).toBe(200);
+    // P0-4: POST 응답에 access_token 포함
+    expect(typeof create.body.access_token).toBe('string');
+    expect(create.body.access_token.length).toBeGreaterThan(10);
 
-    const get = await request(app).get(`/api/orders/${create.body.id}`);
+    const get = await request(app)
+      .get(`/api/orders/${create.body.id}?token=${create.body.access_token}`);
     expect(get.status).toBe(200);
     expect(get.body.id).toBe(create.body.id);
     expect(get.body.no).toBe(create.body.no);
+    // P0-4: GET 응답에서 access_token, external_token 미노출
+    expect(get.body.access_token).toBeUndefined();
+    expect(get.body.external_token).toBeUndefined();
+  });
+
+  it('P0-4 — token 없이 조회 → 401 UNAUTHORIZED', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+      });
+    const get = await request(app).get(`/api/orders/${create.body.id}`);
+    expect(get.status).toBe(401);
+    expect(get.body.error).toBe('UNAUTHORIZED');
+  });
+
+  it('P0-4 — 잘못된 token → 403 FORBIDDEN', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+      });
+    const get = await request(app)
+      .get(`/api/orders/${create.body.id}?token=wrong-token-value`);
+    expect(get.status).toBe(403);
+    expect(get.body.error).toBe('FORBIDDEN');
+  });
+
+  it('P0-4 — 외부인 주문도 access_token 발급되고 동일 인증', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+      });
+    expect(create.status).toBe(200);
+    expect(typeof create.body.access_token).toBe('string');
+
+    const get = await request(app)
+      .get(`/api/orders/${create.body.id}?token=${create.body.access_token}`);
+    expect(get.status).toBe(200);
+    expect(get.body.external_token).toBeUndefined();
+    expect(get.body.access_token).toBeUndefined();
+  });
+
+  it('P0-4 — 타인 주문 ID + 본인 token → 403 FORBIDDEN (ID 추측 차단)', async () => {
+    const app = createApp({ db: freshDb() });
+    const a = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A' });
+    const b = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B' });
+    expect(a.body.id).not.toBe(b.body.id);
+
+    // A 의 token으로 B 의 주문 조회 시도
+    const cross = await request(app)
+      .get(`/api/orders/${b.body.id}?token=${a.body.access_token}`);
+    expect(cross.status).toBe(403);
   });
 
   it('존재 X → 404 ORDER_NOT_FOUND', async () => {
     const app = createApp({ db: freshDb() });
-    const res = await request(app).get('/api/orders/9999');
+    // P0-4: 토큰 없으면 401 우선. 토큰 있고 주문이 없으면 404.
+    const res = await request(app).get('/api/orders/9999?token=anything');
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('ORDER_NOT_FOUND');
   });

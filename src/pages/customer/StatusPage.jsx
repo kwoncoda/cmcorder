@@ -1,20 +1,14 @@
-// C-6 조리 현황 페이지 — Task 4.7 (폴링 fallback + timeline 미니뷰 + READY 진동·깜박).
-//
-// 설계 (§3.5 1조 — 페이지 ≤120줄):
-//  - useApi: 초기 snapshot (새로고침 후 직진입 호환).
-//  - useOrderPolling: 5초 폴링 — 서버 SSE 라우트 미존재 → C-1 fallback.
-//    (서버 SSE 구현 후 useOrderStream 으로 복귀 가능 — 시그니처 동일).
-//  - onStatusChange (§3.5 5조): 진동·깜박은 이벤트 핸들러. prev !== 'READY' && next === 'READY' 시만.
-//    useEffect deps에 status 두지 X — 새로고침 후 READY 직진입 시 진동 0회.
-//  - aria-live polite — 상태 변경 시 SR announce. 연결 끊김 시 안내.
-//  - 3분기: Loading / Error / 404 redirect. OrderTimeline 미니뷰는 ADR-010 시각만.
+// C-6 조리 현황 — Task 4.7 (§3.5 1조 ≤120줄, 폴링 + READY 진동·깜박).
+//  - useApi 초기 snapshot · useOrderPolling 5초 fallback · onStatusChange 부수효과.
+//  - P0-4: useOrderToken으로 ?token= 자동. aria-live · 3분기 Loading/Error/404 redirect.
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
 import { useOrderPolling } from '../../hooks/useOrderPolling.js';
 import { apiFetch } from '../../api/client.js';
 import { OrderSchema } from '../../api/schemas.js';
 import { API } from '../../api/routes.js';
+import { useOrderToken } from '../../hooks/useOrderToken.js';
 import OrderTimeline from '../../components/organisms/OrderTimeline.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
@@ -35,15 +29,15 @@ const STATE_LABEL = {
 
 export default function StatusPage() {
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
+  // P0-4: useOrderToken이 URL ↔ sessionStorage를 통합 — 외부인 ?token= 도 흡수.
+  const { token, withQuery } = useOrderToken(id);
   const [pulse, setPulse] = useState(false);
 
   // 초기 snapshot — 새로고침 후 직진입 시에도 정상 표시.
   const initialQuery = useApi(
-    ({ signal }) => apiFetch(API.ORDER(id), { schema: OrderSchema, signal }),
-    [id],
+    ({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }),
+    [id, token],
   );
 
   // 폴링 이벤트 핸들러 — 진동·깜박 부수효과 (§3.5 5조).

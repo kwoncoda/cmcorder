@@ -36,6 +36,7 @@ export function bootstrapDatabase(db) {
   if (!tableExists) {
     logger.info('[bootstrap] 신규 DB — init.sql 실행');
     runInitSql(db);
+    applyPostInitMigrations(db);
     return { initialized: true };
   }
 
@@ -44,11 +45,45 @@ export function bootstrapDatabase(db) {
   if (count === 0) {
     logger.info('[bootstrap] _migrations 빈 상태 — init.sql 재실행');
     runInitSql(db);
+    applyPostInitMigrations(db);
     return { initialized: true };
   }
 
-  logger.info({ count }, '[bootstrap] 기존 마이그레이션 존재 — skip');
+  logger.info({ count }, '[bootstrap] 기존 마이그레이션 존재 — skip init.sql');
+  applyPostInitMigrations(db);
   return { initialized: false };
+}
+
+/**
+ * init.sql 이후 증분 마이그레이션 — 항상 idempotent.
+ * - 002-access-token (P0-4 Codex 리뷰 2026-05-15): orders.access_token 추가.
+ *   기존 행에 token 발급 (외부인은 external_token 재사용, 그 외 신규 UUID).
+ *
+ * @param {import('better-sqlite3').Database} db
+ */
+function applyPostInitMigrations(db) {
+  const applied = (name) =>
+    !!db.prepare('SELECT 1 FROM _migrations WHERE name = ?').get(name);
+
+  if (!applied('002-access-token')) {
+    const tx = db.transaction(() => {
+      const cols = db.prepare('PRAGMA table_info(orders)').all();
+      const hasCol = cols.some((c) => c.name === 'access_token');
+      if (!hasCol) {
+        db.exec('ALTER TABLE orders ADD COLUMN access_token TEXT');
+      }
+      const rows = db
+        .prepare('SELECT id, external_token FROM orders WHERE access_token IS NULL')
+        .all();
+      const upd = db.prepare('UPDATE orders SET access_token = ? WHERE id = ?');
+      for (const r of rows) {
+        upd.run(r.external_token ?? crypto.randomUUID(), r.id);
+      }
+      db.prepare('INSERT INTO _migrations (name) VALUES (?)').run('002-access-token');
+    });
+    tx();
+    logger.info('[bootstrap] 마이그레이션 002-access-token 적용');
+  }
 }
 
 function runInitSql(db) {

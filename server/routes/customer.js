@@ -121,7 +121,10 @@ export function customerRoutes(db) {
       );
 
       const result = db.transaction(() => {
-        const externalToken = input.is_external ? crypto.randomUUID() : null;
+        // P0-4 (Codex 리뷰): 모든 주문에 access_token 발급.
+        // 외부인은 external_token = access_token (동일 값) — QR 공유 호환.
+        const accessToken = crypto.randomUUID();
+        const externalToken = input.is_external ? accessToken : null;
         const order = createOrder(db, {
           items_priced: priced.items_priced,
           total_price: priced.total_price,
@@ -129,6 +132,7 @@ export function customerRoutes(db) {
           student_id: input.student_id ?? null,
           is_external: input.is_external ?? false,
           external_token: externalToken,
+          access_token: accessToken,
           delivery_type: input.delivery_type ?? 'dineIn',
           table_no: input.table_no ?? null,
           operating_date,
@@ -148,17 +152,32 @@ export function customerRoutes(db) {
         return order;
       })();
 
-      res.json(serializeOrder(result));
+      // POST 응답은 access_token 포함 (최초 1회만 클라가 받음).
+      res.json({ ...serializeOrder(result), access_token: result.access_token });
     } catch (err) {
       next(err);
     }
   });
 
-  // ── GET /api/orders/:id ──
+  // ── GET /api/orders/:id (P0-4 인증) ──
+  // 요구: ?token=<access_token> 일치 시에만 본인 주문 조회 허용.
+  // - token 없음 → 401 UNAUTHORIZED
+  // - 주문 X → 404 (token 자체는 형식 검증만, 존재하지 않는 ID 누설 방지를 위해
+  //              token 검증과 ID 검증 순서: 401 → 404 → 403)
+  // - token 불일치 → 403 FORBIDDEN
   router.get('/api/orders/:id', (req, res) => {
+    const rawToken = req.query.token;
+    if (typeof rawToken !== 'string' || rawToken.length === 0) {
+      return res.status(401).json({ error: 'UNAUTHORIZED', message: '토큰이 필요합니다.' });
+    }
     const order = getOrder(db, Number(req.params.id));
     if (!order) {
       return res.status(404).json({ error: 'ORDER_NOT_FOUND' });
+    }
+    // 우선순위: access_token (모든 주문) → external_token (마이그레이션 전 외부인 호환)
+    const expected = order.access_token ?? order.external_token;
+    if (!expected || rawToken !== expected) {
+      return res.status(403).json({ error: 'FORBIDDEN', message: '주문 접근 권한이 없습니다.' });
     }
     return res.json(serializeOrder(order));
   });
@@ -184,6 +203,8 @@ export function customerRoutes(db) {
   return router;
 }
 
+// P0-4: GET 응답에서 access_token, external_token은 노출하지 않는다.
+// 토큰은 POST /api/orders 응답에서만 최초 1회 전달 (클라가 sessionStorage에 보관).
 function serializeOrder(o) {
   return {
     id: o.id,
@@ -194,7 +215,6 @@ function serializeOrder(o) {
     items: o.items,
     total_price: o.total_price,
     is_external: !!o.is_external,
-    external_token: o.external_token,
     delivery_type: o.delivery_type,
     table_no: o.table_no,
     depositor_name: o.depositor_name,
