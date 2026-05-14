@@ -77,8 +77,26 @@
   animation: start-business-cta-press 200ms ease-out;
 }
 
+/* ── BoothMinimapModal (Task 2.10) — 본인 테이블 강조 펄스 ──
+   결정 h: 세션 상태 없음 — 매 mount 마다 새로 재생 (사용자가 본인 위치 즉시 인지).
+   1.4s ease-in-out infinite — box-shadow 가 형광 옐로 radial 로 퍼졌다 사라짐.
+   reduced motion 시 (아래 매체쿼리) 정적 box-shadow 로 대체. */
+@keyframes booth-table-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(244, 210, 0, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 12px rgba(244, 210, 0, 0);
+  }
+}
+
+.booth-table-pulse {
+  animation: booth-table-pulse 1.4s ease-in-out infinite;
+}
+
 /* ── reduced motion — 모션 일괄 정적화 ──
    globals.css 가 animation-duration 0.01ms 강제하지만, 명시적 'none' 으로 한 번 더 차단.
+   booth-table-pulse 는 모션 대신 정적 box-shadow 로 본인 테이블 시각 강조 유지.
    (DESIGN §9.5 · §9.6) */
 @media (prefers-reduced-motion: reduce) {
   .dogtag-drop,
@@ -88,5 +106,9 @@
   .business-badge-blink,
   .start-business-cta-press {
     animation: none;
+  }
+  .booth-table-pulse {
+    animation: none;
+    box-shadow: 0 0 0 4px var(--color-accent);
   }
 }
