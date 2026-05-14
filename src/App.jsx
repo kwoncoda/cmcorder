@@ -51,7 +51,7 @@ function PageError({ error }) {
 // 라우터 비포함 라우팅 트리. 테스트에서 MemoryRouter 로 감싸 격리 가능.
 export function AppRoutes() {
   return (
-    <ErrorBoundary fallback={(props) => <PageError {...props} />}>
+    <ErrorBoundary fallback={PageError}>
       <Suspense fallback={<PageLoading />}>
         <Routes>
           {/* 사용자 — 정적 import */}
