@@ -28,6 +28,7 @@ playwright-report/
 test-results/
 
 # Build output
+dist/
 public/css/output.css
 
 # Runtime data (Docker volume 또는 로컬)
