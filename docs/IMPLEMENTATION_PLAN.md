@@ -314,15 +314,15 @@ chickenedak/
   - a11y: axe + 키보드 시나리오
 - **관련 결정:** COMPONENT_GUIDE §2.2~§2.5
 
-## Task 1.3: Icon + Spinner + Divider
+## Task 1.3: Icon + Spinner + Divider ✅
 
-- [ ] **완료 기준:**
-  - lucide-react는 **named import 전용** — `import { Map, ShoppingCart } from 'lucide-react'` ✅ / `import * as Icons` 또는 `import Icons from 'lucide-react'` ❌ (`bundle-barrel-imports` 규칙)
+- [x] **완료 기준:**
+  - lucide-react는 **named import 전용** — `import { Map, ShoppingCart } from 'lucide-react'` ✅ / `import * as Icons` 또는 `import Icons from 'lucide-react'` ❌ (`bundle-barrel-imports` 규칙) → bundle.test.js 회귀로 자동 차단
   - 또는 SVG inline (이모지로 대체 가능한 곳은 이모지 우선 — design-bundle 시안 그대로)
-  - spinner는 reduced motion 시 정적 점 (3 도트 흔들 X)
+  - spinner는 reduced motion 시 정적 점 (3 도트 흔들 X) → `motion-reduce:animate-none`
   - Divider 3 variant (solid·dashed·stamp)
 - **필요 테스트:**
-  - 단위: 각 3-4 케이스 = 10 케이스
+  - 단위: 각 3-4 케이스 = 10 케이스 → 실제 19 케이스(Icon 5 · Spinner 8 · Divider 6)
 - **관련 결정:** §3.5 8조 (번들 위생) + COMPONENT §2.6~§2.8
 
 ---

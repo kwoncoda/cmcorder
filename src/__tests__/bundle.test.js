@@ -1,7 +1,9 @@
-// Task 0.4 — 번들 위생 회귀.
-// production 번들(dist/assets/*.js)에 axe-core / @axe-core/react 가
-// 포함되지 않는지 강제한다. main.jsx의 `if (import.meta.env.DEV)` + 동적 import
-// 패턴이 회귀하면 즉시 실패한다.
+// Task 0.4 / 1.3 — 번들 위생 회귀.
+// (1) production 번들(dist/assets/*.js)에 axe-core / @axe-core/react 가
+//     포함되지 않는지 강제. main.jsx의 `if (import.meta.env.DEV)` + 동적 import
+//     패턴이 회귀하면 즉시 실패.
+// (2) src/**/*.{js,jsx} 안에서 lucide-react default 또는 namespace(barrel) import 가
+//     사용되지 않는지 강제 (§3.5 8조). barrel import 시 전체 아이콘이 번들에 포함됨.
 // - dist/ 가 없거나 src 변경 이후라면 `npm run build` 를 한 번 실행.
 // - 검사 패턴: 'axe-core' 또는 '@axe-core/' 문자열 (가짜 매칭 — 'taxe', 'maxe' 등 회피).
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -61,6 +63,39 @@ describe('번들 위생 — axe-core dev-only', () => {
         content,
         `${file} 가 axe-core 흔적을 포함`,
       ).not.toMatch(/axe-core|@axe-core\//);
+    }
+  });
+});
+
+describe('번들 위생 — lucide-react named import 강제 (§3.5 8조)', () => {
+  // src 트리를 재귀 순회해서 .js/.jsx 파일을 수집.
+  function collectSourceFiles(dir) {
+    const out = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = resolve(dir, entry.name);
+      if (entry.isDirectory()) {
+        out.push(...collectSourceFiles(p));
+      } else if (/\.(js|jsx)$/.test(entry.name)) {
+        out.push(p);
+      }
+    }
+    return out;
+  }
+
+  it('lucide-react는 named import 만 사용한다 — barrel · default import 차단', () => {
+    const selfPath = resolve(srcDir, '__tests__', 'bundle.test.js');
+    const files = collectSourceFiles(srcDir).filter((p) => p !== selfPath);
+    expect(files.length).toBeGreaterThan(0);
+    // 정규식 패턴:
+    //  ① namespace(barrel): `import * as X from 'lucide-react'`
+    //  ② default          : `import X from 'lucide-react'` (named/중괄호 없는 형태)
+    const barrel = /import\s+\*\s+as\s+\w+\s+from\s+['"]lucide-react['"]/;
+    const defaultImport = /import\s+(?!type\s)([A-Za-z_$][\w$]*)\s*(?:,\s*\{[^}]*\}\s*)?from\s+['"]lucide-react['"]/;
+    for (const file of files) {
+      const content = readFileSync(file, 'utf-8');
+      if (!content.includes('lucide-react')) continue;
+      expect(content, `${file} 에 lucide-react barrel import 발견`).not.toMatch(barrel);
+      expect(content, `${file} 에 lucide-react default import 발견`).not.toMatch(defaultImport);
     }
   });
 });

@@ -3,8 +3,9 @@
 // 모바일 hitbox: sm 44px 이상 (DESIGN — 모바일 터치 최소 영역).
 // focus-visible: 형광 옐로 outline + offset 2px (DESIGN §12.3).
 // loading: spinner + aria-busy=true + disabled 자동.
-// motion-reduce: spinner 정지 (DESIGN §9.5).
+// motion-reduce: spinner 정지 (DESIGN §9.5) — Spinner atom 이 자체 처리.
 import { forwardRef } from 'react';
+import Spinner from './Spinner.jsx';
 
 // variant 별 색 — 모두 토큰(tailwind.config.js extend.colors) 위에 매핑.
 // primary: 형광 옐로 배경 + 카드 잉크 텍스트 (대비 충분 — DESIGN §3).
@@ -73,20 +74,9 @@ const Button = forwardRef(function Button(
       aria-busy={loading || undefined}
       {...rest}
     >
-      {loading ? <Spinner /> : children}
+      {loading ? <Spinner size="md" /> : children}
     </button>
   );
 });
-
-// Spinner — currentColor 기반 원형 회전. motion-reduce 시 정지.
-function Spinner() {
-  return (
-    <span
-      className="inline-block w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin motion-reduce:animate-none"
-      role="status"
-      aria-label="로딩 중"
-    />
-  );
-}
 
 export default Button;
