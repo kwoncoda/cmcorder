@@ -888,6 +888,33 @@
 
 ---
 
+## ADR-028: react-hook-form 미채택 → controlled inputs 유지 (P2-2 Codex 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- IMPLEMENTATION_PLAN §1.3 초기 계획: `react-hook-form + zod` 사용 명시.
+- 실제 구현은 `useState` controlled inputs + 정규식/조건 검증 (CheckoutPage, TransferReportForm).
+- Codex 리뷰 P2-2가 계획-실제 불일치를 지적.
+
+**결정:**
+**미채택을 공식화**. controlled inputs 유지.
+
+**사유:**
+- 폼 복잡도 낮음 (CheckoutPage 5필드, TransferReportForm 4필드).
+- react-hook-form 도입 시 의존성 +1, 빌드 크기 +12kb gzip, 학습 곡선 추가.
+- 일회성 운영 + ADR-021 학번 정규식은 단순 RegExp.test로 충분.
+- §3.5 1조 페이지 ≤120줄 제약상 hook 추가가 오히려 복잡도 증가.
+
+**Trade-off:**
+- 폼 1개 추가 시 검증 보일러플레이트 재작성 필요. 그러나 일회성 운영이라 변동 X.
+- Phase 2 (가정상 X) 폼 추가 시 도입 재검토.
+
+**문서 갱신:**
+- IMPLEMENTATION_PLAN.md §1.3 `react-hook-form` 라인을 본 ADR로 참조.
+
+---
+
 ## ADR-027: PII 자동 삭제 → 운영자 수동 폐기로 대체 (P1-5 Codex 리뷰)
 
 **상태:** Accepted (2026-05-15)

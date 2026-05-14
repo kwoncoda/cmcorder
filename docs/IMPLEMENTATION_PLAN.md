@@ -29,7 +29,7 @@ ADR-024는 EJS + Alpine.js 채택했으나, 2026-05-14 사용자 결정으로 Re
 | Language | JavaScript + JSDoc + zod (런타임 검증) | TS 학습 비용 회피, 6일 일정. JSDoc + zod로 부분 타입 안전 |
 | Routing | React Router 6 | SPA 표준, 데이터 라우팅 |
 | State | Zustand 4 | 가벼움(2KB), Context 보다 단순. 카트·UI·영업 상태 |
-| Forms | react-hook-form 7 + zod | 학번·이체 등 입력 검증 |
+| Forms | ~~react-hook-form 7~~ → controlled inputs + zod (ADR-028, 2026-05-15) | 폼 ≤5필드 — 의존성 절감 |
 | Styling | Tailwind 3 + `tokens.css` 변수 직접 import | design-bundle tokens.css 그대로 |
 | HTTP | fetch (browser native) + custom hook | axios 학습 회피 |
 | SSE | EventSource (browser native) + custom hook `useOrderStream` | ADR-015 |
