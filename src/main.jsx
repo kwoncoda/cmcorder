@@ -6,6 +6,7 @@ import * as ReactDOM from 'react-dom';
 import App from './App.jsx';
 import './styles/tokens.css';
 import './styles/globals.css';
+import './styles/components.css';
 
 // 개발 모드에서만 axe-core를 동적 import — production 번들에서 완전히 제외.
 // Task 0.4 §3.5 8조 (번들 위생): src/__tests__/bundle.test.js 회귀가 강제.
