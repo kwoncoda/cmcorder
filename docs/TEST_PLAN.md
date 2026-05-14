@@ -1,5 +1,7 @@
 # 테스트 전략 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** §7 "SSE 통합 테스트" → `useOrderPolling` 폴링 hook 테스트로 대체 (ADR-015 변경). E2E-05 등 SSE 의존 시나리오는 폴링 기반. 본문 잔존 SSE 표기는 historical.
+
 **작성일:** 2026-05-04 (`/plan-eng-review` 1차)
 **관련 문서:** `ARCHITECTURE.md`, `API_DRAFT.md`, `DB_DRAFT.md`, `DECISIONS.md`
 **상태:** DRAFT

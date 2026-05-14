@@ -1,5 +1,7 @@
 # 기능 카탈로그 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** F-S-010/011 SSE → 폴링 (ADR-015 변경) · F-I-006 PII 자동 → 수동 (ADR-027) · F-A-024 메뉴 CRUD 축소 (ADR-029) · F-A-032/035 P0 → P2 (ADR-030) · F-U-031/F-A-016/F-A-040 등의 "SSE push" 표기는 폴링으로 읽으세요. CLOSED 사용자 GET은 서버 middleware 302 redirect (충돌-3 2026-05-15).
+
 | 항목 | 값 |
 |---|---|
 | 작성일 | 2026-05-13 (`/office-hours` 2차) |

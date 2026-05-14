@@ -1,7 +1,9 @@
 # 아키텍처 설계서 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** §4.3 SSE Hub → 5초 폴링 (ADR-015 변경, 서버 SSE 라우트 미구현). §11 PII 폐기 → 운영자 수동 (ADR-027). 본문 SSE 다이어그램과 sse Hub 자료구조는 historical 보존. 코드는 `useOrderPolling` 기반.
+
 **작성일:** 2026-05-04 (`/plan-eng-review` 1차)
-**관련 문서:** `order-system-plan.md` (7차본), `DECISIONS.md` (ADR-001~024), `API_DRAFT.md`, `DB_DRAFT.md`, `TEST_PLAN.md`
+**관련 문서:** `order-system-plan.md` (7차본), `DECISIONS.md` (ADR-001~031), `API_DRAFT.md`, `DB_DRAFT.md`, `TEST_PLAN.md`
 **상태:** DRAFT — 구현 시작 전 최종 검토 단계
 
 ---

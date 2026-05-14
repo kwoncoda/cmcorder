@@ -1,5 +1,7 @@
 # API 초안 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** 본문이 ADR와 충돌하면 ADR 우선. 핵심 변경: ① §1.9 SSE → 5초 폴링 fallback (ADR-015 변경) ② §4 SSE 채널 → 폴링으로 대체 ③ §0.3 CLOSED 사용자 GET → 302 /closed redirect (서버 middleware, 충돌-3 2026-05-15) ④ `GET/POST /api/orders/:id*` 인증 → `?token=<access_token>` 필수 (P0-4/P0-B). 본문에 남아있는 SSE 시그니처는 historical.
+
 **작성일:** 2026-05-04 (`/plan-eng-review` 1차)
 **관련 문서:** `ARCHITECTURE.md`, `DB_DRAFT.md`, `order-system-plan.md` §3-§12, `DECISIONS.md`
 **상태:** DRAFT

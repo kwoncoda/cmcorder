@@ -1,5 +1,7 @@
 # MVP 범위 정의 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** "SSE 사용자" → 5초 폴링 fallback (ADR-015 변경). "PII 자동 삭제" → 수동 폐기 (ADR-027 신규). 메뉴 CRUD → 가격+토글 (ADR-029). 정산 그래프/ZIP 이력 → P2 강등 (ADR-030). 본문 본 SoT의 ADR 변경은 historical 보존.
+
 | 항목 | 값 |
 |---|---|
 | 작성일 | 2026-05-13 (`/office-hours` 2차) |

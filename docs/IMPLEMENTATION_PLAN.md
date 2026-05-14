@@ -1,5 +1,7 @@
 # IMPLEMENTATION_PLAN — React 기준 (2026-05-14 재작성)
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** SSE → 폴링 (ADR-015 변경) · PII 수동 폐기 (ADR-027) · react-hook-form 미채택 (ADR-028) · 메뉴 CRUD 축소 (ADR-029) · 정산 그래프 P2 강등 (ADR-030) · 세션 secure env 분리 (ADR-031). Task 본문의 옛 표기는 historical, 코드는 ADR 기준.
+
 > **For agentic workers:** Use `superpowers:subagent-driven-development` (권장) 또는 `superpowers:executing-plans`로 Task 단위로 진행. 각 Task는 `- [ ]` 체크박스로 트래킹.
 
 **Goal:** 컴퓨터모바일융합과 학교 축제(5/20-21) 부스 모바일 웹 주문 시스템을 D-day 5/20 16:30 운영 시작까지 완성.

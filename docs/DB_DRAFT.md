@@ -1,5 +1,7 @@
 # DB 초안 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** §6 PII 보존 정책 → 운영자 수동 폐기 (ADR-027). orders 테이블에 `access_token` 컬럼 신규 (마이그레이션 002, P0-4). 본문에 남아있는 "정산 후 N일 자동 NULL" 표기는 D+7일 수동 절차 (`docs/operations/pii-deletion.md`)로 대체.
+
 **작성일:** 2026-05-04 (`/plan-eng-review` 1차)
 **관련 문서:** `ARCHITECTURE.md` §3·§5, `API_DRAFT.md`, `DECISIONS.md`
 **상태:** DRAFT
