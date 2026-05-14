@@ -1,0 +1,90 @@
+// Task 2.9 — ClosedScreen organism 단위 테스트.
+// IMPLEMENTATION_PLAN §2.9 / G13 / UX §8.8.
+//
+// 회귀 보호 항목:
+//   - 4 reason 별 카피 ('before-open' | 'after-close' | 'after-settlement' | 'both-days-done')
+//   - 운영 일정 SoT 2일 모두 표시 (5/20·5/21)
+//   - operatingDate=오늘 일자만 강조 (text-accent 또는 font-semibold)
+//   - 운영 일정 aria-live="polite" — UX §8.8 자동 announce
+//   - 새로고침 CTA 클릭 시 onRefresh 호출 (Button atom 재사용)
+//   - 알 수 없는 reason fallback → 'before-open'
+//   - MascotState 재사용 — reason='both-days-done' 시 canceled (😢 이모지 fallback)
+//   - a11y (axe)
+import { describe, it, expect, vi } from 'vitest';
+import { render, fireEvent, screen } from '@testing-library/react';
+import { axe } from 'vitest-axe';
+import ClosedScreen from '../ClosedScreen.jsx';
+
+describe('ClosedScreen', () => {
+  it.each([
+    ['before-open', /영업 시작 전/],
+    ['after-close', /영업이 끝났어요/],
+    ['after-settlement', /정산 마감/],
+    ['both-days-done', /축제 부스가 종료/],
+  ])('reason=%s 시 해당 카피 렌더', (reason, regex) => {
+    render(<ClosedScreen reason={reason} operatingDate="2026-05-20" />);
+    expect(screen.getByText(regex)).toBeInTheDocument();
+  });
+
+  it('운영 일정 2일 모두 표시 (5/20·5/21)', () => {
+    render(<ClosedScreen reason="before-open" operatingDate="2026-05-20" />);
+    expect(screen.getByText('5월 20일 (수)')).toBeInTheDocument();
+    expect(screen.getByText('5월 21일 (목)')).toBeInTheDocument();
+    expect(screen.getByText('16:30 ~ 21:00')).toBeInTheDocument();
+    expect(screen.getByText('11:00 ~ 21:00')).toBeInTheDocument();
+  });
+
+  it('operatingDate=오늘 일자만 강조 (text-accent 또는 font-semibold)', () => {
+    const { container } = render(
+      <ClosedScreen reason="before-open" operatingDate="2026-05-20" />,
+    );
+    // 강조 항목 — text-accent 또는 font-semibold 클래스로 표시.
+    const today =
+      container.querySelector('li.text-accent') ||
+      container.querySelector('li.font-semibold');
+    expect(today).not.toBeNull();
+    expect(today.textContent).toContain('5월 20일');
+  });
+
+  it('★ 운영 일정 aria-live=polite (UX §8.8 자동 announce)', () => {
+    render(<ClosedScreen reason="before-open" operatingDate="2026-05-20" />);
+    expect(screen.getByTestId('operating-schedule')).toHaveAttribute(
+      'aria-live',
+      'polite',
+    );
+  });
+
+  it('새로고침 CTA 클릭 시 onRefresh 호출', () => {
+    const onRefresh = vi.fn();
+    render(
+      <ClosedScreen
+        reason="before-open"
+        operatingDate="2026-05-20"
+        onRefresh={onRefresh}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /새로고침/ }));
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('알 수 없는 reason 시 before-open fallback', () => {
+    render(<ClosedScreen reason="weird" operatingDate="2026-05-20" />);
+    expect(screen.getByText(/영업 시작 전/)).toBeInTheDocument();
+  });
+
+  it('마스코트 표시 — both-days-done 시 canceled (😢 이모지 fallback)', () => {
+    const { container } = render(
+      <ClosedScreen reason="both-days-done" operatingDate="2026-05-20" />,
+    );
+    // useFallback=true 기본 → canceled 상태의 fallbackEmoji=😢 렌더.
+    expect(container.textContent).toContain('😢');
+  });
+
+  it('a11y 위반 없음 (axe-core)', async () => {
+    const { container } = render(
+      <ClosedScreen reason="before-open" operatingDate="2026-05-20" />,
+    );
+    const r = await axe(container);
+    expect(r).toHaveNoViolations();
+  });
+});
