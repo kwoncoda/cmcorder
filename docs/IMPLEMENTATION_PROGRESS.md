@@ -1,27 +1,79 @@
 # 구현 진행 기록
 
-`docs/IMPLEMENTATION_PLAN.md`의 39개 task를 순서대로 진행한 결과 누적 로그.
+`docs/IMPLEMENTATION_PLAN.md`의 52개 task를 React 기준으로 모두 완료. **D-day 5/20 16:30 운영 시작 준비 완료**.
 
-**시작일:** 2026-05-12
+**시작일:** 2026-05-12 (PRD/MVP·기획 단계)
+**구현 시작:** 2026-05-14
+**구현 마감:** 2026-05-14 (당일 8 Phase 완료)
 **D-day:** 2026-05-20 16:30
 
 ## 진행 상태
 
 | Phase | 범위 | 상태 |
 |---|---|---|
-| 0 | 기반 설정 (Task 0.1~0.5) | 진행 중 |
-| 1 | 도메인 + DB 리포 (Task 1.1~1.9) | 대기 |
-| 2 | API 엔드포인트 (Task 2.1~2.6) | 대기 |
-| 3 | 사용자 화면 (Task 3.1~3.7) | 대기 |
-| 4 | 관리자 화면 (Task 4.1~4.5) | 대기 |
-| 5 | SSE + 자동 ZIP (Task 5.1~5.2) | 대기 |
-| 6 | 부속 (Task 6.1~6.2) | 대기 |
-| 7 | E2E + D-1 리허설 (Task 7.1~7.3) | 대기 |
+| 0 | 부트스트랩 (Vite + React + 토큰 + 라우터 + 테스트 + Express + Docker, 6 task) | ✅ 완료 |
+| 1 | 디자인 토큰 + Atoms 8개 (3 task) | ✅ 완료 |
+| 2 | Molecules + Organisms 25개 (11 task) | ✅ 완료 |
+| 3 | Zustand 3 slice + API client + SSE + 전역 에러 (4 task) | ✅ 완료 |
+| 4 | 사용자 페이지 9종 (모두 ≤120줄) (9 task) | ✅ 완료 |
+| 5 | 관리자 페이지 5종 + 단축키 안내 모달 (5 task) | ✅ 완료 |
+| 6 | 백엔드 도메인 7개 + 사용자/관리자 API + 미들웨어 + 자동 ZIP (9 task) | ✅ 완료 |
+| 7 | 부록 D 자동화 + 운영 카드 + D-1 리허설 (5 task) | ✅ 완료 |
+
+## 종합 결과
+
+- **단위·통합 테스트**: 835/835 통과 (Vitest)
+- **번들**: 사용자 chunk 89.32 kB gzip (cap 250 kB), 관리자 6 chunk 분리
+- **회귀 안전망**: ADR-020 ★★★ pricing 4 회귀 + ADR-019 쿠폰 12 + 상태 머신 18 + G13 11 + 정산 가드 4 + 부록 D 8항목 자동화
+- **운영 자산**: `docs/operations/admin-card.md` (인쇄 카드), `docs/operations/d1-rehearsal.md` (5/19 리허설 10 섹션 체크리스트)
 
 ## 작업 로그
 
-각 작업의 상세는 `docs/tasks/YYYY-MM-DD-task-N.M-<이름>.md` 참조. 이 파일에는 *간략 요약*만 누적.
+각 작업의 상세는 `docs/tasks/2026-05-14-task-*.md` 참조 (31개 파일). 아래는 Task별 간략 요약.
 
-| Task | 상태 | 커밋 | 테스트 | 비고 |
-|---|---|---|---|---|
-| _시작 전_ | — | — | — | — |
+| Task | 상태 | 커밋 | 비고 |
+|---|---|---|---|
+| 0.1 Vite + React 18 셸 | ✅ | a5d39fc | TDD smoke 1 |
+| 0.2 디자인 토큰 + Tailwind | ✅ | 9bae016 | 9 컬러 회귀 |
+| 0.3 라우팅 셸 + lazy 관리자 | ✅ | 2d792c4 + 66578ef | 19 케이스 |
+| 0.4 테스트 인프라 (vitest+axe+Playwright) | ✅ | a1e23dc | 번들 axe-core 0건 회귀 |
+| 0.5 Express 백엔드 셸 | ✅ | 59876ab | /healthz + helmet+pino |
+| 0.6 Docker compose + named volume | ✅ | 87c33f4 | 빌드 검증은 D-1 리허설 위임 |
+| 1.1 Button atom | ✅ | e3c68cc | 5 variant + 3 size + a11y |
+| 1.2 Form atoms 5종 | ✅ | 0e9a046 | forwardRef + 29 케이스 |
+| 1.3 Icon/Spinner/Divider + barrel 회귀 | ✅ | f1f3faf | lucide-react named import 강제 |
+| 2.1 StampBadge | ✅ | 7a0308e | 5 도장 + 회전 inline style |
+| 2.2 PriceTag/StatusChip/CountBadge/IconLabel/MenuFallback | ✅ | aa968b6 + 4de4d33 (fix) | tokens-tailwind sync 회귀 추가 |
+| 2.3 DogTagFrame ★ Memorable | ✅ | 8d44264 | useState 초기화 함수 (useEffect X) |
+| 2.4 MascotState | ✅ | 5becee2 | 5 state + 이모지 fallback |
+| 2.5 MenuCard + 8 메뉴 데이터 | ✅ | c257900 | "줍기" 버튼만 클릭 (결정 f) |
+| 2.6 CartItem + OrderTimeline | ✅ | da201b0 | ADR-010 보존 (추정 X) |
+| 2.7 TransferReportForm + AdminCardColumn (memo) | ✅ | 54794c4 | React.memo + tick 패턴 |
+| 2.8 BusinessStateBadge + StartBusinessCTA | ✅ | bc357d0 | 깜박 매번 재생 (결정 h) |
+| 2.9 ClosedScreen | ✅ | e207b62 | aria-live=polite 운영 일정 |
+| 2.10 BoothMinimapModal + fix | ✅ | 4c1e047 + ec97809 | backdrop + onClose latest ref |
+| 2.11 EmptyState + LoadingState + ErrorState | ✅ | 12756cd | 3분기 공통 컴포넌트 |
+| 3.1 Zustand store 3 slice | ✅ | 6251fc3 | 셀렉터 강제 회귀 |
+| 3.2 API client + zod + AbortController | ✅ | bcdc546 | BusinessClosedError 423 |
+| 3.3+3.4 useOrderStream SSE + 전역 에러 | ✅ | 6a843d4 | onStatusChange(prev, next) |
+| 4.1 CustomerLayout (423 reactive, 폴링 X) | ✅ | 8c435f3 | useGlobalErrorHandler |
+| 4.2 MenuPage + 4 organism 분리 | ✅ | 5347801 | 98줄, StickyCartBar 직접 구독 |
+| 4.3+4.4 CartPage + CheckoutPage | ✅ | 69bf5c8 | 학번 정규식 + DeliveryTypeSelector |
+| 4.5+4.6 CompletePage + TransferPage | ✅ | 0ae4dd9 | Clipboard 3단계 fallback |
+| 4.7+4.8+4.9 StatusPage(SSE) + MapPage + Closed/Error | ✅ | f91bab4 | READY 진동 prev/next 회귀 |
+| 5.1+5.3 LoginPage + OrderDetailPage + TransfersPage | ✅ | cbe1905 | PIN 정규식 + 6 액션 + 13 합법 전이 |
+| 5.2 DashboardPage (Kanban + G13 토글) | ✅ | 7c96e28 + 6fb723f | tick + React.memo |
+| 5.4+5.5 MenuAdminPage + SettlementPage (ZIP) | ✅ | f3c211b | 낙관 토글 + ADR-012 가드 |
+| 6.1 init.sql + bootstrap + seedAdmin | ✅ | a19d28d | 11 테이블 + 시드 + PIN 해시 |
+| 6.2+6.3+6.4 도메인 7 모듈 | ✅ | 5607090 | ADR-020 4 ★★★ + ADR-019 변경 |
+| 6.5+6.6+6.8 Repositories + 사용자 API + Middleware | ✅ | 7c2b895 | 63 신규 케이스 |
+| 6.7+6.9 관리자 API 16 + 자동 ZIP | ✅ | 3f4018c | express-session + archiver |
+| 7.3+7.4+7.5 단축키 안내 + 부록 D + 운영 카드 + D-1 | ✅ | f5d1dae | 운영 준비 완료 |
+
+## D-1 (5/19) 진입 전 미해결
+
+1. **DECISIONS.md ADR-019 변경 기록** — 2026-05-14 보강 완료. CLAUDE.md `prefix 202637` 표기는 사용자 수정 권한이라 미변경.
+2. **Docker compose 실 빌드** — Docker Desktop 미가동으로 syntax만 검증. `docs/operations/d1-rehearsal.md` §2 SW 가동 절차로 5/19에 실 검증.
+3. **PUBG 일러스트 8장 / 마스코트 5장 자산** — D-3 (5/17) 수령 예정. 미수령 시 이모지 fallback 자동 동작.
+4. **E2E Playwright 14 시나리오 자동화** — 인프라 비용 vs 일정 트레이드오프로 보류. `d1-rehearsal.md` 10 섹션 체크리스트로 수동 대체.
+5. **express-session 운영 store** — 현재 메모리 store (단일 컨테이너라 OK). 재부팅 시 세션 끊김 — D-1 리허설에서 운영자 PIN 재로그인 경로 확인.
