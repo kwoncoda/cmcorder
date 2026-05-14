@@ -21,6 +21,7 @@ import ErrorPage from './pages/customer/ErrorPage.jsx';
 
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import LoadingState from './components/state/LoadingState.jsx';
+import CustomerLayout from './components/layouts/CustomerLayout.jsx';
 
 // 관리자 6 페이지 — React.lazy 로 별도 chunk 분리.
 const AdminLoginPage = lazy(() => import('./pages/admin/LoginPage.jsx'));
@@ -59,18 +60,21 @@ export function AppRoutes() {
     <ErrorBoundary fallback={PageError}>
       <Suspense fallback={<PageLoading />}>
         <Routes>
-          {/* 사용자 — 정적 import */}
-          <Route path="/" element={<Navigate to="/menu" replace />} />
-          <Route path="/menu" element={<MenuPage />} />
-          <Route path="/cart" element={<CartPage />} />
-          <Route path="/checkout" element={<CheckoutPage />} />
-          <Route path="/orders/:id/complete" element={<CompletePage />} />
-          <Route path="/orders/:id/transfer" element={<TransferPage />} />
-          <Route path="/orders/:id/status" element={<StatusPage />} />
-          <Route path="/map" element={<MapPage />} />
-          <Route path="/closed" element={<ClosedPage />} />
+          {/* 사용자 — 정적 import + CustomerLayout 래핑 (Task 4.1).
+              헤더(로고+지도) 공통 + 423 reactive 가드 (/closed redirect). */}
+          <Route element={<CustomerLayout />}>
+            <Route path="/" element={<Navigate to="/menu" replace />} />
+            <Route path="/menu" element={<MenuPage />} />
+            <Route path="/cart" element={<CartPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
+            <Route path="/orders/:id/complete" element={<CompletePage />} />
+            <Route path="/orders/:id/transfer" element={<TransferPage />} />
+            <Route path="/orders/:id/status" element={<StatusPage />} />
+            <Route path="/map" element={<MapPage />} />
+            <Route path="/closed" element={<ClosedPage />} />
+          </Route>
 
-          {/* 관리자 — React.lazy 코드 스플릿 */}
+          {/* 관리자 — React.lazy 코드 스플릿. Phase 5에서 AdminLayout 별도. */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
           <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
           <Route
