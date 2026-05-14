@@ -388,7 +388,7 @@ describe('사용자 API — GET /api/orders/:id', () => {
 });
 
 describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
-  it('이체 신고 → status TRANSFER_REPORTED', async () => {
+  it('이체 신고 (token 포함) → status TRANSFER_REPORTED', async () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
@@ -398,7 +398,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
       });
 
     const report = await request(app)
-      .post(`/api/orders/${create.body.id}/transfer-report`)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({
         bank: '국민',
         depositorName: '김철수',
@@ -409,7 +409,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     expect(report.body.depositor_name).toBe('김철수');
   });
 
-  it('이체 신고 필드 누락 → 400', async () => {
+  it('이체 신고 필드 누락 → 400 (token 있어도 검증 후)', async () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
@@ -419,8 +419,65 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
       });
 
     const report = await request(app)
-      .post(`/api/orders/${create.body.id}/transfer-report`)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({ bank: '국민' }); // amount, depositorName 누락
     expect(report.status).toBe(400);
+  });
+
+  // ── P0-B (Codex v2) transfer-report 인증 ──────────────────────
+  it('P0-B — token 없이 POST → 401 UNAUTHORIZED', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+
+    const report = await request(app)
+      .post(`/api/orders/${create.body.id}/transfer-report`)
+      .send({ bank: '국민', depositorName: '김철수', amount: 18000 });
+    expect(report.status).toBe(401);
+    expect(report.body.error).toBe('UNAUTHORIZED');
+  });
+
+  it('P0-B — 잘못된 token → 403 FORBIDDEN', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+
+    const report = await request(app)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=wrong-token`)
+      .send({ bank: '국민', depositorName: '김철수', amount: 18000 });
+    expect(report.status).toBe(403);
+    expect(report.body.error).toBe('FORBIDDEN');
+  });
+
+  it('P0-B — 타인 주문 ID + 본인 token → 403 (ID 추측 차단)', async () => {
+    const app = createApp({ db: freshDb() });
+    const a = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A' });
+    const b = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B' });
+
+    // A의 token으로 B 주문에 transfer-report 시도 → 403, B 주문 상태 변경 X
+    const cross = await request(app)
+      .post(`/api/orders/${b.body.id}/transfer-report?token=${a.body.access_token}`)
+      .send({ bank: '국민', depositorName: 'A가 B 주문에 이체 보고 시도', amount: 18000 });
+    expect(cross.status).toBe(403);
+
+    // B 주문은 여전히 ORDERED (상태 변경 X)
+    const bGet = await request(app).get(`/api/orders/${b.body.id}?token=${b.body.access_token}`);
+    expect(bGet.body.status).toBe('ORDERED');
+    expect(bGet.body.depositor_name).toBeFalsy();
+  });
+
+  it('P0-B — 존재하지 않는 주문 ID + 임의 token → 404 (token 검증 후)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders/9999/transfer-report?token=anything')
+      .send({ bank: '국민', depositorName: 'X', amount: 1000 });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('ORDER_NOT_FOUND');
   });
 });

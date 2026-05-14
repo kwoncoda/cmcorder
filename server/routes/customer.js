@@ -182,9 +182,23 @@ export function customerRoutes(db) {
     return res.json(serializeOrder(order));
   });
 
-  // ── POST /api/orders/:id/transfer-report ──
+  // ── POST /api/orders/:id/transfer-report (P0-B Codex v2 인증 추가) ──
+  // 검증 순서: token 형식(401) → 주문 존재(404) → token 일치(403) → 입력 검증(400)
+  // 이전: 무인증으로 ID 추측만으로 타인 주문 입금정보 덮어쓰기 + TRANSFER_REPORTED 강제 전이 가능.
   router.post('/api/orders/:id/transfer-report', (req, res, next) => {
     try {
+      const rawToken = req.query.token;
+      if (typeof rawToken !== 'string' || rawToken.length === 0) {
+        return res.status(401).json({ error: 'UNAUTHORIZED', message: '토큰이 필요합니다.' });
+      }
+      const existing = getOrder(db, Number(req.params.id));
+      if (!existing) {
+        return res.status(404).json({ error: 'ORDER_NOT_FOUND' });
+      }
+      const expected = existing.access_token ?? existing.external_token;
+      if (!expected || rawToken !== expected) {
+        return res.status(403).json({ error: 'FORBIDDEN', message: '주문 접근 권한이 없습니다.' });
+      }
       const input = TransferReportSchema.parse(req.body);
       const order = updateTransferInfo(db, Number(req.params.id), {
         depositor_name: input.depositorName,
@@ -194,9 +208,9 @@ export function customerRoutes(db) {
         other_name: input.otherName,
         amount: input.amount,
       });
-      res.json(serializeOrder(order));
+      return res.json(serializeOrder(order));
     } catch (err) {
-      next(err);
+      return next(err);
     }
   });
 

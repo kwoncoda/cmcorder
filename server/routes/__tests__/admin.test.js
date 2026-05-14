@@ -348,8 +348,9 @@ describe('GET /admin/api/transfers', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
       });
+    // P0-B (Codex v2): transfer-report에 token 필수.
     await request(app)
-      .post(`/api/orders/${o1.body.id}/transfer-report`)
+      .post(`/api/orders/${o1.body.id}/transfer-report?token=${o1.body.access_token}`)
       .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
     await request(app)
       .post('/api/orders')

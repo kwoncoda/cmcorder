@@ -44,7 +44,8 @@ export default function TransferPage() {
     setSubmitting(true);
     setServerError(null);
     try {
-      await apiFetch(API.ORDER_TRANSFER_REPORT(id), {
+      // P0-B (Codex v2): ?token= 강제. token 없으면 서버 401.
+      await apiFetch(withQuery(API.ORDER_TRANSFER_REPORT(id)), {
         method: 'POST',
         body: formData,
       });
