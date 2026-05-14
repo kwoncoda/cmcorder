@@ -174,6 +174,91 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
     expect(dup.status).toBe(400);
     expect(dup.body.error).toBe('ALREADY_USED');
   });
+
+  // ── P0-3 (Codex 리뷰) 쿠폰 할인 위변조 방어 ───────────────────
+  // pricing.js는 coupon.used만 보고 1,000원 할인. 이후 consumeCoupon은 student_id가
+  // 있을 때만 실행하므로, 외부인이거나 학번 없이 coupon: { used: true } 보내면
+  // 할인만 받고 used_coupons 기록은 안 남는다. 서버가 거부해야.
+  it('P0-3 — 외부인이 coupon.used=true 보내면 400 COUPON_REQUIRES_STUDENT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('COUPON_REQUIRES_STUDENT');
+    // DB에 어떤 주문도 생성되지 X (트랜잭션 보호)
+    const orderCount = db.prepare('SELECT COUNT(*) AS c FROM orders').get().c;
+    expect(orderCount).toBe(0);
+  });
+
+  it('P0-3 — student_id 없이 coupon.used=true 보내면 400 COUPON_REQUIRES_STUDENT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: null,
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('COUPON_REQUIRES_STUDENT');
+  });
+
+  it('P0-3 — 잘못된 학번 형식 + coupon.used=true → 400 INVALID_FORMAT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '12345', // 형식 X (학과 코드 37 누락)
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_FORMAT');
+  });
+
+  it('P0-3 — 학과 코드 37이 아닌 학번 + coupon.used=true → 400 INVALID_FORMAT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202612001', // 학과 코드 12 (다른 학과)
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_FORMAT');
+  });
+
+  it('P0-3 — 쿠폰 미사용(coupon.used=false) + 외부인 → 정상 주문 (할인 없음)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        coupon: { used: false },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.total_price).toBe(18000); // 할인 X
+  });
 });
 
 describe('사용자 API — 영업 외 가드', () => {

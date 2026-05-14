@@ -22,7 +22,7 @@ import {
   updateTransferInfo,
 } from '../repositories/order-repo.js';
 import { calculatePrice } from '../domain/pricing.js';
-import { consumeCoupon } from '../domain/coupon.js';
+import { consumeCoupon, CouponError } from '../domain/coupon.js';
 import { getPopularMenus } from '../domain/popularity.js';
 import { getBusinessState } from '../domain/business-state.js';
 
@@ -96,11 +96,24 @@ export function customerRoutes(db) {
     res.json(getBusinessState(db));
   });
 
-  // ── POST /api/orders (ADR-020 Pattern B) ──
+  // ── POST /api/orders (ADR-020 Pattern B + P0-3 쿠폰 위변조 방어) ──
   router.post('/api/orders', (req, res, next) => {
     try {
       const input = CreateOrderSchema.parse(req.body);
       const operating_date = getBusinessState(db).operating_date;
+
+      // P0-3 (Codex 리뷰) — 쿠폰 위변조 방어.
+      // pricing.js는 coupon.used만 보고 1,000원 할인하므로, 학번/외부인 검증을
+      // *가격 계산 이전*에 강제해야 한다. 거부 시 트랜잭션 시작 전이라 DB 무변경.
+      if (input.coupon?.used) {
+        if (input.is_external || !input.student_id) {
+          throw new CouponError(
+            '쿠폰은 학번이 있는 학생만 사용할 수 있습니다',
+            'COUPON_REQUIRES_STUDENT',
+          );
+        }
+      }
+
       // 서버 자체 계산 — 클라가 보낸 total/items_priced는 무시
       const priced = calculatePrice(
         { items: input.items, coupon: input.coupon },
@@ -120,8 +133,9 @@ export function customerRoutes(db) {
           table_no: input.table_no ?? null,
           operating_date,
         });
-        // 쿠폰 사용 — 학생만, 외부인은 정책상 불가
-        if (input.coupon?.used && !input.is_external && input.student_id) {
+        // 쿠폰 소비 — 위 P0-3 가드로 student_id·!is_external가 보장됨.
+        // validateCoupon 실패(형식·중복) 시 트랜잭션 ROLLBACK으로 주문도 취소.
+        if (input.coupon?.used) {
           consumeCoupon(
             {
               studentId: input.student_id,
