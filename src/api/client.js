@@ -65,6 +65,13 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 // 즉, 총 시도 횟수는 1 + RETRY_BACKOFFS.length = 3.
 const RETRY_BACKOFFS = [200, 600];
 
+// P1-6 (Codex 리뷰): admin mutation에 자동 CSRF 토큰 주입.
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+const ADMIN_API_PREFIX = '/admin/api/';
+function isAdminMutation(path, method) {
+  return !SAFE_METHODS.has(method) && path.startsWith(ADMIN_API_PREFIX);
+}
+
 // ── 핵심 함수 ────────────────────────────────────────────────
 /**
  * @param {string} path - API 경로 (또는 baseUrl과 합성될 path).
@@ -96,9 +103,17 @@ export async function apiFetch(
   const init = {
     method,
     signal: composedSignal,
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
   };
   if (body !== undefined) init.body = JSON.stringify(body);
+
+  // P1-6: admin mutation 자동 CSRF 토큰 주입 (지연 import — 순환 방지).
+  if (isAdminMutation(path, method)) {
+    const { getCsrfToken } = await import('./csrf.js');
+    const token = await getCsrfToken({ signal: composedSignal });
+    if (token) init.headers['X-CSRF-Token'] = token;
+  }
 
   // 재시도 루프: 0 ≤ attempt ≤ RETRY_BACKOFFS.length.
   for (let attempt = 0; attempt <= RETRY_BACKOFFS.length; attempt++) {

@@ -35,8 +35,61 @@ function freshDb({ open = true } = {}) {
 async function loginAgent(app, pin = SEED_PIN) {
   const agent = request.agent(app);
   const res = await agent.post('/admin/login').send({ pin });
-  return { agent, res };
+  // P1-6: CSRF 토큰 미리 받아 두기 (mutation 호출 시 자동 set).
+  const t = await agent.get('/admin/api/csrf-token');
+  return { agent, res, csrfToken: t.body?.token ?? null };
 }
+
+// P1-6: mutation 호출 헬퍼 — X-CSRF-Token 자동 주입.
+function withCsrf(req, token) {
+  return token ? req.set('X-CSRF-Token', token) : req;
+}
+
+// ── P1-6 (Codex 리뷰) CSRF 토큰 보호 ──────────────────────────
+describe('CSRF 보호 — P1-6', () => {
+  it('★ 미들웨어 — POST /admin/api/menus/:id/toggle X-CSRF-Token 없으면 403', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.post('/admin/api/menus/1/toggle').send({ soldOut: true });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('CSRF_INVALID');
+  });
+
+  it('★ GET /admin/api/csrf-token → 토큰 발급 + 동일 토큰으로 mutation 통과', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const token = await agent.get('/admin/api/csrf-token');
+    expect(token.status).toBe(200);
+    expect(typeof token.body.token).toBe('string');
+    expect(token.body.token.length).toBeGreaterThan(10);
+
+    const ok = await agent
+      .post('/admin/api/menus/1/toggle')
+      .set('X-CSRF-Token', token.body.token)
+      .send({ soldOut: true });
+    expect(ok.status).toBe(200);
+  });
+
+  it('★ X-CSRF-Token 불일치 시 403', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    await agent.get('/admin/api/csrf-token'); // 토큰 발급 받지만
+    const res = await agent
+      .post('/admin/api/menus/1/toggle')
+      .set('X-CSRF-Token', 'wrong-value')
+      .send({ soldOut: true });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('CSRF_INVALID');
+  });
+
+  it('★ GET 요청은 CSRF 검증 X (안전한 메서드)', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    // GET /admin/api/menus — 토큰 없이도 통과 (안전한 read-only)
+    const res = await agent.get('/admin/api/menus');
+    expect(res.status).toBe(200);
+  });
+});
 
 describe('POST /admin/login', () => {
   it('정상 PIN → 200 + 세션 쿠키 설정', async () => {
@@ -104,9 +157,8 @@ describe('GET /admin/api/business/state', () => {
 describe('POST /admin/api/business/open', () => {
   it('CLOSED → OPEN 전환', async () => {
     const app = createApp({ db: freshDb({ open: false }) });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post('/admin/api/business/open')
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/business/open'), csrfToken)
       .send({ operating_date: '2026-05-21' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('OPEN');
@@ -115,8 +167,8 @@ describe('POST /admin/api/business/open', () => {
 
   it('멱등 — 이미 OPEN이어도 200 (operating_date 유지)', async () => {
     const app = createApp({ db: freshDb() });
-    const { agent } = await loginAgent(app);
-    const res = await agent.post('/admin/api/business/open').send({});
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/business/open'), csrfToken).send({});
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('OPEN');
   });
@@ -138,9 +190,8 @@ describe('GET /admin/api/menus', () => {
 describe('POST /admin/api/menus/:id/toggle', () => {
   it('soldOut 토글', async () => {
     const app = createApp({ db: freshDb() });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post('/admin/api/menus/1/toggle')
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/menus/1/toggle'), csrfToken)
       .send({ soldOut: true });
     expect(res.status).toBe(200);
     expect(res.body.soldOut).toBe(true);
@@ -148,9 +199,8 @@ describe('POST /admin/api/menus/:id/toggle', () => {
 
   it('recommended 토글', async () => {
     const app = createApp({ db: freshDb() });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post('/admin/api/menus/2/toggle')
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/menus/2/toggle'), csrfToken)
       .send({ recommended: true });
     expect(res.status).toBe(200);
     expect(res.body.recommended).toBe(true);
@@ -158,9 +208,8 @@ describe('POST /admin/api/menus/:id/toggle', () => {
 
   it('존재하지 않는 메뉴 → 404', async () => {
     const app = createApp({ db: freshDb() });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post('/admin/api/menus/9999/toggle')
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/menus/9999/toggle'), csrfToken)
       .send({ soldOut: true });
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('MENU_NOT_FOUND');
@@ -250,10 +299,11 @@ describe('POST /admin/api/orders/:id/transition', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
       });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post(`/admin/api/orders/${create.body.id}/transition`)
-      .send({ to: 'CANCELED' });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(
+      agent.post(`/admin/api/orders/${create.body.id}/transition`),
+      csrfToken,
+    ).send({ to: 'CANCELED' });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('CANCELED');
   });
@@ -267,20 +317,22 @@ describe('POST /admin/api/orders/:id/transition', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
       });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post(`/admin/api/orders/${create.body.id}/transition`)
-      .send({ to: 'PAID' });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(
+      agent.post(`/admin/api/orders/${create.body.id}/transition`),
+      csrfToken,
+    ).send({ to: 'PAID' });
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('ILLEGAL_TRANSITION');
   });
 
   it('존재 X → 404', async () => {
     const app = createApp({ db: freshDb() });
-    const { agent } = await loginAgent(app);
-    const res = await agent
-      .post('/admin/api/orders/9999/transition')
-      .send({ to: 'CANCELED' });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(
+      agent.post('/admin/api/orders/9999/transition'),
+      csrfToken,
+    ).send({ to: 'CANCELED' });
     expect(res.status).toBe(404);
   });
 });
@@ -330,11 +382,10 @@ describe('POST /admin/api/settlement/close (ADR-012 + G13)', () => {
   it('가드 통과 (in_progress 0) → 마감 + business_state CLOSED', async () => {
     const db = freshDb();
     const app = createApp({ db });
-    const { agent } = await loginAgent(app);
-    const res = await agent.post('/admin/api/settlement/close').send({});
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/settlement/close'), csrfToken).send({});
     expect(res.status).toBe(200);
     expect(res.body.is_closed).toBe(true);
-    // G13 — business_state 자동 CLOSED
     const state = await agent.get('/admin/api/business/state');
     expect(state.body.status).toBe('CLOSED');
   });
@@ -348,8 +399,8 @@ describe('POST /admin/api/settlement/close (ADR-012 + G13)', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
       });
-    const { agent } = await loginAgent(app);
-    const res = await agent.post('/admin/api/settlement/close').send({});
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/settlement/close'), csrfToken).send({});
     expect(res.status).toBe(409);
     expect(res.body.error).toBe('IN_PROGRESS_EXISTS');
   });
