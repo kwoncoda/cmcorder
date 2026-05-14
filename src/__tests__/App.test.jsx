@@ -2,9 +2,27 @@
 // - 사용자 9 라우트(C-1~C-9) + 관리자 6 라우트(A-1~A-7) + 404 catch-all + ErrorBoundary.
 // - MemoryRouter 로 initialEntries 지정해 각 경로 진입 시 placeholder 가 렌더되는지 확인.
 // - 관리자 페이지는 React.lazy 라 Suspense fallback 을 거치므로 waitFor 로 비동기 대기.
+// - Task 4.5/4.6 이후: CompletePage/TransferPage 는 useParams.id 기반 fetch 를 수행하므로
+//   apiFetch 를 mock (SAMPLE_ORDER 반환) 해야 진입 testid 가 노출된다.
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+
+// apiFetch mock — fetch 의존 페이지(CompletePage/TransferPage)가 정상 분기로 진입하도록.
+vi.mock('../api/client.js', async () => {
+  const actual = await vi.importActual('../api/client.js');
+  return {
+    ...actual,
+    apiFetch: vi.fn(async () => ({
+      id: 17,
+      no: 17,
+      operating_date: '2026-05-20',
+      status: 'ORDERED',
+      items: [],
+      total_price: 18000,
+    })),
+  };
+});
 
 import { AppRoutes, PageLoading } from '../App.jsx';
 import ErrorBoundary from '../components/ErrorBoundary.jsx';
