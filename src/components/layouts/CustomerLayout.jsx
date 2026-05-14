@@ -1,39 +1,62 @@
-// CustomerLayout — Task 4.1.
+// CustomerLayout — Task 4.1 + P0-5 (Codex 리뷰).
 //
 // 사용자 페이지 공통 레이아웃:
 //  - 헤더 (로고 + 🗺️ 지도 아이콘)
 //  - 본문은 React Router 6 <Outlet/> 로 자식 라우트 렌더
 //  - 423 BusinessClosedError 글로벌 catch → /closed redirect (결정 i, G13)
+//  - P0-5: 마운트 시 /api/business-state 1회 sync — CLOSED면 /closed redirect.
+//    (기존 423 reactive는 POST 호출 의존이라 사용자가 GET만 하면 CLOSED를 모름.
+//     SPA 진입 시점에 영업 상태를 강제 확인해 잘못된 메뉴 노출 차단.)
 //
-// 영업 가드 — 폴링 X, 단일 reactive 진입점 (USER_FLOW §3.5 3조):
-//  - 60초 폴링은 비효율 — 200명 동시 접속 시 분당 200req 의미 없는 트래픽.
-//  - Task 6.8 middleware 가 모든 POST 를 423 으로 거부 → 어떤 API 호출이든 423 = CLOSED 즉시 감지.
-//  - useGlobalErrorHandler 가 unhandledrejection 에서 BusinessClosedError 를 catch → navigate('/closed').
-//  - 진행 중 주문 페이지(/orders/:id/{complete,transfer,status}) 에서는 redirect X.
-//    이미 PAID/READY/DONE 등 정산 가드 통과 상태 — 영업 종료와 무관하게 사용자가 자기 주문은 봐야 함.
+// 진행 중 주문 페이지(/orders/:id/{complete,transfer,status})에서는 redirect X.
+// 이미 PAID/READY/DONE 등 정산 가드 통과 상태 — 영업 종료와 무관하게 사용자가 자기 주문은 봐야 함.
 import { useNavigate, useLocation, Outlet, Link } from 'react-router-dom';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Map } from 'lucide-react';
 import { useGlobalErrorHandler } from '../../hooks/useGlobalErrorHandler.js';
+import { useApi } from '../../hooks/useApi.js';
+import { apiFetch } from '../../api/client.js';
+import { API } from '../../api/routes.js';
+import { BusinessStateSchema } from '../../api/schemas.js';
+import useBusinessStateStore from '../../store/businessState.js';
 import Icon from '../atoms/Icon.jsx';
 
 // 진행 중 주문 페이지인지 (redirect 보호 대상).
-// 경로 패턴: /orders/<숫자>/{complete|transfer|status}.
 function isOrderInProgressPath(pathname) {
   return /^\/orders\/\d+\/(complete|transfer|status)$/.test(pathname);
+}
+
+// CLOSED일 때도 머물러 있어도 되는 경로 (자기 자신 redirect 방지).
+function isClosedAllowedPath(pathname) {
+  return pathname === '/closed' || pathname === '/map' || isOrderInProgressPath(pathname);
 }
 
 export default function CustomerLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const syncFromServer = useBusinessStateStore((s) => s.syncFromServer);
+  const status = useBusinessStateStore((s) => s.status);
 
-  // useGlobalErrorHandler 의 useEffect 의존성에 안정적인 함수를 넘기기 위해 useCallback.
-  // location.pathname 이 바뀔 때만 새 핸들러 생성 → 리스너 재등록.
-  const handleBusinessClosed = useCallback(() => {
-    if (isOrderInProgressPath(location.pathname)) {
-      // 진행 중 주문 페이지는 redirect X — 정산 가드 통과한 주문 보호.
-      return;
+  // P0-5: 마운트 시 1회 영업 상태 sync (DashboardPage I-2 패턴과 동일).
+  const businessQuery = useApi(
+    ({ signal }) => apiFetch(API.BUSINESS_STATE, { schema: BusinessStateSchema, signal }),
+    [],
+  );
+  useEffect(() => {
+    if (businessQuery.data?.status) syncFromServer(businessQuery.data);
+  }, [businessQuery.data, syncFromServer]);
+
+  // CLOSED + 진행 중 주문/허용 경로 외 → /closed redirect.
+  // *서버 응답 수신 후*에만 발화 — store 기본값 'CLOSED'로 인한 잘못된 redirect 방지.
+  useEffect(() => {
+    if (!businessQuery.data) return;
+    if (status === 'CLOSED' && !isClosedAllowedPath(location.pathname)) {
+      navigate('/closed', { replace: true });
     }
+  }, [businessQuery.data, status, location.pathname, navigate]);
+
+  const handleBusinessClosed = useCallback(() => {
+    if (isOrderInProgressPath(location.pathname)) return;
     navigate('/closed', { replace: true });
   }, [navigate, location.pathname]);
 

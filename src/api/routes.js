@@ -8,6 +8,7 @@ export const API = {
   // 사용자
   MENUS: '/api/menus',
   POPULAR: '/api/popular',
+  BUSINESS_STATE: '/api/business-state',
   ORDERS: '/api/orders',
   ORDER: (id) => `/api/orders/${id}`,
   ORDER_TRANSFER_REPORT: (id) => `/api/orders/${id}/transfer-report`,

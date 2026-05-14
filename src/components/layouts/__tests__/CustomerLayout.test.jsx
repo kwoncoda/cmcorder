@@ -10,12 +10,13 @@
 //    (이미 PAID/READY/DONE 등 정산 가드 통과 = 영향 X)
 //  - 일반 에러는 redirect 발화 X
 //
-// 폴링은 *사용하지 않는다*. unhandledrejection 단일 진입점만.
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+// 폴링은 *사용하지 않는다*. unhandledrejection 단일 진입점만 (+ P0-5 마운트 시 1회 sync).
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import CustomerLayout from '../CustomerLayout.jsx';
 import { BusinessClosedError } from '../../../api/client.js';
+import useBusinessStateStore from '../../../store/businessState.js';
 
 // 테스트용 자식 페이지 (Outlet 검증용).
 function TestPage() {
@@ -44,7 +45,28 @@ function renderWithLayout(initialPath = '/menu') {
   );
 }
 
+// fetch mock — /api/business-state 응답 제어.
+function mockBusinessStateResponse(body, status = 200) {
+  const orig = global.fetch;
+  global.fetch = vi.fn(async (url) => {
+    if (typeof url === 'string' && url.includes('/api/business-state')) {
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    return orig ? orig(url) : new Response('not-mocked', { status: 404 });
+  });
+}
+
 describe('CustomerLayout', () => {
+  beforeEach(() => {
+    // 기본은 OPEN — 기존 테스트들이 redirect 미발화를 가정하기 때문.
+    // P0-5 CLOSED 케이스에서는 mockBusinessStateResponse + setState로 명시 변경.
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    mockBusinessStateResponse({ status: 'OPEN', operating_date: '2026-05-20' });
+  });
+
   it('헤더 로고 + 지도 아이콘이 렌더된다', () => {
     renderWithLayout('/menu');
     expect(screen.getByText('🍗 치킨이닭')).toBeInTheDocument();
@@ -119,6 +141,34 @@ describe('CustomerLayout', () => {
       window.dispatchEvent(event);
     });
 
+    expect(screen.getByTestId('test-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('closed-redirect-target')).not.toBeInTheDocument();
+  });
+
+  // ── P0-5 (Codex 리뷰) CLOSED GET 가드 ────────────────────────
+  it('★ P0-5 — 마운트 시 서버가 CLOSED 응답 → /menu에서 /closed redirect', async () => {
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    mockBusinessStateResponse({ status: 'CLOSED', operating_date: '2026-05-20' });
+    renderWithLayout('/menu');
+    await waitFor(
+      () => expect(screen.getByTestId('closed-redirect-target')).toBeInTheDocument(),
+      { timeout: 2000 },
+    );
+  });
+
+  it('★ P0-5 — CLOSED 응답이어도 /orders/:id/status에서는 redirect X (진행 중 보호)', async () => {
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    mockBusinessStateResponse({ status: 'CLOSED', operating_date: '2026-05-20' });
+    renderWithLayout('/orders/17/status');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.getByTestId('test-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('closed-redirect-target')).not.toBeInTheDocument();
+  });
+
+  it('★ P0-5 — OPEN 응답 시 redirect 발화 X', async () => {
+    mockBusinessStateResponse({ status: 'OPEN', operating_date: '2026-05-20' });
+    renderWithLayout('/menu');
+    await new Promise((r) => setTimeout(r, 300));
     expect(screen.getByTestId('test-page')).toBeInTheDocument();
     expect(screen.queryByTestId('closed-redirect-target')).not.toBeInTheDocument();
   });
