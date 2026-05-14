@@ -33,7 +33,7 @@ ADR-024는 EJS + Alpine.js 채택했으나, 2026-05-14 사용자 결정으로 Re
 | Styling | Tailwind 3 + `tokens.css` 변수 직접 import | design-bundle tokens.css 그대로 |
 | HTTP | fetch (browser native) + custom hook | axios 학습 회피 |
 | SSE | EventSource (browser native) + custom hook `useOrderStream` | ADR-015 |
-| 모션 | Framer Motion 11 (선택) 또는 CSS animation | 도그태그·미니맵 펄스·StartBusinessCTA |
+| 모션 | **CSS animation 기본** (Framer Motion 도입 X — Phase 2 후보) | 도그태그·미니맵 펄스·StartBusinessCTA — design-bundle CSS keyframes로 이미 작동. 50KB+ gzip 절감 |
 | **Backend** | Express 4 + better-sqlite3 11 | ADR-024 그대로 유지 |
 | API | REST (`/api/*`, `/admin/api/*`) + SSE (`/api/orders/:id/stream`) | API_DRAFT.md 그대로 |
 | DB | SQLite WAL + Docker named volume | ADR-023 유지 |
@@ -54,6 +54,9 @@ ADR-024는 EJS + Alpine.js 채택했으나, 2026-05-14 사용자 결정으로 Re
 | `screens-admin.jsx` | `src/pages/admin/*.jsx` |
 | `app.jsx` (tweaks panel 포함) | `src/App.jsx` (라우터만, tweaks 제거 — Phase 2 후보) |
 | `assets/items/*` | `public/items/*` 또는 `src/assets/items/*` |
+| `window.MENUS` (전역) | API fetch `GET /api/menus` + zod 스키마 (Task 3.2). 페이지 hook `useMenuData()`로 캡슐화 |
+| `window.CATEGORIES` (전역) | `src/constants/categories.js` 상수 (정적 배열) |
+| `window.STATE_LABEL` (전역) | `src/constants/order-states.js` 상수 (8 상태 한글 라벨 맵) |
 
 ---
 
@@ -173,6 +176,21 @@ chickenedak/
 - [ ] **reduced motion 시 정적 표시** (모션 있는 컴포넌트만)
 - [ ] **타입 안전** (zod 스키마 또는 JSDoc — 입력·출력 둘 다)
 - [ ] **회귀 케이스 추가** (해당 시 — ADR-020 4 / 쿠폰 / 상태 머신 등)
+- [ ] **React 가이드라인 준수** (§3.5 8조 — 페이지 컴포넌트·Effect·상태)
+- [ ] **페이지 Task 한정:** Loading / Error / Empty 3분기 모두 처리 (`LoadingState`·`ErrorState`·`EmptyState` 사용)
+
+### 3.5 React 코드 가이드라인 (vercel-react-best-practices 기반)
+
+모든 React 코드는 다음 8조를 따른다. 위반 시 Phase 7 부록 D 회귀에서 차단.
+
+1. **페이지 컴포넌트는 ≤ 120줄** — *data fetch (custom hook 위임) + 레이아웃 합성 + 라우팅 분기*만. 표시 로직은 Organisms로 분리. 위반 시 `MenuPage` → `useMenuData()` + `<RecommendedBanner/>` + `<MenuList/>` + `<StickyCartBar/>` 식으로 쪼갠다.
+2. **Zustand는 셀렉터로만 구독** — `useCartStore(s => s.totalQty)` 패턴. `const { totalQty } = useCartStore()` 처럼 *전체 상태 destructure 금지* (전체 리렌더 유발). 다중 필드는 `shallow`.
+3. **API 호출은 페이지 또는 페이지 전용 hook에서만** — Atoms/Molecules/Organisms는 stateless + presentational. `useEffect` 안 fetch는 *항상 AbortController로 cleanup*.
+4. **effect는 외부 시스템 동기화에만** — *파생 상태는 render 중 계산*하거나 `useState(() => 초기화 함수)`. `setState` → useEffect → 또 setState 패턴 금지 (rerender-derived-state-no-effect).
+5. **인터랙션 로직은 이벤트 핸들러에** — 진동·소리·analytics·navigate 같은 *부수효과*는 effect deps에 두지 말고 onClick/onStatusChange 핸들러 안 (rerender-move-effect-to-event). 새로고침 후 같은 상태로 재진입 시 부수효과 재발화 X.
+6. **컴포넌트는 모듈 최상위에서만 정의** — 부모 함수 안 `function Child() {}` 금지 (매 렌더마다 재생성 + 자식 전체 unmount/remount). hook도 hook 안에서 정의 X.
+7. **메모이즈는 안정 의존성으로** — `React.memo` 적용 시 props는 primitive 또는 *안정 reference*. 객체/배열 리터럴을 그대로 넘기지 말고 store 또는 useMemo. key는 `id` (index key 금지).
+8. **번들 위생** — ① barrel import 금지 (`import { Map } from 'lucide-react'` ✅ / `import * as Icons from 'lucide-react'` ❌). ② 관리자 라우트는 `React.lazy` + `Suspense`. ③ dev-only 도구(axe-core)는 `if (import.meta.env.DEV)` 가드 후 동적 import.
 
 ---
 
@@ -210,31 +228,37 @@ chickenedak/
   - 단위: `tokens.test.js` — 모든 CSS 변수 hex 매칭 9 케이스 (회귀: 군복 톤 + 카드 + 형광 옐로 + danger)
 - **관련 결정:** DESIGN §3.3·§4.1·§4.3·§9.5
 
-## Task 0.3: 라우팅 셸 (React Router 6 + ErrorBoundary)
+## Task 0.3: 라우팅 셸 (React Router 6 + ErrorBoundary + React.lazy)
 
-- [ ] **목적:** 사용자/관리자 라우트 구분 + 영업 외 redirect 가드 + 에러 경계.
+- [ ] **목적:** 사용자/관리자 라우트 구분 + 영업 외 redirect 가드 + 에러 경계 + 관리자 라우트 코드 스플릿.
 - **TDD 흐름:**
-  1. RED: `App.test.jsx` `/menu` 진입 → MenuPage 렌더, `/admin/dashboard` → DashboardPage
-  2. GREEN: React Router 6 + 라우트 14개 placeholder
+  1. RED: `App.test.jsx` `/menu` 진입 → MenuPage 렌더, `/admin/dashboard` → DashboardPage (lazy 로드 대기)
+  2. GREEN: React Router 6 + 라우트 14개 placeholder + 관리자 6 페이지 `React.lazy()` + `<Suspense fallback={<LoadingState/>}>` 경계
   3. REFACTOR: ErrorBoundary로 감싸기 + 404 catch-all
 - **완료 기준:**
   - 모든 라우트(C-1~C-9, A-1~A-7) placeholder 렌더
+  - **사용자 6 페이지는 정적 import** (오픈 시 즉시 필요), **관리자 6 페이지는 `React.lazy`** (학생회 5명만 진입 — 사용자 번들에 미포함)
+  - `<Suspense>` 경계에 `<LoadingState variant="page">` fallback
   - ErrorBoundary 작동 (의도 throw → ErrorPage)
+  - 빌드 결과 `npm run build` → 관리자 chunk 분리 확인 (`dist/assets/admin-*.js` 별도 파일)
 - **필요 테스트:**
-  - 단위: `App.test.jsx` — 라우트 매칭 14 케이스 + ErrorBoundary 1
-- **관련 결정:** USER_FLOW §10 라우팅 다이어그램
+  - 단위: `App.test.jsx` — 라우트 매칭 14 케이스 + ErrorBoundary 1 + lazy Suspense fallback 1
+- **관련 결정:** USER_FLOW §10 라우팅 다이어그램 + §3.5 8조 (번들 위생)
 
 ## Task 0.4: 테스트 인프라 (Vitest + RTL + axe + Playwright)
 
-- [ ] **목적:** 모든 테스트 도구 설정. `npm test`·`npm run test:e2e` 명령.
+- [ ] **목적:** 모든 테스트 도구 설정. `npm test`·`npm run test:e2e` 명령. dev에서 axe 자동 검증.
 - **완료 기준:**
   - `vitest.config.js` jsdom 환경
   - `@testing-library/react` + `@testing-library/jest-dom`
   - `vitest-axe` 통합 (axe-core)
   - `playwright.config.js` baseURL 5173·timeout 10s
   - sample E2E 통과 (홈페이지 진입)
+  - **`src/lib/ax.js`는 dev-only 동적 import** — `main.jsx`에서 `if (import.meta.env.DEV) { import('./lib/ax').then(({ initAxe }) => initAxe(React, ReactDOM)); }` 패턴. production 번들에 axe-core 미포함 회귀 (build → axe 문자열 검색 0건).
 - **필요 테스트:**
   - E2E: `e2e/smoke.spec.js` 1 케이스
+  - 번들: `npm run build` 후 `dist/assets/*.js`에 `axe-core` 0건 확인 (Phase 7 부록 D에서 회귀)
+- **관련 결정:** §3.5 8조 (번들 위생)
 
 ## Task 0.5: 백엔드 Express 셸
 
@@ -292,9 +316,14 @@ chickenedak/
 
 ## Task 1.3: Icon + Spinner + Divider
 
-- [ ] **완료 기준:** lucide-react 또는 SVG inline. spinner는 reduced motion 시 정적 점.
+- [ ] **완료 기준:**
+  - lucide-react는 **named import 전용** — `import { Map, ShoppingCart } from 'lucide-react'` ✅ / `import * as Icons` 또는 `import Icons from 'lucide-react'` ❌ (`bundle-barrel-imports` 규칙)
+  - 또는 SVG inline (이모지로 대체 가능한 곳은 이모지 우선 — design-bundle 시안 그대로)
+  - spinner는 reduced motion 시 정적 점 (3 도트 흔들 X)
+  - Divider 3 variant (solid·dashed·stamp)
 - **필요 테스트:**
   - 단위: 각 3-4 케이스 = 10 케이스
+- **관련 결정:** §3.5 8조 (번들 위생) + COMPONENT §2.6~§2.8
 
 ---
 
@@ -323,17 +352,27 @@ chickenedak/
 
 - [ ] **목적:** 절정 컴포넌트. 떨어지는 모션 600ms + sessionStorage 단발 (DESIGN §9.6 + 결정 h).
 - **TDD 흐름:**
-  1. RED: 첫 진입 시 모션 재생 + sessionStorage 키 저장 / 재방문 시 정적 표시
-  2. GREEN: `useSession('dogtag-shown-{orderId}')` hook + Framer Motion or CSS
-  3. REFACTOR: reduced motion 시 정적 + 진동(Vibration API) 조건부
+  1. RED: 첫 진입 시 *첫 렌더부터* dropping 클래스 포함 (깜박 없음) + sessionStorage 키 저장 / 재방문 시 정적 표시
+  2. GREEN: **`useState(() => ...)` 초기화 함수 패턴** — useEffect 사용 X. §3.5 4조 (rerender-derived-state-no-effect).
+     ```jsx
+     const [animate] = useState(() => {
+       if (!dropping || !no) return false;
+       const key = `dogtag-shown-${no}`;
+       if (sessionStorage.getItem(key)) return false;
+       sessionStorage.setItem(key, '1');
+       return true;
+     });
+     ```
+  3. REFACTOR: reduced motion 시 정적 + 진동(Vibration API) 조건부. Framer Motion 도입 X (§0.2) — CSS keyframes만.
 - **완료 기준:**
   - sessionStorage 키 = `dogtag-shown-{orderId}` (DESIGN §9.6)
+  - **첫 렌더부터 dropping 클래스 결정** (useEffect 후행 setState 금지 — 깜박 회귀)
   - reduced motion 시 모션 X
   - Pretendard Black 주문번호 + JetBrains Mono 일자 (DESIGN §5.1)
 - **필요 테스트:**
-  - 단위: `DogTagFrame.test.jsx` 8 케이스 (첫/재방문·reduced motion·진동 API·키보드 포커스)
+  - 단위: `DogTagFrame.test.jsx` 9 케이스 (첫/재방문·reduced motion·진동 API·키보드 포커스 + **첫 렌더 dropping 회귀 1**)
   - E2E: E2E-01 학생 주문 흐름의 일부
-- **관련 결정:** DESIGN §1·§9.3·§9.6·ADR-026 §1·결정 h
+- **관련 결정:** DESIGN §1·§9.3·§9.6·ADR-026 §1·결정 h + §3.5 4조
 
 ## Task 2.4: MascotState (5 variant + idle)
 
@@ -381,11 +420,14 @@ chickenedak/
 - [ ] **목적:** 이체 확인 폼 (은행 콤보 + "다른 이름 이체" 체크박스) + 본부 대시보드 칸반 컬럼.
 - **완료 기준:**
   - 은행 6개 옵션 + "기타" 직접 입력
-  - "다른 이름 이체" 체크 시 추가 이름 input 활성
+  - "다른 이름 이체" 체크 시 추가 이름 input 활성 — react-hook-form `watch('useOtherName')` (Controller X — re-render 최소화)
   - AdminCardColumn: 5분/10분 경과 노란/빨간 강조
+  - **카드 단위 `React.memo`** — `OrderCard`는 props가 *primitive 또는 안정 reference (order 객체 reference 유지)*. 5초 폴링 후 *변하지 않은 카드는 리렌더 X* (§3.5 7조).
+  - **elapsed_minutes는 카드 내부 `useMemo([order.transferred_at, tick])`** — tick은 부모(KanbanBoard)가 1분 단위 발행. 카드 자체는 transferred_at 안 바뀌면 리렌더 회피.
+  - key는 `order.id` (index key 금지).
 - **필요 테스트:**
-  - 단위: 12+ 케이스
-- **관련 결정:** ADR-021 + USER_FLOW §4.2
+  - 단위: 12+ 케이스 + **memo 회귀 1** (동일 props 재전달 시 React.memo가 rerender 차단 — `render` mock count로 검증)
+- **관련 결정:** ADR-021 + USER_FLOW §4.2 + §3.5 7조 (메모이즈)
 
 ## Task 2.8: BusinessStateBadge + StartBusinessCTA (G13)
 
@@ -446,49 +488,55 @@ chickenedak/
 
 # Phase 3 — 상태 관리 + API 클라이언트 + 에러 처리 (0.5일, Phase 4-6과 병렬)
 
-## Task 3.1: Zustand store 설계
+## Task 3.1: Zustand store 설계 (3 slice — 셀렉터 강제)
 
-- [ ] **목적:** `cart`·`ui`·`businessState` 3 slice.
+- [ ] **목적:** `cart`·`ui`·`businessState` 3 slice. **order는 글로벌 X** (URL `:id`로부터 fetch).
 - **완료 기준:**
   - `cart`: items[] · totalQty · totalPrice (memo) · addItem · removeItem · clear
-  - `ui`: 미니맵 open · 모달 stack · scroll position
+  - `ui`: **모달 stack만** (미니맵 open은 modal stack에 통합). **scroll position 제거** — 페이지 내부 ref/history state로 처리. 전역화 시 모든 페이지 리렌더 트리거.
   - `businessState`: status · operating_date · shouldBeOpen (computed)
+  - **order slice 만들지 X** — `pages/customer/{Complete,Status,Transfer}Page.jsx`에서 `useParams().id`로 fetch. 새로고침/SNS 공유 URL 모두 자연스럽게 작동 (§3.5 3조).
   - DevTools middleware (개발 모드)
+  - **셀렉터 강제 패턴 (§3.5 2조):** 모든 사용처에 `useCartStore(s => s.totalQty)` 형식. `const { totalQty } = useCartStore()` 처럼 *전체 객체 구독 금지*. 다중 필드는 `shallow` 사용.
 - **필요 테스트:**
   - 단위: `cart.store.test.js` 8 케이스 (add·remove·중복·합계·clear)
   - 단위: `businessState.store.test.js` 5 케이스 (status 전이·shouldBeOpen)
-- **관련 결정:** USER_FLOW §7.5 영업 머신
+  - **셀렉터 회귀 1**: 카트 totalQty만 구독한 컴포넌트가 items 배열 변경 시 리렌더되는지 — *셀렉터 도입 후 차단되어야* (render count 검증)
+- **관련 결정:** USER_FLOW §7.5 영업 머신 + §3.5 2조 (셀렉터)
 
-## Task 3.2: API client (fetch wrapper + retry + zod)
+## Task 3.2: API client (fetch wrapper + retry + zod + AbortController)
 
-- [ ] **목적:** `src/api/client.js` + `schemas.js` (zod) + `routes.js` 상수.
+- [ ] **목적:** `src/api/client.js` + `schemas.js` (zod) + `routes.js` 상수 + `hooks/useApi.js` (페이지에서 호출).
 - **TDD 흐름:**
-  1. RED: `getMenus()` 200 응답 파싱 + 423 BUSINESS_CLOSED 거부 + 5xx 재시도
-  2. GREEN: fetch + zod 검증 + 에러 throw
-  3. REFACTOR: AbortController + timeout 10s
+  1. RED: `getMenus()` 200 응답 파싱 + 423 BUSINESS_CLOSED 거부 + 5xx 재시도 + StrictMode 2회 mount 시 1개 fetch만 활성
+  2. GREEN: fetch + zod 검증 + 에러 throw + **모든 호출 AbortController 지원**
+  3. REFACTOR: timeout 10s + 423 단일 reactive 패턴
 - **완료 기준:**
   - 모든 API 응답 zod 스키마 검증 (런타임 타입 안전)
-  - HTTP 423 (G13) 시 `BusinessClosedError` 별도 처리 → /closed redirect
+  - **HTTP 423 (G13) 단일 reactive 패턴:** `BusinessClosedError` throw → `useApi` 또는 ErrorBoundary가 catch → `/closed` redirect (또는 `BusinessGate` 컴포넌트 분기). **별도 폴링 X — 어떤 API 호출이든 423이면 자동 redirect** (Task 4.1 변경 참조).
   - 5xx 재시도 (최대 2회, exponential backoff)
+  - **`useApi` hook이 AbortController 자동 관리** — useEffect cleanup에서 abort. StrictMode 2회 mount에도 *최종 활성 fetch 1개*만.
 - **필요 테스트:**
-  - 단위: 15 케이스 (200·400·423·500·timeout·재시도·zod 실패)
-- **관련 결정:** API_DRAFT §0.3·G13
+  - 단위: 16 케이스 (200·400·423·500·timeout·재시도·zod 실패 + **AbortController cleanup 1** + **StrictMode 2 mount 후 1 fetch 활성 회귀 1**)
+- **관련 결정:** API_DRAFT §0.3·G13 + §3.5 3조 (AbortController)
 
-## Task 3.3: useOrderStream SSE hook
+## Task 3.3: useOrderStream SSE hook (StrictMode 호환)
 
-- [ ] **목적:** EventSource 래핑 + 자동 재연결 + cleanup.
+- [ ] **목적:** EventSource 래핑 + 자동 재연결 + cleanup + 단계 전이 콜백 (`onStatusChange(prev, next)`).
 - **TDD 흐름:**
-  1. RED: 단계 변경 이벤트 수신 + 컴포넌트 언마운트 시 close
-  2. GREEN: EventSource + addEventListener + return cleanup
-  3. REFACTOR: 인증 분기 (학생 학번 vs 외부인 토큰) + 재연결 backoff
+  1. RED: 단계 변경 이벤트 수신 + 컴포넌트 언마운트 시 close + StrictMode 2회 mount 시 *최종 EventSource 1개*만 활성
+  2. GREEN: `useEffect` 안 EventSource open + `return () => es.close()` cleanup. **backoff 카운터는 외부 `useRef`** (state로 두면 close된 ref가 재발화)
+  3. REFACTOR: 인증 분기 (학생 학번 vs 외부인 토큰) + `onStatusChange(prev, next)` 콜백 props
 - **완료 기준:**
   - 메모리 누수 0 (cleanup 검증)
+  - **StrictMode mount-unmount-mount에서 EventSource 1개만 활성** (connection counter ≤ 1)
   - 재연결 (브라우저 기본) 후 snapshot 재push
+  - **`onStatusChange(prev, next)` 콜백 인터페이스** — 호출자(StatusPage)가 진동·깜박 등 *부수효과를 이벤트로* 처리 (§3.5 5조)
   - reduced motion 시 카드 깜박 정적
 - **필요 테스트:**
-  - 단위: 10 케이스 (snapshot·status 이벤트·언마운트 cleanup·재연결·인증 분기)
+  - 단위: 12 케이스 (snapshot·status 이벤트·언마운트 cleanup·재연결·인증 분기 + **StrictMode 회귀 1** + **onStatusChange 호출 횟수 회귀 1**)
   - 통합: 백엔드 SSE 엔드포인트와 (Phase 6 후)
-- **관련 결정:** ADR-015·ADR-021
+- **관련 결정:** ADR-015·ADR-021 + §3.5 5조 (이벤트 핸들러)
 
 ## Task 3.4: ErrorBoundary + 전역 에러 처리
 
@@ -503,96 +551,114 @@ chickenedak/
 
 # Phase 4 — 사용자 페이지 9종 (1일)
 
-## Task 4.1: CustomerLayout + 영업 외 가드
+## Task 4.1: CustomerLayout + 영업 외 가드 (423 reactive — 폴링 X)
 
-- [ ] **목적:** 공통 레이아웃 (헤더·로고·🗺️ 아이콘) + 영업 상태 폴링 + CLOSED 시 /closed redirect.
+- [ ] **목적:** 공통 레이아웃 (헤더·로고·🗺️ 아이콘) + **423 reactive 가드** (별도 폴링 X). CLOSED 시 /closed redirect.
+- **변경 사유 (2026-05-14 React 리뷰):** 60초 폴링은 ① 200명 동시 접속 시 분당 200req 의미 없는 트래픽 ② Task 6.8 middleware가 모든 POST를 423으로 거부하므로 *어떤 사용자 API 호출이든 423 = CLOSED 즉시 감지* ③ 카트만 보고 있어도 메뉴 fetch·이체·주문 어디든 시도하면 자동 감지. 폴링은 *불필요*.
 - **완료 기준:**
-  - GET `/admin/api/business/state` 60초마다 폴링 (Phase 6 후 실 API)
-  - CLOSED 감지 시 **200ms fade + 컨텍스트 카피** → /closed redirect (결정 i)
-  - 진행 중 주문(/orders/:id/*) 보고 있으면 redirect X
+  - **폴링 제거** — `setInterval(fetchBusinessState, 60000)` 패턴 사용 X
+  - 모든 API 호출에서 `BusinessClosedError` (HTTP 423) catch → **200ms fade + 컨텍스트 카피** → /closed redirect (결정 i). useApi/ErrorBoundary 단일 진입점.
+  - 진행 중 주문 SSE 채널의 `event: business-closed` 이벤트 수신 시도 redirect (서버가 푸시)
+  - 진행 중 주문(/orders/:id/*) 보고 있으면 redirect X (이미 DONE/CANCELED 상태이므로 정산 가드 통과 = 영향 X)
 - **필요 테스트:**
-  - 단위: 6 케이스 (CLOSED 감지·fade·redirect·예외 경로)
-- **관련 결정:** G13·결정 i·USER_FLOW §4.6
+  - 단위: 6 케이스 (423 catch·fade·redirect·진행 중 주문 예외·SSE business-closed 이벤트·진입 직후 423)
+- **관련 결정:** G13·결정 i·USER_FLOW §4.6 + §3.5 3조 (API 호출 단일 reactive)
 
-## Task 4.2: MenuPage (C-1)
+## Task 4.2: MenuPage (C-1) — Container/Presentational 분리
 
-- [ ] **목적:** 메뉴 목록 + 분류 탭 + 인기 TOP 3 (정적 BEST) + 🗺️ 진입.
+- [ ] **목적:** 메뉴 목록 + 분류 탭 + 인기 TOP 3 (정적 BEST) + 🗺️ 진입. **페이지 ≤120줄** (§3.5 1조).
 - **TDD 흐름:**
-  1. RED: GET /api/menus·/api/popular 모의 → MenuCard 8개 + TOP 3 영역
-  2. GREEN: useQuery 또는 useEffect + fetch
-  3. REFACTOR: 분류 탭 (전체·🔥인기·⭐추천·치킨·사이드·음료)
+  1. RED: GET /api/menus·/api/popular 모의 → MenuCard 8개 + TOP 3 영역 + 로딩/에러/빈 분기
+  2. GREEN: `useMenuData()` custom hook (fetch + zod) + `MenuPage` presentational
+  3. REFACTOR: `<RecommendedBanner/>`·`<CategoryTabs/>`·`<MenuList/>`·`<StickyCartBar/>` Organisms 분리
 - **완료 기준:**
+  - **MenuPage ≤120줄** — data fetch는 `useMenuData()` hook 위임, 표시는 Organisms 합성만
+  - **3분기 처리:** `<LoadingState/>` (fetch 중) + `<ErrorState/>` (5xx·zod 실패) + `<EmptyState/>` (분류 필터 결과 0건)
+  - **StickyCartBar는 Zustand `useCartStore(s => s.totalQty, shallow)` 직접 구독** — props drilling X (§3.5 2조)
   - 정적 BEST 카피 ("🔥 학생회 추천 BEST") — 결정 E
-  - sticky 카트 바 (하단 sticky bar)
   - 품절 메뉴 흐림 + SOLD OUT 도장
 - **필요 테스트:**
-  - 단위: 12 케이스
+  - 단위: 14 케이스 (12 기존 + **3분기 회귀 2: loading/error/empty 렌더**)
   - E2E: E2E-01 학생 주문 흐름 일부
-- **관련 결정:** ADR-017 변경·G11·UX §6.1
+- **관련 결정:** ADR-017 변경·G11·UX §6.1 + §3.5 1·2조
 
 ## Task 4.3: CartPage (C-2 인벤토리)
 
-- [ ] **목적:** 카트 화면 (인벤토리 라벨) + 수량 변경 + sticky CTA.
+- [ ] **목적:** 카트 화면 (인벤토리 라벨) + 수량 변경 + sticky CTA. **페이지 ≤120줄** (§3.5 1조).
 - **완료 기준:**
   - 헤더 "인벤토리 (N개)" (G11)
-  - 합계 즉시 반영 (Zustand 구독)
-  - 비어있을 때 마스코트 fallback (UX §6.1)
+  - 합계 즉시 반영 — **Zustand 셀렉터** `useCartStore(s => s.totalPrice)` (§3.5 2조)
+  - 비어있을 때 `<EmptyState/>` 마스코트 fallback (UX §6.1)
+  - **3분기 처리** 명시 (cart 비어있음=Empty, 수량 0 전이 = remove)
 - **필요 테스트:**
-  - 단위: 10 케이스
+  - 단위: 11 케이스 (10 + Empty 분기 1)
 
 ## Task 4.4: CheckoutPage (C-3)
 
-- [ ] **목적:** 학번·이름·"학번 없음"·수령·테이블·쿠폰 입력 폼.
+- [ ] **목적:** 학번·이름·"학번 없음"·수령·테이블·쿠폰 입력 폼. **페이지 ≤120줄** (§3.5 1조).
 - **TDD 흐름:**
   1. RED: 모든 필드 검증·"학번 없음" 체크 시 학번 input 비활성·서버 재계산
   2. GREEN: react-hook-form + zod (학번 `^\d{2}\d{2}37\d{3}$` 또는 외부인)
   3. REFACTOR: 매장 식사 시 테이블 input 활성 + 쿠폰 체크
 - **완료 기준:**
   - "학번 없음" 체크박스 큰 hitbox + 형광 옐로 외곽 (UX-7)
-  - 쿠폰 거부 인라인 에러 (학과 코드 37 미일치 시) — 결정 ADR-019 변경
+  - **조건부 필드는 `watch('isExternal')` / `watch('deliveryType')`** (Controller X — re-render 최소화, §3.5 7조)
+  - 쿠폰 거부 인라인 에러 (학과 코드 37 미일치 시) — 결정 ADR-019 변경 → `<ErrorState variant="inline-field"/>`
   - sticky "주문 접수" CTA
+  - **3분기 처리:** 제출 중 LoadingState (CTA 버튼 inline) + 서버 에러 ErrorState
 - **필요 테스트:**
-  - 단위: 18 케이스 (학번 정규식 6 + 외부인 + 쿠폰 + 테이블 분기 + 폼 제출)
+  - 단위: 18 케이스 (학번 정규식 6 + 외부인 + 쿠폰 + 테이블 분기 + 폼 제출 + watch 조건부 필드 1)
   - E2E: E2E-02 외부인 흐름
-- **관련 결정:** ADR-019 변경·ADR-021·UX-7
+- **관련 결정:** ADR-019 변경·ADR-021·UX-7 + §3.5 1·7조
 
 ## Task 4.5: CompletePage (C-4 절정)
 
-- [ ] **목적:** 도그태그 + WINNER WINNER + 계좌 안내 + 확인 요청 CTA.
+- [ ] **목적:** 도그태그 + WINNER WINNER + 계좌 안내 + 확인 요청 CTA. **페이지 ≤120줄** (§3.5 1조).
 - **완료 기준:**
+  - **주문 정보는 `useParams().id` 기반 fetch** — Zustand `order` slice 만들지 X. 새로고침/SNS 공유 URL 모두 작동 (§3.5 3조)
   - **계좌: 국민은행 233001-04-403536 박동빈** (G9)
-  - 도그태그 sessionStorage 단발 (결정 h)
+  - 도그태그 sessionStorage 단발 (결정 h) — Task 2.3 패턴
   - "WINNER WINNER" 2줄 강제 (DESIGN §5.2) — Black Ops One + Pretendard 한글 부 카피 (결정 g)
-  - 계좌번호 복사 버튼 (Clipboard API)
+  - **계좌번호 복사 3단계 fallback** (학교 와이파이 HTTP 환경 대비, SCREEN §7):
+    1. `navigator.clipboard.writeText()` — HTTPS·localhost (정상 경로)
+    2. 실패 시 `document.execCommand('copy')` + 숨겨진 textarea
+    3. 둘 다 실패 시 텍스트 선택 + "길게 눌러 복사" 안내 카피 표시
+  - **3분기 처리:** 주문 fetch loading/error/notfound (잘못된 id → 404 redirect)
 - **필요 테스트:**
-  - 단위: 14 케이스
+  - 단위: 16 케이스 (14 + **Clipboard 3단계 fallback 회귀 2**: clipboard API 실패 mock → execCommand 사용 / 둘 다 실패 → 안내 카피 렌더)
   - E2E: E2E-01 종착점
-- **관련 결정:** G9·결정 g·결정 h·DESIGN §5.2
+- **관련 결정:** G9·결정 g·결정 h·DESIGN §5.2 + §3.5 1·3조
 
 ## Task 4.6: TransferPage (C-5)
 
-- [ ] **목적:** 은행 입력 폼 + 자동 redirect to StatusPage.
+- [ ] **목적:** 은행 입력 폼 + 자동 redirect to StatusPage. **페이지 ≤120줄** (§3.5 1조).
 - **완료 기준:**
+  - **react-hook-form + zod** 명시 (Task 4.4와 동일 패턴)
+  - **"다른 이름 이체" 체크 시 조건부 필드는 `watch('useOtherName')`** (§3.5 7조)
   - POST `/api/orders/:id/transfer-report` 호출 → status='TRANSFER_REPORTED'
   - 즉시 redirect `/orders/:id/status`
+  - **3분기 처리:** 제출 중 LoadingState + 서버 에러 ErrorState
 - **필요 테스트:**
-  - 단위: 8 케이스
+  - 단위: 9 케이스 (8 + watch 조건부 필드 회귀 1)
 
-## Task 4.7: StatusPage (C-6 SSE + timeline)
+## Task 4.7: StatusPage (C-6 SSE + timeline) — onStatusChange 이벤트 핸들러
 
-- [ ] **목적:** 조리 현황판 + SSE + timeline 미니뷰 + READY 진동·깜박.
+- [ ] **목적:** 조리 현황판 + SSE + timeline 미니뷰 + READY 진동·깜박. **페이지 ≤120줄** (§3.5 1조).
 - **TDD 흐름:**
-  1. RED: useOrderStream → status 변경 시 카피 갱신 + timeline 시각 추가 + READY 시 진동
-  2. GREEN: SSE hook + state 매핑 + Vibration API
-  3. REFACTOR: 외부인 토큰 인증 분기 + reduced motion
+  1. RED: useOrderStream → status 변경 시 카피 갱신 + timeline 시각 추가 + READY 시 진동 *1회만* (PAID→READY 전이) + 새로고침 후 status='READY' 진입 시 진동 0회
+  2. GREEN: `useOrderStream({ onStatusChange: (prev, next) => { ... } })` 콜백 패턴 — 진동·깜박은 *이벤트 핸들러 안*에서 호출 (§3.5 5조)
+  3. REFACTOR: 외부인 토큰 인증 분기 + reduced motion + aria-live announce
 - **완료 기준:**
   - **timeline 미니뷰** (UX §5.1 보강): ✅ 17:30 주문→17:33 입금→...→🔄 17:38 조리 시작
   - 시각만 표시 (분 단위 추정 X, ADR-010 보존)
-  - READY 시 화면 형광 옐로 깜박 1초 + 진동 (`navigator.vibrate(200)`)
+  - **READY 진동·깜박은 `onStatusChange(prev, next)` 핸들러 안에서** `prev !== 'READY' && next === 'READY'`일 때만 호출. useEffect deps에 status를 두지 X.
+  - 새로고침 후 status='READY' 직진입 시 *정적 표시* — 진동 0회
+  - **상태 변경 시 `<div role="status" aria-live="polite">` 카피 announce** (스크린리더, UX §8 시나리오)
+  - **3분기 처리:** SSE 연결 중 LoadingState + 끊김 ErrorState (자동 재연결 안내) + 주문 없음 404
 - **필요 테스트:**
-  - 단위: 18 케이스 (SSE 8 상태 + timeline + 진동 + reduced motion)
+  - 단위: 21 케이스 (18 + **onStatusChange 회귀 3**: PAID→READY 1회 진동 / READY 직진입 0회 / StrictMode 2 mount 1회 진동)
   - E2E: E2E-05 SSE 갱신
-- **관련 결정:** ADR-015·ADR-010·UX §5.1
+- **관련 결정:** ADR-015·ADR-010·UX §5.1 + §3.5 5조 (이벤트 핸들러)
 
 ## Task 4.8: MapPage (C-7 미니맵 모달)
 
@@ -631,22 +697,27 @@ chickenedak/
   - E2E: E2E-09 로그인·세션·로그아웃
 - **관련 결정:** ADR-024·ADR-021
 
-## Task 5.2: DashboardPage (A-2 Kanban + G13 영업 토글)
+## Task 5.2: DashboardPage (A-2 Kanban + G13 영업 토글) — memo + tick 패턴
 
-- [ ] **목적:** 본부 대시보드 6 컬럼 Kanban + BusinessStateBadge + StartBusinessCTA + 5초 폴링.
+- [ ] **목적:** 본부 대시보드 6 컬럼 Kanban + BusinessStateBadge + StartBusinessCTA + 5초 폴링. **페이지 ≤120줄** (§3.5 1조).
 - **TDD 흐름:**
-  1. RED: 6 컬럼 (주문중·이체확인요청·이체완료·조리중·수령대기·보류) + 영업 상태 분기 (CLOSED 시 CTA)
-  2. GREEN: GET /admin/api/orders 5초 폴링 + AdminCardColumn
+  1. RED: 6 컬럼 (주문중·이체확인요청·이체완료·조리중·수령대기·보류) + 영업 상태 분기 (CLOSED 시 CTA) + 5초 폴링 후 변하지 않은 카드는 리렌더 X
+  2. GREEN: `useDashboardData()` hook (5초 폴링) + `<BusinessGate/>` + `<KanbanBoard/>` (memo 카드) + `<SidebarCounter/>`
   3. REFACTOR: 5분/10분 경고 + 키보드 4종 (Enter·Esc·Tab·?)
 - **완료 기준:**
+  - **DashboardPage ≤120줄** — 표시 로직은 Organisms에 (§3.5 1조)
   - **CLOSED 상태:** Kanban 숨김 + 큰 형광 옐로 "🚀 장사 시작" CTA prominent (Task 2.8)
   - **OPEN 상태:** Kanban 6 컬럼 + 영업 배지 🟢 OPEN
   - 좌측 사이드 5단계 카운터 (SCREEN §5.2)
   - 5초 폴링 (SSE는 Phase 2 후보)
+  - **카드 단위 React.memo + 안정 key** — `<OrderCard order={o}/>` 의 props는 *primitive 또는 안정 reference*. 5초 폴링 후 *동일 order는 리렌더 X* (Profiler로 검증). key는 `order.id` (§3.5 7조).
+  - **tick 발행 패턴 — KanbanBoard가 1분 단위 tick state 발행** → AdminCardColumn 내부 `useMemo([order.transferred_at, tick])`로 elapsed 재계산. 카드 자체는 transferred_at 안 바뀌면 리렌더 X.
+  - **키보드 Enter — 카드 컨테이너는 `<button>` 또는 `<article tabIndex={0} onKeyDown(Enter)>`** (시맨틱 button 우선). focus-visible 형광 옐로 ring (DESIGN §12.3).
+  - **3분기 처리:** 폴링 첫 진입 LoadingState + 5xx ErrorState + 주문 0건 EmptyState ("오늘 첫 주문 대기 중")
 - **필요 테스트:**
-  - 단위: 16 케이스
+  - 단위: 19 케이스 (16 + **memo 회귀 1** + **tick 패턴 회귀 1** + **키보드 Enter 1**)
   - E2E: E2E-11 장사 시작 흐름·E2E-12 자동 CLOSED
-- **관련 결정:** G13·결정 D 단축키 4종·SCREEN §3.7
+- **관련 결정:** G13·결정 D 단축키 4종·SCREEN §3.7 + §3.5 1·7조
 
 ## Task 5.3: OrderDetailPage (A-3) + TransfersPage (A-4)
 
@@ -821,9 +892,9 @@ chickenedak/
 - **필요 테스트:**
   - E2E: reduced motion 시뮬레이션 1 케이스
 
-## Task 7.4: 회귀 테스트 매트릭스 최종 검증
+## Task 7.4: 회귀 테스트 매트릭스 최종 검증 + 부록 D React 점검
 
-- [ ] **목적:** 핵심 회귀 모두 실행 → 통과.
+- [ ] **목적:** 핵심 회귀 모두 실행 → 통과 + 부록 D vercel-react-best-practices 8항목 점검.
 - **회귀:**
   - ADR-020 4 케이스 (pricing) ★★★
   - 쿠폰 12 케이스 (학과 코드 37)
@@ -831,9 +902,11 @@ chickenedak/
   - business-state 11 단위 (G13)
   - bootstrap 7 단위 (init.sql)
   - 정산 마감 4 가드
-  - SSE 누수
+  - SSE 누수 + StrictMode connection counter ≤ 1
+  - **부록 D 8항목** (Profiler·번들·StrictMode·셀렉터·코드 스플릿·barrel·effect→event·페이지 크기)
 - **완료 기준:**
   - `npm test` 모든 회귀 통과 5초 내
+  - 부록 D 체크리스트 8/8 통과
 
 ## Task 7.5: D-1 리허설 (5/19)
 
@@ -872,14 +945,14 @@ chickenedak/
 
 | Phase | 관련 ADR/결정 |
 |---|---|
-| 0 부트스트랩 | ADR-023 (Docker)·**ADR-024 변경** (React 채택) |
-| 1 토큰·Atoms | DESIGN §3·§4 군복 톤·결정 d 대비 실측·결정 b 메뉴 매핑 |
-| 2 Components | DESIGN §10·§11·결정 c·d·e·f·h·G12·G13 |
-| 3 상태·API | API_DRAFT 전체·G13 423·ADR-021 인증 |
-| 4 사용자 페이지 | USER_FLOW §2~§3·SCREEN_STRUCTURE §3·결정 i·g·G9 계좌 |
-| 5 관리자 페이지 | G13 영업 토글·ADR-012·결정 D 단축키 4종 |
+| 0 부트스트랩 | ADR-023 (Docker)·**ADR-024 변경** (React 채택)·**§3.5 8조 번들 위생** (React.lazy·axe dev-only·Framer X) |
+| 1 토큰·Atoms | DESIGN §3·§4 군복 톤·결정 d 대비 실측·결정 b 메뉴 매핑·**§3.5 8조** (lucide-react named import) |
+| 2 Components | DESIGN §10·§11·결정 c·d·e·f·h·G12·G13·**§3.5 4·7조** (DogTag useState 초기화·React.memo) |
+| 3 상태·API | API_DRAFT 전체·G13 423·ADR-021 인증·**§3.5 2·3·5조** (셀렉터·AbortController·onStatusChange) |
+| 4 사용자 페이지 | USER_FLOW §2~§3·SCREEN_STRUCTURE §3·결정 i·g·G9 계좌·**§3.5 1·5조** (페이지 ≤120줄·이벤트 핸들러) |
+| 5 관리자 페이지 | G13 영업 토글·ADR-012·결정 D 단축키 4종·**§3.5 1·7조** (Container/Presentational·memo) |
 | 6 백엔드 | ADR-019 변경·ADR-020·ADR-022 변경·G13·init.sql 사용자 요구 |
-| 7 접근성·E2E | DESIGN §12·§9.5·UX §8·TEST_PLAN §8 |
+| 7 접근성·E2E | DESIGN §12·§9.5·UX §8·TEST_PLAN §8·**부록 D** (vercel-react-best-practices 8항목) |
 
 # 부록 C: design-bundle 변환 체크리스트
 
@@ -894,6 +967,53 @@ design-bundle 파일을 React 프로덕션으로 이식 시 *반드시* 확인:
 - [ ] ClosedScreen aria-live 운영 일정 자동 announce
 - [ ] AI 슬롭 #26 카드 내 형광 옐로 텍스트 검출 (린트 또는 회귀)
 - [ ] `react-tweaks-panel.jsx` *프로덕션 제외* (Phase 2 후보)
+- [ ] `window.MENUS` → `/api/menus` fetch + zod 스키마 (§0.3 표)
+- [ ] `window.CATEGORIES` → `src/constants/categories.js`
+- [ ] `window.STATE_LABEL` → `src/constants/order-states.js`
+- [ ] DogTag dropping 모션 `useEffect` 사용 X (시안 53-60줄 패턴 변경) — `useState(() => ...)` 초기화 함수 (Task 2.3, §3.5 4조)
+- [ ] `screens-customer.jsx`·`screens-admin.jsx` 단일 함수 컴포넌트 → 페이지 ≤120줄 + Organisms 분리 (§3.5 1조)
+
+---
+
+# 부록 D: vercel-react-best-practices 회귀 체크리스트 (Phase 7 직전)
+
+Phase 7.4 회귀 매트릭스 통과 후 *추가로* 다음 8항목을 점검. 위반 시 차단.
+
+## D.1 React DevTools Profiler 검증 (성능)
+- [ ] **AdminDashboardPage 5초 폴링 후 동일 order 카드는 "Did not render"** — Profiler에서 record 시작 → 5초 대기 → 변하지 않은 카드들이 commit 없음 확인 (Task 5.2 React.memo)
+- [ ] **MenuPage 카트 변화 시 메뉴 카드 리렌더 X** — Zustand 셀렉터로 StickyCartBar만 리렌더 (Task 3.1, 4.2)
+
+## D.2 번들 크기 검증
+- [ ] `npm run build` 후 `dist/assets/` 사용자 chunk와 관리자 chunk 분리 확인 (Task 0.3 React.lazy)
+- [ ] `grep -r "axe-core" dist/assets/*.js` → 0건 (Task 0.4 dev-only)
+- [ ] 사용자 번들 ≤ 250KB gzip (React + Router + Zustand + react-hook-form + zod + 코드)
+- [ ] Framer Motion 미포함 확인 (`grep "framer-motion" package.json` → 미설치, §0.2)
+
+## D.3 StrictMode 호환
+- [ ] `<React.StrictMode>` 활성 상태에서 모든 페이지 진입 → console error 0건
+- [ ] StatusPage 진입 시 EventSource connection counter ≤ 1 (Task 3.3)
+- [ ] StatusPage PAID→READY 전이 1회 vibrate (StrictMode mount-unmount-mount에도 1회만, Task 4.7)
+
+## D.4 Zustand 셀렉터 패턴
+- [ ] grep으로 `const { ... } = useCartStore()` 패턴 검출 → 0건 (셀렉터 `(s => ...)` 강제, §3.5 2조)
+- [ ] grep `useBusinessStateStore()` (인자 없음) → 0건
+- [ ] grep `useUiStore()` (인자 없음) → 0건
+
+## D.5 코드 스플릿
+- [ ] Network 탭에서 `/menu` 진입 시 admin chunk 미로딩
+- [ ] `/admin/dashboard` 진입 시 admin chunk 추가 로드
+
+## D.6 Barrel import 차단
+- [ ] grep `import \* as` → lucide-react·zod·zustand 등 barrel 0건 (§3.5 8조)
+- [ ] grep `from 'lucide-react'` 모두 named import (`{ X, Y }`)
+
+## D.7 Effect → Event 분리
+- [ ] grep `useEffect.*navigate(`·`useEffect.*vibrate(`·`useEffect.*toast(` → 0건 (이벤트 핸들러로, §3.5 5조)
+- [ ] DogTag dropping 모션 useEffect 미사용 회귀 (Task 2.3, §3.5 4조)
+
+## D.8 페이지 컴포넌트 크기
+- [ ] `wc -l src/pages/**/*.jsx` → 모두 ≤ 120줄 (§3.5 1조)
+- [ ] 페이지 안 inline 컴포넌트 정의 0건 (`function X() {}` 안 `function Y() {}`, §3.5 6조)
 
 ---
 
