@@ -11,6 +11,8 @@
 4. 영업 상태 빨간 CLOSED 배지 확인 → "장사 시작" 큰 노란 버튼 클릭 → 녹색 OPEN
 5. 모바일 폰에서 `http://<노트북IP>:3000/menu` 진입 → 메뉴 정상 표시 확인
 
+> **세션 쿠키 (P0-A, ADR-031 2026-05-15):** `docker-compose.yml`은 `SESSION_COOKIE_SECURE=false` 기본. HTTP 로컬 운영 호환. **HTTPS reverse proxy 도입 시 `SESSION_COOKIE_SECURE=true`로 변경 + Express `trust proxy` 설정 필요.** 부스 로컬 와이파이는 HTTP가 정상 경로.
+
 ## 운영 중 (한 화면)
 
 대시보드는 6 컬럼 칸반(Kanban) 형태로 표시.

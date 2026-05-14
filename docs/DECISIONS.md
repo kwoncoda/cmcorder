@@ -888,6 +888,35 @@
 
 ---
 
+## ADR-031: 세션 쿠키 secure flag 환경변수 분리 (P0-A Codex v2 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- 기존 `server/middleware/admin-auth.js`는 `secure: process.env.NODE_ENV === 'production'`
+- Docker compose가 `NODE_ENV=production` + 부스 노트북 HTTP 로컬 운영 → secure 쿠키가 HTTP에서 발송 안 됨 → admin 로그인 200이지만 세션 유실
+- Codex v2 P0 지적 (`docs/codex리뷰결과_v2.md` §4 P0-1)
+- 환경 라벨(NODE_ENV)과 전송 프로토콜(HTTPS)을 혼동했던 설계 결함
+
+**결정:**
+`SESSION_COOKIE_SECURE` env로 명시적 opt-in.
+- 기본 (미설정) → `secure: false` (HTTP 호환)
+- `SESSION_COOKIE_SECURE=true` → `secure: true` (HTTPS reverse proxy 가정)
+
+`docker-compose.yml` 기본은 `SESSION_COOKIE_SECURE=false`. HTTPS proxy 도입 시 `true` + `app.set('trust proxy', 1)` 추가 필요.
+
+**대안 — 거부됨:**
+- `secure: 'auto'` (express-session) — `trust proxy` 설정 의존, 행동 예측 어려움
+- HTTPS 강제 — 부스 단발 운영 인프라에 과스펙
+
+**Trade-off:**
+- 기본 false는 sniffing 가능. 그러나 부스 로컬 와이파이 환경 + 운영자 단일 노트북 사용이라 위협 모델 낮음.
+- HTTPS 도입 시 환경변수 1개만 바꾸면 됨 (운영 가이드 안내).
+
+**회귀:** `server/middleware/__tests__/admin-auth.test.js` P0-A 케이스 3건.
+
+---
+
 ## ADR-028: react-hook-form 미채택 → controlled inputs 유지 (P2-2 Codex 리뷰)
 
 **상태:** Accepted (2026-05-15)

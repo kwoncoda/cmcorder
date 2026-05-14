@@ -1,199 +1,162 @@
-# Codex 리뷰 수정 계획 — P0/P1/P2 자동 수정
+# Codex 리뷰 v2 수정 계획 — P0 2건 + 문서 충돌 통합
 
-작성일: 2026-05-15
-실행 모드: Superpowers subagent-driven-development + TDD (자동)
-대상: `docs/codex리뷰결과.md` 의 P0 5건 · P1 6건 · P2 3건
+작성일: 2026-05-15 (v2 재리뷰 기반)
+대상: `docs/codex리뷰결과_v2.md` 의 새 P0 2건 + 문서 충돌 6항목
+실행 모드: Superpowers subagent-driven-development + TDD (자동, 무승인)
+이전 v1 계획: `docs/CODEX_REVIEW_FIX_PLAN.md` (기존 — 본 문서가 덮어씀, git history로 보존)
 
-## 0. 진행 원칙
+## 0. 진행 원칙 (v1과 동일)
 
-1. 항목마다 **실제 코드/문서 기준 재검증** → 진짜 버그 여부 확인.
-2. production code 수정 전 **실패 테스트 먼저 작성** (TDD).
-3. 패치 후 테스트 통과 → 명세 정합/품질 리뷰.
-4. 보안·정합성·가격·권한은 **서버 기준 재계산/검증**. 클라 값 신뢰 금지.
-5. 단순 우회·테스트 삭제·기능 제거 금지.
-6. 자동 수정이 위험한 항목은 BLOCKED로 기록하고 다음으로 진행.
-7. 항목 단위 1 커밋 (한국어 메시지).
-8. 전체 종료 후 `npm test` + `npm run build` 통과 + summary 작성.
+1. 항목마다 **실제 코드/문서 기준 재검증**.
+2. production code 수정 전 **실패 테스트 먼저** (TDD).
+3. 보안·정합성·가격·권한은 **서버 기준 재계산/검증**.
+4. 단순 우회·테스트 삭제·기능 제거 금지.
+5. 항목 단위 1 커밋 (한국어 메시지).
+6. 자동 위험 시 BLOCKED로 기록 후 다음으로 진행.
+7. 전체 종료 후 `npm test` + `npm run build` 통과 + summary 작성.
 
-## 1. 사전 검증 — 코드 ↔ 리뷰 매칭 결과
+## 1. 검증 — 코드/문서 ↔ v2 리뷰 매칭
 
-| 리뷰 항목 | 코드 검증 | 결론 |
+| v2 항목 | 검증 | 결론 |
 |---|---|---|
-| P0-1 Docker 정적 서빙 | `server/app.js`에 `express.static` X | **버그 확정** |
-| P0-2 SSE 미구현 | `useOrderPolling` 으로 fallback (0900068 커밋) | **이미 폴링으로 대응 — 문서 정합만 남음** |
-| P0-3 쿠폰 위변조 | `consumeCoupon` 호출이 `student_id && !is_external` 가드 안 | **버그 확정** (할인은 적용, 기록 누락) |
-| P0-4 주문 상세 무인증 | `GET /api/orders/:id` 인증 X + `external_token` 응답 | **버그 확정** |
-| P0-5 CLOSED GET 통과 | 미들웨어 GET 통과, 프론트는 423 발생 시 /closed redirect (POST 만) | **부분 문제 — SPA 가드 보강 필요** |
-| P1-1 E2E 실패 | `tests/smoke.spec.js`는 1개. 로컬 dev server 미기동 시 타임아웃 | **환경 의존 — 명령 수정** |
-| P1-2 admin card 매핑 | `AdminCardColumn`이 `order.depositorName` 읽음. 서버는 `depositor_name`/`name` | **버그 확정** |
-| P1-3 정산 보조 누락 | 통장합계/차이/쿠폰 요약 X | **누락 확정** |
-| P1-4 메뉴 CRUD | 가격 편집 UI X. 서버는 `base_price` patch 가능 | **누락 확정** |
-| P1-5 PII 자동삭제 | 일회성 서비스이므로 수동 폐기 절차 문서화로 충분 | **운영 가이드 보강** |
-| P1-6 CSRF | 관리자 mutation API에 토큰 검증 X | **누락 확정** |
-| P2-1 README 불일치 | EJS+Alpine 옛 표기 | **문서 갱신** |
-| P2-2 react-hook-form | 실제 미채택 | **계획 문서 갱신** |
-| P2-3 canvas 경고 | jsdom 미지원 | **테스트 setup 보강** |
+| 새 P0-A: Docker production secure cookie | `server/middleware/admin-auth.js:32` `secure: NODE_ENV==='production'` + `docker-compose.yml` `NODE_ENV=production` + `admin-card.md`가 HTTP 로컬 안내 → secure 쿠키가 HTTP에서 전송 안 됨 | **버그 확정** |
+| 새 P0-B: transfer-report 인증 누락 | `server/routes/customer.js:152-168` `?token=` 미검증. ID만으로 입금정보 덮어쓰기 가능 | **버그 확정** |
+| 충돌-1: SSE vs 폴링 | 6+ 문서가 SSE 잔존, 코드는 폴링 — ADR-015 (2026-05-15) 변경이 최신 | **문서 갱신** (ADR-015 기준) |
+| 충돌-2: PII 자동 vs 수동 | 6+ 문서가 자동 잔존, 코드/ADR-027(2026-05-15)는 수동 | **문서 갱신** (ADR-027 기준) |
+| 충돌-3: CLOSED GET — 서버 vs SPA | API_DRAFT/FEATURE_LIST는 서버 middleware 명세, 코드는 SPA만 — Codex v2 P1 지적 | **서버 middleware 추가** + SPA 유지 (이중 가드) |
+| 충돌-4: react-hook-form | IMPLEMENTATION_PLAN 5곳 잔존, ADR-028(2026-05-15) 미반영 | **문서 갱신** (ADR-028 기준) |
+| 충돌-5: 메뉴 CRUD 범위 | F-A-024 전체 CRUD 요구, 코드는 가격+토글만 — 일회성 8개 고정 메뉴 | **명세 축소 + ADR-029** |
+| 충돌-6: 정산 그래프/ZIP 이력 | F-A-032/035 P0 요구, 코드 미구현 — ZIP의 summary.json 사후 분석 가능 | **명세 축소 + ADR-030** |
 
-## 2. 수정 작업 순서
+## 2. P0 — 코드 수정
 
-### P0-1. Express dist 정적 서빙 + SPA fallback
+### P0-A. Docker production secure cookie
+
+**근본 원인:**
+- `secure: process.env.NODE_ENV === 'production'` 단일 조건은 *전송 프로토콜*과 *환경 라벨*을 혼동.
+- Docker compose가 `NODE_ENV=production` + HTTP 로컬 운영 → secure 쿠키가 HTTP에서 발송 X.
 
 **파일:**
-- 수정: `server/app.js`
-- 수정: `Dockerfile` (필요 시 path 환경변수)
-- 신규 테스트: `server/__tests__/static-spa.test.js`
+- 수정: `server/middleware/admin-auth.js`
+- 수정: `docker-compose.yml` (`SESSION_COOKIE_SECURE` env 명시)
+- 신규 테스트: `server/middleware/__tests__/admin-auth.test.js` (P0-A 케이스 추가)
 
-**TDD 단계:**
-1. supertest로 `GET /` → 200 + HTML 응답, `GET /menu` → 200 HTML, `GET /api/menus` → JSON 유지 검증하는 실패 테스트 작성.
-2. `server/app.js`에 `DIST_PATH` 환경변수 (기본 `./dist`) → `express.static(DIST_PATH)` + `app.get('*', ...)` SPA fallback 추가.
-3. fallback은 API/admin/healthz 경로 제외.
-4. dist 디렉토리 없으면 fallback skip (테스트 환경).
+**TDD:**
+1. 실패 테스트: `NODE_ENV=production` + `SESSION_COOKIE_SECURE` 미설정 시 cookie `secure` flag *없음* (HTTP 호환).
+2. 실패 테스트: `SESSION_COOKIE_SECURE=true` 시 cookie `secure` flag *있음*.
+3. 수정: `secure: process.env.SESSION_COOKIE_SECURE === 'true'` (명시적 opt-in).
+4. docker-compose.yml `environment`에 `SESSION_COOKIE_SECURE=false` 기본 명시 + 주석으로 HTTPS proxy 시 `true` 설정 안내.
+5. admin-card.md 운영 가이드에 환경변수 안내 추가.
 
-### P0-2. SSE 정책 정합 (문서 갱신)
+**결정 근거:** 보안 fail-secure를 *플랫폼 기본*으로 두지 않고 *운영자 명시 설정*으로 옮김. HTTP 로컬 운영이 명확한 일회성 부스이므로 이중 안전: SESSION_SECRET fallback 경고 + secure 명시.
 
-**파일:**
-- 수정: `docs/FEATURE_LIST.md` F-S-010/011 (폴링 fallback로 변경, SSE는 Phase 2)
-- 수정: `docs/DECISIONS.md` ADR 추가 또는 ADR-015 변경 기록
+### P0-B. transfer-report access_token 인증
 
-**작업:**
-- 별도 테스트 추가 없음 (이미 `useOrderPolling.test.jsx` 존재).
-- F-S-010/011을 "5초 폴링 fallback (ADR-015 변경 2026-05-15)"로 갱신.
-
-### P0-3. 쿠폰 할인 위변조 방어
+**근본 원인:**
+- P0-4에서 `GET /api/orders/:id`만 token 검증 추가, mutation `POST /api/orders/:id/transfer-report`는 무인증 잔존.
+- ID 추측으로 타인 주문 입금정보 덮어쓰기 가능 → `TRANSFER_REPORTED`로 강제 전이.
 
 **파일:**
-- 수정: `server/routes/customer.js`
-- 신규 테스트: `server/routes/__tests__/customer.test.js` 케이스 추가
+- 수정: `server/routes/customer.js` (POST transfer-report에 token 검증)
+- 수정: `src/pages/customer/TransferPage.jsx` (token query 부착)
+- 신규 테스트: `server/routes/__tests__/customer.test.js` (token 없음/잘못된 token/타인 token)
 
-**TDD 단계:**
-1. 실패 테스트: `coupon.used=true` + `is_external=true` → 400 또는 할인 X. 
-2. 실패 테스트: `coupon.used=true` + `student_id=null` → 400.
-3. 실패 테스트: `coupon.used=true` + invalid student_id → 400 (validateCoupon 호출).
-4. customer.js에서 `input.coupon?.used`가 true면 가격 계산 전 `validateCoupon` 호출. 외부인이거나 학번 없으면 `CouponError('COUPON_REQUIRES_STUDENT')`로 거부.
-5. 검증 통과 후 가격 계산 + consumeCoupon. 트랜잭션으로 묶음.
+**TDD:**
+1. 실패 테스트: token 없이 POST → 401.
+2. 실패 테스트: 잘못된 token → 403.
+3. 실패 테스트: 타인 token → 403.
+4. 수정: GET와 동일 패턴 — `?token=` 검증 후 access_token 비교, 미일치 시 401/403.
+5. 클라: TransferPage가 `useOrderToken.withQuery(API.ORDER_TRANSFER_REPORT(id))`로 자동 부착.
 
-### P0-4. 주문 상세 인증 + external_token 보호
+## 3. 문서 충돌 통합
 
-**파일:**
-- 수정: `server/routes/customer.js`
-- 신규 테스트: `server/routes/__tests__/customer.test.js` 케이스 추가
+### 충돌-1: SSE → 폴링
 
-**TDD 단계:**
-1. 실패 테스트: 학생 주문에 학번+이름 없이 `GET /api/orders/:id` → 401.
-2. 실패 테스트: 외부인 주문에 잘못된 token으로 조회 → 403.
-3. 실패 테스트: 응답에 `external_token`이 *조회한 본인*이 외부인인 경우에만 포함.
-4. customer.js: query param `?student_id=&name=` 또는 `?token=` 검증. 미일치 시 401/403.
-5. serializeOrder에서 인증 컨텍스트별로 `external_token` 필터링.
-6. 기존 `GET /api/orders/:id`만 사용하는 호출자 검토 (useOrderPolling은 token query를 이미 보냄).
+**갱신 대상:**
+- `docs/ARCHITECTURE.md` §4.3 + 다이어그램 (line 27/116/141/156/260/271/282-310/683/876/889/897/908): SSE 표기를 "5초 폴링 (ADR-015 변경)"로
+- `docs/PRD.md`: SSE 잔존 위치 폴링으로
+- `docs/USER_FLOW.md`: SSE 언급 → 폴링
+- `docs/API_DRAFT.md`: §1.x SSE 엔드포인트 → 폴링 fallback 명시 + 0.3 SSE 423 항목 갱신
+- `docs/TEST_PLAN.md`: E2E SSE 시나리오 → 폴링
+- `docs/MVP_SCOPE.md`: SSE → 폴링
+- `docs/FEATURE_LIST.md:347,350`: F-U-031/F-A-016 의존 라인 갱신
+- `docs/IMPLEMENTATION_PLAN.md`: SSE/EventSource 잔존 라인 갱신
+- 코드: `src/hooks/useOrderStream.js` 미사용 — `// @deprecated ADR-015 변경` 헤더만 추가 (삭제하면 P1-4 회귀 위험 적지만 보수적으로 보존)
 
-### P0-5. CLOSED GET 정책 정합 — SPA 가드 보강
+**기준 ADR:** ADR-015 (2026-05-15 변경).
 
-**현재 정책:** 백엔드는 GET 통과(이미 6/11 테스트가 기대). SPA는 423 catch 시 /closed.
-**리뷰 지적:** 사용자가 직접 /menu URL 진입 시 CLOSED여도 메뉴가 보임.
+### 충돌-2: PII 자동 → 수동
 
-**파일:**
-- 수정: `src/components/layouts/CustomerLayout.jsx` 또는 신규 가드 컴포넌트
-- 신규 테스트: layout 테스트
+**갱신 대상:**
+- `docs/PRD.md:217,284,304,453`: "정산 후 N일 자동 삭제" → "정산 후 7일 내 운영자 수동 폐기 (ADR-027)"
+- `docs/MVP_SCOPE.md:90`: 동일
+- `docs/FEATURE_LIST.md:271`: F-I-006 cron → 수동 절차 (ADR-027 참조)
+- `docs/USER_FLOW.md:419`: "PII 자동 삭제" → 운영자 수동 폐기
+- `docs/DB_DRAFT.md:4,726,738,819`: "자동 삭제 정책" → "수동 폐기 절차"
+- `docs/ARCHITECTURE.md:938`: PII 자동 삭제 → 수동
 
-**TDD 단계:**
-1. 실패 테스트: businessState=CLOSED + pathname=/menu → /closed로 navigate.
-2. CustomerLayout에 useBusinessStateStore 구독 + 진행 중 주문 페이지 제외하고 status==='CLOSED' 시 redirect.
-3. 마운트 시 `/api/business-state` fetch (이미 dashboard sync 패턴 있음 — 3da61a6 커밋 참조).
-4. `/closed` 자체는 예외.
+**기준 ADR:** ADR-027 (2026-05-15 신규).
 
-### P1-1. E2E smoke 통과
+### 충돌-3: CLOSED GET 서버 middleware
 
-**파일:**
-- 수정: `playwright.config.js` (또는 npm script) — `webServer` 단계에서 백엔드 같이 띄우거나 dev에서 mock.
-- 수정: `tests/smoke.spec.js`
-
-**TDD 단계:**
-1. smoke.spec 실패 원인 확인 → goto('/')가 React 빌드에서 API call 의존 시 타임아웃.
-2. webServer 설정에 backend(server.js)도 launch 또는 npm 스크립트 `dev:full` 정의.
-3. smoke를 백엔드까지 같이 돌면 통과해야.
-
-### P1-2. 관리자 카드 필드 매핑
+**근본 원인:** API_DRAFT.md §1.12 예시 코드가 `if (state.status === 'CLOSED') { if (req.method === 'GET') return res.redirect(302, '/closed'); }` 명세. 현재 `business-state.js`는 GET 통과.
 
 **파일:**
-- 수정: `src/components/organisms/AdminCardColumn.jsx`
-- 신규 테스트: `src/components/organisms/__tests__/AdminCardColumn.test.jsx` 추가 케이스
+- 수정: `server/middleware/business-state.js`
+- 수정: `server/middleware/__tests__/business-state.test.js`
+- 수정: `server/routes/__tests__/customer.test.js` (CLOSED + GET /api/menus 통과 → 302 redirect로 변경)
 
-**TDD 단계:**
-1. 실패 테스트: order.depositor_name 또는 order.name + 금액(total_price) 표시 검증.
-2. AdminCardColumn에서 `order.depositor_name ?? order.name`, `order.total_price` 표시.
+**TDD:**
+1. 실패 테스트: CLOSED + GET `/menu` (SPA 경로) → 302 redirect `/closed`.
+2. 실패 테스트: CLOSED + GET `/api/business-state` → 200 (사용자가 영업 상태 알아야 함 — 예외).
+3. 실패 테스트: CLOSED + GET `/api/menus` → 302 (조회도 차단).
+4. 실패 테스트: CLOSED + GET `/closed` → 200 (자기 자신 무한 루프 X).
+5. 실패 테스트: CLOSED + GET 정적 자산 (`/assets/...`, `/favicon.ico`) → 200 (SPA 자산 로드 필요).
+6. 수정: middleware에 GET 분기. CLOSED 시 사용자 GET → 302. 예외: `/api/business-state`, `/closed`, `/healthz`, `/admin/*`, `/assets/*`, 정적 파일.
+7. 기존 테스트 "CLOSED — GET 요청은 통과" 케이스를 갱신 (명세 정렬 — 기능 제거 X).
+8. SPA 가드(P0-5)는 유지 — JS 비활성 환경에서 서버 redirect, JS 동작 환경에서 SPA 가드 = 이중 방어.
 
-### P1-3. 정산 보조 — 통장 합계/차이/쿠폰 요약
+### 충돌-4: react-hook-form 문서
 
-**파일:**
-- 수정: `server/domain/settlement.js` (summary에 coupon_count, coupon_discount 추가)
-- 수정: `src/pages/admin/SettlementPage.jsx` (통장 합계 입력 + 차이 + 쿠폰 요약)
-- 테스트: 도메인/페이지 테스트 추가
+**갱신 대상:**
+- `docs/IMPLEMENTATION_PLAN.md:307` REFACTOR react-hook-form 라인 → "controlled inputs (ADR-028)"
+- `:423` "react-hook-form watch" → "useState"
+- `:601` "GREEN: react-hook-form + zod" → "controlled + 정규식 검증"
+- `:636` "react-hook-form + zod 명시" → "controlled + Task 4.4 패턴"
+- `:989` "react-hook-form + zod" → "zod (서버 검증 + 클라 정규식)"
+- `docs/tasks/2026-05-14-task-1.2-form-atoms.md`, `2026-05-14-task-2.7-transfer-admin-card.md`: 본문 끝에 "ADR-028 (2026-05-15) — react-hook-form 미채택 확정" 후기 추가 (tasks는 history라 본문 수정 X, 후기 추가)
+- `docs/tasks/2026-05-14-implementation-plan-react.md:24`: 동일 라인 갱신
 
-**TDD 단계:**
-1. 도메인 테스트: getSettlementSummary가 coupon_count, coupon_discount_total 반환.
-2. 페이지 테스트: 통장 합계 입력 → 매출 - 합계 = 차이 표시. 쿠폰 N건 표시.
+### 충돌-5: 메뉴 CRUD 명세 축소
 
-### P1-4. 메뉴 CRUD — 가격 편집 UI
+**신규:** ADR-029 — 메뉴 CRUD 축소
 
-**파일:**
-- 수정: `src/pages/admin/MenuAdminPage.jsx`
-- 테스트: 가격 변경 → toggle API 호출 검증
+**갱신:**
+- `docs/FEATURE_LIST.md:184`: F-A-024를 "메뉴 가격 + 품절/추천 토글 (ADR-029 변경, 2026-05-15)"
+- `docs/SCREEN_STRUCTURE.md:380` "[+ 새 메뉴 추가]" → "[가격 편집/품절 토글/추천 토글]"
+- `docs/PRD.md`: 메뉴 8개 고정 운영 명시 (이미 G14 일회성)
 
-**TDD 단계:**
-1. 가격 편집 input 추가 (수정 모드 토글). Save 시 `base_price` patch.
-2. 이름/분류/이미지 편집은 일회성 운영에서 불필요 → BLOCKED로 기록.
+**사유:** 일회성 2일 · 8개 고정 메뉴 · 운영자 1명. 이름/분류/이미지/생성/삭제는 시드 단계에서 SoT(`src/constants/menus.js` + `init.sql`)로 충분.
 
-### P1-5. PII 자동 삭제 정책 — 운영 가이드
+### 충돌-6: 정산 그래프/ZIP 이력 축소
 
-**파일:**
-- 신규: `docs/operations/pii-deletion.md` (수동 폐기 절차)
-- 수정: `docs/operations/admin-card.md` (정산 후 7일 내 데이터 삭제 안내)
-- 수정: `docs/DECISIONS.md` (ADR 추가)
+**신규:** ADR-030 — 정산 보조 P2 강등
 
-**작업:** 일회성 서비스이므로 cron job 대신 운영 절차 + ZIP 보관 + DB 삭제 명령 문서화.
+**갱신:**
+- `docs/FEATURE_LIST.md:197` F-A-032 메뉴별/시간대별 그래프 → **P2 강등** (ZIP `summary.json` 사후 분석)
+- `docs/FEATURE_LIST.md:200` F-A-035 ZIP 다운로드 이력 → **P2 강등** (운영자 1명이라 외부 추적 가능)
+- `docs/PRD.md:163`: "메뉴별 판매 ZIP" 표현 유지하되 그래프 UI 없음 명시
 
-### P1-6. CSRF 토큰
+**사유:** ZIP에 `serializeDb` 전체 덤프 + `summary.json` 포함. 정산 후 Excel/SQLite 직접 열람으로 메뉴별/시간대별 분석 가능. 운영 중 그래프 UI 비용 ≫ 가치.
 
-**파일:**
-- 신규: `server/middleware/csrf.js`
-- 수정: `server/app.js` + `server/routes/admin.js`
-- 수정: `src/api/client.js` (X-CSRF-Token 헤더)
-- 신규 테스트
+## 4. 종료 조건
 
-**TDD 단계:**
-1. GET /admin/api/csrf-token → 토큰 발급 + 쿠키.
-2. POST /admin/api/* mutation에 X-CSRF-Token 누락 → 403.
-3. 토큰 일치 시 통과.
-4. SameSite=lax + double-submit cookie 패턴.
-
-### P2-1. README
-
-**파일:** `README.md`
-
-EJS+Alpine → React 18 SPA + Vite + Express + better-sqlite3 표기 갱신.
-
-### P2-2. react-hook-form 문서
-
-**파일:** `docs/IMPLEMENTATION_PLAN.md` 또는 `docs/DECISIONS.md`
-
-폼 라이브러리 미채택 결정 추가 (controlled inputs로 충분).
-
-### P2-3. canvas 경고
-
-**파일:** `src/__tests__/setup.js`
-
-HTMLCanvasElement.getContext mock 추가하여 axe-core 색대비 검사 우회.
-
-## 3. 자동 수정 종료 조건
-
-- 각 항목 수정 후 관련 테스트 통과 확인.
-- 마지막에 `npm test` 전체 통과.
+- 각 항목 수정 후 관련 테스트 통과.
+- `npm test` 전체 통과 (시작 889/889 → 종료 +N 회귀).
 - `npm run build` 성공.
-- `docs/CODEX_REVIEW_FIX_SUMMARY.md` 작성.
+- `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md` 작성.
 
-## 4. BLOCKED 처리 기준
+## 5. BLOCKED 기준
 
-다음 조건 충족 시 BLOCKED 기록 후 다음으로 진행:
-- API 계약 변경이 진행 중 주문 흐름을 깨고 fallback 미존재
-- 테스트 작성이 5분 이내 불가하고 운영 안전성에 직결되지 않음
-- 사용자 결정이 필요한 정책 (예: 이름/분류 변경 UI 형태)
+- API 계약 변경이 운영 중 주문 흐름을 *현재* 깨는 경우 (D-day 5일 전).
+- 사용자 결정이 필요한 정책 (현재로선 없음 — 충돌 6건 방향성은 위에 명시).
