@@ -6,6 +6,7 @@
 //   브라우저 axe 로 수행하므로 단위 테스트에서는 비활성.
 import { describe, it, expect } from 'vitest';
 import { render } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 
 import ErrorPage from '../pages/customer/ErrorPage.jsx';
@@ -18,7 +19,12 @@ const axeOptions = {
 
 describe('ErrorPage a11y (axe-core)', () => {
   it('ErrorPage 404 렌더에는 a11y 위반이 없다', async () => {
-    const { container } = render(<ErrorPage code={404} />);
+    // Task 4.9 — ErrorPage가 <Link to="/menu"> 사용 → Router 컨텍스트 필요.
+    const { container } = render(
+      <MemoryRouter>
+        <ErrorPage code={404} />
+      </MemoryRouter>,
+    );
     const results = await axe(container, axeOptions);
     expect(results).toHaveNoViolations();
   });
