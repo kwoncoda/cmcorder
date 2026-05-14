@@ -1,11 +1,11 @@
-// A-2 본부 대시보드 (IMPLEMENTATION_PLAN §5.2 / G13 / SCREEN §3.7 / 결정 D).
-// CLOSED: Badge + StartCTA. OPEN: 헤더 + 6컬럼 Kanban + 5초 폴링 + 1분 tick + ? 단축키 안내.
-// 페이지 ≤120줄 (§3.5 1조) — 표시 로직 Organism 위임. 401 → /admin/login navigate.
+// A-2 본부 대시보드 (IMPLEMENTATION_PLAN §5.2 / G13 / SCREEN §3.7 / 결정 D). 페이지 ≤120줄 (§3.5 1조).
+// CLOSED: Badge + StartCTA. OPEN: 헤더 + 6컬럼 Kanban + 5초 폴링 + 1분 tick + ? 단축키 + 401 navigate.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
 import { apiFetch, ApiError } from '../../api/client.js';
 import { API } from '../../api/routes.js';
+import { BusinessStateSchema } from '../../api/schemas.js';
 import useBusinessStateStore, { businessStateSelectors } from '../../store/businessState.js';
 import AdminCardColumn from '../../components/organisms/AdminCardColumn.jsx';
 import BusinessStateBadge from '../../components/organisms/BusinessStateBadge.jsx';
@@ -23,6 +23,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const status = useBusinessStateStore((s) => s.status);
   const setStatus = useBusinessStateStore((s) => s.setStatus);
+  const syncFromServer = useBusinessStateStore((s) => s.syncFromServer);
   const shouldBeOpen = useBusinessStateStore(businessStateSelectors.shouldBeOpen);
 
   const [tick, setTick] = useState(() => Date.now());
@@ -47,6 +48,10 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // I-2: 마운트 시 서버 영업 상태 sync — 새로고침 후 store 기본값 CLOSED 보정.
+  const businessQuery = useApi(({ signal }) => apiFetch(API.ADMIN_BUSINESS_STATE, { schema: BusinessStateSchema, signal }), []);
+  useEffect(() => { if (businessQuery.data?.status) syncFromServer(businessQuery.data); }, [businessQuery.data, syncFromServer]);
+
   // 5초 폴링 — OPEN 상태에서만.
   const ordersQuery = useApi(({ signal }) => apiFetch(API.ADMIN_ORDERS, { signal }), []);
   const { refetch } = ordersQuery;
@@ -57,9 +62,7 @@ export default function DashboardPage() {
   }, [status, refetch]);
 
   // 401 → 로그인으로 이동 (render 중 navigate 금지 → effect).
-  useEffect(() => {
-    if (ordersQuery.error?.status === 401) navigate('/admin/login');
-  }, [ordersQuery.error, navigate]);
+  useEffect(() => { if (ordersQuery.error?.status === 401) navigate('/admin/login'); }, [ordersQuery.error, navigate]);
 
   const handleStartBusiness = async () => {
     setStarting(true);

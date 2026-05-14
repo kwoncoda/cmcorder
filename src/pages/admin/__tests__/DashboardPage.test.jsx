@@ -343,4 +343,56 @@ describe('DashboardPage', () => {
     fireEvent.keyDown(window, { key: '?' });
     expect(screen.queryByTestId('keyboard-help-modal')).not.toBeInTheDocument();
   });
+
+  // ── I-2 회귀: 마운트 시 서버 영업 상태 동기화 ───────────────────────
+  // 문제: store 기본값 CLOSED → 새로고침 후 서버는 OPEN인데 화면은 "장사 시작" CTA 표시.
+  // 해결: 마운트 시 GET /admin/api/business/state → syncFromServer.
+  it('★ 마운트 시 GET /admin/api/business/state 호출 + store sync (I-2)', async () => {
+    // 초기 store는 CLOSED (새로고침 직후 상황 모의).
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    // 첫 useApi → 영업 상태 응답 (서버는 OPEN), 두 번째 → orders.
+    useApi
+      .mockReturnValueOnce({
+        data: { status: 'OPEN', operating_date: '2026-05-20' },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      })
+      .mockReturnValueOnce({
+        data: [],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    renderPage();
+    await waitFor(() => {
+      expect(useBusinessStateStore.getState().status).toBe('OPEN');
+    });
+  });
+
+  it('★ 새로고침 시뮬: store=CLOSED·서버=OPEN → 마운트 후 Kanban으로 전환 (I-2)', async () => {
+    // 새로고침 직후: store 기본값 CLOSED.
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    // businessQuery: 서버 OPEN / ordersQuery: 빈 배열.
+    useApi
+      .mockReturnValueOnce({
+        data: { status: 'OPEN', operating_date: '2026-05-20' },
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      })
+      .mockReturnValueOnce({
+        data: [],
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      });
+    renderPage();
+    // sync 후 OPEN 화면 — CTA는 사라지고 헤더 + Badge 노출.
+    await waitFor(() => {
+      expect(useBusinessStateStore.getState().status).toBe('OPEN');
+    });
+    expect(screen.queryByTestId('start-business-cta')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /본부 대시보드/ })).toBeInTheDocument();
+  });
 });
