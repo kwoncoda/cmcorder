@@ -1,5 +1,16 @@
 # UI 구현 분석 — design-bundle vs 기존 docs
 
+> ⚠️ **DEPRECATED (2026-05-14)** — 이 문서는 *ADR-024 변경 전* EJS+Alpine 기준으로 작성되었습니다.
+> 2026-05-14 React 18 SPA로 스택이 변경됨에 따라, 본 문서의 *변환 가이드·EJS partial 매핑·Alpine 디렉티브* 등은 *더 이상 유효하지 않습니다*.
+> **현재 구현의 정답(SoT):**
+> - 구현 산출물: `docs/IMPLEMENTATION_PLAN.md` (8 Phase / 52 Task, 모두 ✅ 2026-05-14 완료)
+> - 컴포넌트 트리: `src/components/{atoms,molecules,organisms,state,layouts}/`
+> - 페이지: `src/pages/customer/`, `src/pages/admin/`
+>
+> 본 문서는 *2026-05-12 시점 의사결정 이력* 보존용. 구현 참조는 위 SoT 사용.
+
+---
+
 **작성일:** 2026-05-12
 **대상:** `docs/design-bundle/` (Claude Design handoff bundle) vs `docs/{DESIGN, UX_STRATEGY, SCREEN_STRUCTURE, COMPONENT_GUIDE}.md`
 **목적:** **구현 시작 전** 시안과 기획 정합성 검증 + 누락 항목 정리. 코드는 작성하지 않음.

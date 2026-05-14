@@ -109,7 +109,7 @@
 | 컴모융 학생 환영 쿠폰 운영 어려움 | 학번 패턴 검증 (학과 코드 `37`) + 중복 차단 |
 | 입금 매칭이 어려움 | 사용자가 이름·은행 신고 → 운영진 통장 대조 |
 | 사용자가 "조리 완료됐나?" 모름 | 조리 현황판 — 본인 진행 상황 직접 확인 |
-| DB 장애·서버 종료 시 정산 근거 소실 | 정산 ZIP 백업 + 30분 자동 스냅샷 |
+| DB 장애·서버 종료 시 정산 근거 소실 | 정산 ZIP 백업 + 2시간 자동 스냅샷 (ADR-022 변경) |
 
 ### 2.2 왜 모바일 웹인가
 
@@ -161,7 +161,7 @@
 2. **"이체 확인이 빠르다"** — 통장 대조 4요소(이름·은행·금액·시각) + 키보드 Enter
 3. **"마감 실수 안 생긴다"** — 진행 주문 0건 가드 (ADR-012)
 4. **"정산 자료가 ZIP 1개"** — 매출·메뉴별 판매·쿠폰·이미지 모두 압축 (ADR-016)
-5. **"DB 날아가도 안전"** — 30분 자동 스냅샷 (ADR-022)
+5. **"DB 날아가도 안전"** — 2시간 자동 스냅샷 (ADR-022 변경)
 6. **"내년 학생회가 봐도 안다"** — Docker compose + ADR 문서 + 단축키 카드 = 인수인계 자산
 
 ### 4.3 학생회 운영 가치
@@ -252,7 +252,7 @@ PO/CEO 검토(`docs/PO_REVIEW.md` §2.5)에서 식별한 *단일 절대 흐름*.
 |---|---|---|
 | 데이터 영속성 | SQLite + Docker named volume | ADR-023 |
 | 자동 재시작 | `restart: always` (컨테이너 죽어도 부활) | ADR-023 |
-| 데이터 손실 최악값 | ≤ 30분 (자동 ZIP 주기) | ADR-022 |
+| 데이터 손실 최악값 | ≤ 2시간 (자동 ZIP 주기) | ADR-022 변경 |
 | 정산 가드 | 진행 주문 0건일 때만 마감 (강제 마감 X) | ADR-012 |
 | 가격 위변조 차단 | Pattern B 4 케이스 회귀 테스트 (필수) | ADR-020, ADR-025 |
 | 상태 머신 가드 | 13개 합법/불법 전이 케이스 회귀 | ADR-025 |
@@ -365,7 +365,7 @@ PO/CEO 검토(`docs/PO_REVIEW.md` §2.5)에서 식별한 *단일 절대 흐름*.
 ### 8.5 기술 부채로 인식하는 것
 
 - TypeScript 미채택 (JSDoc + zod로 부분 보완, ADR-024) — Phase 2 마이그레이션 후보
-- React 미채택 (Alpine.js로 충분, ADR-024) — 화면 12개·복잡 상태 없음
+- ~~React 미채택 (Alpine.js로 충분, ADR-024)~~ → **2026-05-14 React 18 SPA 채택 (ADR-024 변경)**: design-bundle React 시안을 *변환 베이스*로 활용
 - Postgres 미채택 (SQLite로 30 동시 충분, ADR-024) — 외부 호스팅 시 Phase 2
 
 ---
@@ -430,8 +430,8 @@ PO/CEO 검토(`docs/PO_REVIEW.md` §2.5)에서 식별한 *단일 절대 흐름*.
 |---|---|---|
 | Node.js 20 LTS | ADR-024 | Docker 이미지 |
 | Docker daemon | ADR-023 | 호스트 머신 |
-| Express 4.x + EJS + Alpine.js + Tailwind CSS | ADR-024 | npm install |
-| better-sqlite3 + archiver + pino + zod + helmet | ADR-024 | npm install |
+| React 18 + Vite 5 + Tailwind CSS 3 + Zustand 5 | ADR-024 변경 (2026-05-14) | npm install |
+| Express 4.x + better-sqlite3 + archiver + pino + zod + helmet + express-session | ADR-024 | npm install |
 | Pretendard Variable + JetBrains Mono + Black Ops One | DESIGN §5.1 | Google Fonts CDN |
 | Vitest 2.x + Playwright 1.x | ADR-025 | 개발·검증 |
 
@@ -461,7 +461,7 @@ PO/CEO 검토(`docs/PO_REVIEW.md` §2.5)에서 식별한 *단일 절대 흐름*.
 | SQLite WAL 락 충돌 (30 동시) | API 지연 | better-sqlite3 + `busy_timeout` 5000ms |
 | SSE 30 연결 메모리 누수 | 서버 OOM | ADR-025 회귀 테스트 + `restart: always` |
 | 자동 ZIP 생성 중 새 주문 | 데이터 불일치 | 트랜잭션 시점 스냅샷 |
-| 자동 ZIP 30분 주기 디스크 부족 | 운영 중단 | 회전 6개 유지 (max 6MB) + Docker volume |
+| 자동 ZIP 2시간 주기 디스크 부족 | 운영 중단 | 회전 6개 유지 (max 6MB, 12시간 보존창) + Docker volume |
 | 가격 위변조 시도 (DevTools) | 손실 | Pattern B + 4 회귀 케이스 (ADR-020) |
 | 클라이언트 시각 조작 | 부정 정산 | 서버 시각만 사용 |
 

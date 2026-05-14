@@ -753,6 +753,28 @@
 
 ## ADR-024: 기술 스택 — Node 20 + Express + SQLite + EJS + Alpine.js
 
+**상태:** ~~Accepted (2026-05-04)~~ → **변경 (2026-05-14)** — 프론트엔드는 **React 18 SPA + Vite 5**로 전환. EJS·Alpine.js 미채택.
+
+**변경 사유:** `docs/design-bundle/`에 완성된 React 18 JSX 시안이 이미 존재 — *변환 베이스*로 활용 가능. React 학습 비용 < 시안→EJS 변환 비용. 백엔드(Express 4 + SQLite + zod + pino + archiver + helmet + dotenv + express-session)는 그대로 유지.
+
+**현재 스택 (2026-05-14 기준 실 구현):**
+| Layer | 선택 |
+|---|---|
+| Frontend | React 18.3 + Vite 5 + Tailwind 3 |
+| State | Zustand 5 (셀렉터 강제, 모달 stack만 전역) |
+| Routing | React Router 6 (사용자 정적 / 관리자 lazy) |
+| Forms | useState controlled (react-hook-form 미설치) |
+| 검증 | zod 4 (런타임 입력·응답) |
+| HTTP | fetch + custom `apiFetch` wrapper |
+| SSE | EventSource + `useOrderStream` hook |
+| Test | Vitest 2 + RTL 16 + vitest-axe + Playwright 1 |
+| Backend (변경 없음) | Node 20 + Express 4 + better-sqlite3 11 + helmet + pino + archiver |
+
+상세는 `docs/IMPLEMENTATION_PLAN.md` §0 "기술 스택" 참조. 아래 *원본 결정문*은 의사결정 이력 보존용.
+
+---
+
+### 원본 결정문 (2026-05-04, 변경 전)
 **상태:** Accepted (2026-05-04)
 
 **컨텍스트:**

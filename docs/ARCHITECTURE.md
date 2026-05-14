@@ -61,17 +61,19 @@
 | Language | JavaScript + JSDoc | ES2023 |
 | HTTP framework | Express | 4.x |
 | DB | SQLite (better-sqlite3) | 3.x / 11.x |
-| 마이그레이션 | raw SQL 파일 + 부팅 시 적용 | — |
-| 템플릿 | EJS | 3.x |
-| 클라이언트 인터랙션 | Alpine.js | 3.x (CDN) |
-| CSS | Tailwind CSS (CLI) | 3.x |
-| 검증 | zod | 3.x |
-| 로깅 | pino + pino-pretty | 9.x |
-| ZIP | archiver | 7.x |
-| 세션 (관리자) | express-session + connect-sqlite3 | — |
+| 마이그레이션 | raw SQL 파일 + 부팅 시 적용 (`server/db/init.sql`) | — |
+| **프론트엔드 (ADR-024 변경 2026-05-14)** | **React 18 SPA + Vite 5** | 18.3 / 5.4 |
+| 상태 관리 | Zustand (셀렉터 강제, 모달 stack만 전역) | 5.x |
+| 라우팅 | React Router (사용자 정적 / 관리자 lazy) | 6.30 |
+| CSS | Tailwind CSS 3 + tokens.css 변수 | 3.4 |
+| 검증 | zod (런타임 입력·응답·스키마) | 4.x |
+| 로깅 | pino | 9.x → 10.x |
+| ZIP | archiver | 7.x → 8.x |
+| 세션 (관리자) | express-session (메모리 store) — 운영 단일 컨테이너 | 1.x |
 | 보안 헤더 | helmet | 8.x |
-| 환경변수 | dotenv | 16.x |
-| 배포 | Docker + docker compose | (ADR-023) |
+| 환경변수 | dotenv | 16.x → 17.x |
+| 테스트 | Vitest 2 + RTL 16 + vitest-axe + Playwright 1 | — |
+| 배포 | Docker + docker compose + named volume | (ADR-023) |
 | 단위/통합 테스트 | Vitest | 2.x |
 | E2E | Playwright | 1.x |
 
