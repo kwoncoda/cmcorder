@@ -1,16 +1,17 @@
-// C-6 조리 현황 페이지 — Task 4.7 (SSE + timeline 미니뷰 + READY 진동·깜박).
+// C-6 조리 현황 페이지 — Task 4.7 (폴링 fallback + timeline 미니뷰 + READY 진동·깜박).
 //
 // 설계 (§3.5 1조 — 페이지 ≤120줄):
 //  - useApi: 초기 snapshot (새로고침 후 직진입 호환).
-//  - useOrderStream: SSE 실시간 갱신 — snapshot 우선.
+//  - useOrderPolling: 5초 폴링 — 서버 SSE 라우트 미존재 → C-1 fallback.
+//    (서버 SSE 구현 후 useOrderStream 으로 복귀 가능 — 시그니처 동일).
 //  - onStatusChange (§3.5 5조): 진동·깜박은 이벤트 핸들러. prev !== 'READY' && next === 'READY' 시만.
 //    useEffect deps에 status 두지 X — 새로고침 후 READY 직진입 시 진동 0회.
-//  - aria-live polite — 상태 변경 시 SR announce. SSE 끊김 시 안내.
+//  - aria-live polite — 상태 변경 시 SR announce. 연결 끊김 시 안내.
 //  - 3분기: Loading / Error / 404 redirect. OrderTimeline 미니뷰는 ADR-010 시각만.
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
-import { useOrderStream } from '../../hooks/useOrderStream.js';
+import { useOrderPolling } from '../../hooks/useOrderPolling.js';
 import { apiFetch } from '../../api/client.js';
 import { OrderSchema } from '../../api/schemas.js';
 import { API } from '../../api/routes.js';
@@ -45,8 +46,8 @@ export default function StatusPage() {
     [id],
   );
 
-  // SSE 이벤트 핸들러 — 진동·깜박 부수효과 (§3.5 5조).
-  // useOrderStream 자체가 prev=null 시 콜백 호출 X → 새로고침 후 READY 직진입 시 진동 X.
+  // 폴링 이벤트 핸들러 — 진동·깜박 부수효과 (§3.5 5조).
+  // useOrderPolling 자체가 prev=null 시 콜백 호출 X → 새로고침 후 READY 직진입 시 진동 X.
   const handleStatusChange = (prev, next) => {
     if (prev !== 'READY' && next === 'READY') {
       navigator.vibrate?.([200, 100, 200]);
@@ -55,7 +56,7 @@ export default function StatusPage() {
     }
   };
 
-  const stream = useOrderStream({
+  const stream = useOrderPolling({
     orderId: id,
     authToken: token,
     onStatusChange: handleStatusChange,

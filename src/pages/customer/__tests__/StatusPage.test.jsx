@@ -17,16 +17,16 @@ import { render, screen, waitFor, within, cleanup } from '@testing-library/react
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 
-// useApi + useOrderStream 둘 다 mock — SSE/네트워크 완전 격리.
+// useApi + useOrderPolling 둘 다 mock — 폴링/네트워크 완전 격리.
 vi.mock('../../../hooks/useApi.js', () => ({
   useApi: vi.fn(),
 }));
-vi.mock('../../../hooks/useOrderStream.js', () => ({
-  useOrderStream: vi.fn(),
+vi.mock('../../../hooks/useOrderPolling.js', () => ({
+  useOrderPolling: vi.fn(),
 }));
 
 import { useApi } from '../../../hooks/useApi.js';
-import { useOrderStream } from '../../../hooks/useOrderStream.js';
+import { useOrderPolling } from '../../../hooks/useOrderPolling.js';
 
 import StatusPage from '../StatusPage.jsx';
 
@@ -65,7 +65,7 @@ beforeEach(() => {
     isLoading: false,
     refetch: vi.fn(),
   });
-  useOrderStream.mockReturnValue({
+  useOrderPolling.mockReturnValue({
     snapshot: null,
     status: null,
     error: null,
@@ -137,9 +137,9 @@ describe('StatusPage', () => {
 
   // ── ★ onStatusChange — 진동·pulse 부수효과 (§3.5 5조) ──────────
   it('★ onStatusChange PAID → READY 시 vibrate 1회', () => {
-    // useOrderStream mock — onStatusChange 핸들러 캡쳐 후 직접 호출.
+    // useOrderPolling mock — onStatusChange 핸들러 캡쳐 후 직접 호출.
     let capturedHandler;
-    useOrderStream.mockImplementation(({ onStatusChange }) => {
+    useOrderPolling.mockImplementation(({ onStatusChange }) => {
       capturedHandler = onStatusChange;
       return {
         snapshot: { ...SAMPLE_ORDER, status: 'PAID' },
@@ -156,14 +156,14 @@ describe('StatusPage', () => {
   });
 
   it('★ 새로고침 후 status=READY 직진입 시 vibrate 0회 (prev=null)', () => {
-    // 초기 useApi 데이터가 READY — onStatusChange 호출 X (prev=null 이라 useOrderStream 자체 차단).
+    // 초기 useApi 데이터가 READY — onStatusChange 호출 X (prev=null 이라 useOrderPolling 자체 차단).
     useApi.mockReturnValue({
       data: { ...SAMPLE_ORDER, status: 'READY' },
       error: null,
       isLoading: false,
       refetch: vi.fn(),
     });
-    useOrderStream.mockReturnValue({
+    useOrderPolling.mockReturnValue({
       snapshot: null,
       status: null,
       error: null,
@@ -175,7 +175,7 @@ describe('StatusPage', () => {
 
   it('★ READY 이외 전이는 진동 X — onStatusChange(ORDERED → PAID)', () => {
     let capturedHandler;
-    useOrderStream.mockImplementation(({ onStatusChange }) => {
+    useOrderPolling.mockImplementation(({ onStatusChange }) => {
       capturedHandler = onStatusChange;
       return {
         snapshot: { ...SAMPLE_ORDER, status: 'PAID' },
@@ -190,9 +190,9 @@ describe('StatusPage', () => {
   });
 
   it('★ 동일 status 재전송 시 진동 X — onStatusChange(READY → READY)', () => {
-    // useOrderStream에서 자동 차단되지만 핸들러 안에서도 prev === next 회귀.
+    // useOrderPolling에서 자동 차단되지만 핸들러 안에서도 prev === next 회귀.
     let capturedHandler;
-    useOrderStream.mockImplementation(({ onStatusChange }) => {
+    useOrderPolling.mockImplementation(({ onStatusChange }) => {
       capturedHandler = onStatusChange;
       return {
         snapshot: { ...SAMPLE_ORDER, status: 'READY' },
@@ -222,7 +222,7 @@ describe('StatusPage', () => {
 
   // ── SSE 끊김 안내 ───────────────────────────────────────────
   it('★ SSE 끊김 시 안내 노출 — isConnected=false', () => {
-    useOrderStream.mockReturnValue({
+    useOrderPolling.mockReturnValue({
       snapshot: null,
       status: null,
       error: null,
@@ -234,7 +234,7 @@ describe('StatusPage', () => {
   });
 
   it('★ SSE 연결 정상 시 끊김 안내 미렌더', () => {
-    useOrderStream.mockReturnValue({
+    useOrderPolling.mockReturnValue({
       snapshot: null,
       status: null,
       error: null,
@@ -268,7 +268,7 @@ describe('StatusPage', () => {
       isLoading: false,
       refetch: vi.fn(),
     });
-    useOrderStream.mockReturnValue({
+    useOrderPolling.mockReturnValue({
       snapshot: { ...SAMPLE_ORDER, status: 'COOKING' },
       status: 'COOKING',
       error: null,
