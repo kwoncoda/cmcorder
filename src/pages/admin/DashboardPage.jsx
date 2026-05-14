@@ -1,13 +1,6 @@
-// A-2 본부 대시보드 (IMPLEMENTATION_PLAN §5.2 / G13 / SCREEN §3.7).
-//
-// CLOSED 시: BusinessStateBadge + StartBusinessCTA (Kanban 숨김).
-// OPEN 시 : 헤더 + 6 컬럼 Kanban + 5초 폴링 + 1분 tick.
-//
-// 핵심 결정 (§3.5 1·6·7조 / Task 2.7):
-//  - 페이지 ≤120줄 — 표시 로직은 Organism(AdminCardColumn)에 위임.
-//  - tick state 1분 발행 → AdminCardColumn 에 prop 전달 → OrderCard useMemo deps.
-//  - 5초 폴링 — useApi.refetch — OPEN 상태에서만 등록 (CLOSED 시 setInterval X).
-//  - 401 → /admin/login navigate.
+// A-2 본부 대시보드 (IMPLEMENTATION_PLAN §5.2 / G13 / SCREEN §3.7 / 결정 D).
+// CLOSED: Badge + StartCTA. OPEN: 헤더 + 6컬럼 Kanban + 5초 폴링 + 1분 tick + ? 단축키 안내.
+// 페이지 ≤120줄 (§3.5 1조) — 표시 로직 Organism 위임. 401 → /admin/login navigate.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
@@ -17,6 +10,7 @@ import useBusinessStateStore, { businessStateSelectors } from '../../store/busin
 import AdminCardColumn from '../../components/organisms/AdminCardColumn.jsx';
 import BusinessStateBadge from '../../components/organisms/BusinessStateBadge.jsx';
 import StartBusinessCTA from '../../components/organisms/StartBusinessCTA.jsx';
+import KeyboardHelpModal from '../../components/organisms/KeyboardHelpModal.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
 import EmptyState from '../../components/state/EmptyState.jsx';
@@ -34,11 +28,23 @@ export default function DashboardPage() {
   const [tick, setTick] = useState(() => Date.now());
   const [startError, setStartError] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
 
   // 1분 tick — elapsed_minutes 재계산용 (AdminCardColumn 내부 useMemo deps).
   useEffect(() => {
     const id = setInterval(() => setTick(Date.now()), TICK_INTERVAL_MS);
     return () => clearInterval(id);
+  }, []);
+
+  // ? 키 → 단축키 안내 토글 (결정 D). input/textarea 포커스 시 무시.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== '?') return;
+      if (e.target instanceof HTMLElement && e.target.matches('input, textarea, select, [contenteditable="true"]')) return;
+      setShowHelp((s) => !s);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   // 5초 폴링 — OPEN 상태에서만.
@@ -75,6 +81,7 @@ export default function DashboardPage() {
       <section data-testid="admin-dashboard-page" className="min-h-screen flex flex-col items-center justify-center gap-md p-lg bg-bg">
         <BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} />
         <StartBusinessCTA status={status} shouldBeOpen={shouldBeOpen} loading={starting} error={startError} onStart={handleStartBusiness} />
+        <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
       </section>
     );
   }
@@ -103,6 +110,7 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
+      <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
     </section>
   );
 }

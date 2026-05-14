@@ -333,4 +333,14 @@ describe('DashboardPage', () => {
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
+
+  it('★ ? 키 입력 → KeyboardHelpModal 토글 (CLOSED 화면, 결정 D)', () => {
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    renderPage();
+    expect(screen.queryByTestId('keyboard-help-modal')).not.toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '?' });
+    expect(screen.getByTestId('keyboard-help-modal')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: '?' });
+    expect(screen.queryByTestId('keyboard-help-modal')).not.toBeInTheDocument();
+  });
 });
