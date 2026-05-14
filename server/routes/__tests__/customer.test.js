@@ -280,12 +280,22 @@ describe('사용자 API — 영업 외 가드', () => {
     expect(res.body.error).toBe('BUSINESS_CLOSED');
   });
 
-  it('CLOSED 상태에서도 GET /api/menus 통과', async () => {
+  it('CLOSED 상태에서 GET /api/menus → 302 /closed (충돌-3 정합, API_DRAFT §1.12)', async () => {
     const db = new Database(':memory:');
     bootstrapDatabase(db);
     const app = createApp({ db });
     const res = await request(app).get('/api/menus');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/closed');
+  });
+
+  it('CLOSED 상태에서도 GET /api/business-state는 통과 (SPA가 영업 상태 알아야 함)', async () => {
+    const db = new Database(':memory:');
+    bootstrapDatabase(db);
+    const app = createApp({ db });
+    const res = await request(app).get('/api/business-state');
     expect(res.status).toBe(200);
+    expect(res.body.status).toBe('CLOSED');
   });
 });
 
