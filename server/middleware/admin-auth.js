@@ -1,6 +1,39 @@
-// Task 6.8 — 관리자 세션 가드.
+// Task 6.7/6.8 — 관리자 세션 인프라 + 가드.
 //
-// 세션 인프라(express-session)는 Task 6.7에서 결합. 본 미들웨어는 req.session 의존만 한다.
+// express-session 메모리 store (단순 — 단일 부스 환경) + requireAdmin 가드.
+//
+// 보안:
+//   - httpOnly + sameSite=lax (CSRF 완화)
+//   - secure 플래그는 NODE_ENV=production일 때만 (HTTPS 종단 가정)
+//   - 세션 시크릿: SESSION_SECRET env 우선, fallback은 dev-only 경고
+//   - PIN 검증은 verifyPin (timingSafeEqual)
+import session from 'express-session';
+import { verifyPin } from '../db/bootstrap.js';
+import { logger } from '../lib/logger.js';
+
+/**
+ * express-session 미들웨어 팩토리.
+ * - 메모리 store (단일 프로세스, 단발 운영 — 영속성 불필요)
+ * - 12시간 maxAge (운영 1일 + 여유)
+ */
+export function sessionMiddleware() {
+  const secret = process.env.SESSION_SECRET ?? 'dev-secret-change-me';
+  if (secret === 'dev-secret-change-me' && process.env.NODE_ENV === 'production') {
+    logger.warn('[session] SESSION_SECRET 미설정 — 운영 환경에서 dev fallback 사용 중');
+  }
+  return session({
+    name: 'chickenedak.sid',
+    secret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 1000 * 60 * 60 * 12, // 12시간
+    },
+  });
+}
 
 /**
  * 관리자 로그인 필수 — req.session.adminId 없으면 401.
@@ -13,4 +46,21 @@ export function requireAdmin(req, res, next) {
     });
   }
   return next();
+}
+
+/**
+ * PIN 검증 — admins 테이블 1행과 verifyPin.
+ * - 시드된 관리자가 없으면 throw (운영 셋업 실수)
+ * - PIN 일치 시 admin.id 반환, 불일치 시 null
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} pin
+ * @returns {number|null}
+ */
+export function loginAdmin(db, pin) {
+  const admin = db.prepare('SELECT id, pin_hash FROM admins LIMIT 1').get();
+  if (!admin) {
+    throw new Error('관리자가 시드되지 않았습니다.');
+  }
+  return verifyPin(pin, admin.pin_hash) ? admin.id : null;
 }

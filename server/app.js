@@ -12,8 +12,10 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import { logger } from './lib/logger.js';
 import { businessStateGuard } from './middleware/business-state.js';
+import { sessionMiddleware } from './middleware/admin-auth.js';
 import { errorHandler } from './middleware/error.js';
 import { customerRoutes } from './routes/customer.js';
+import { adminRoutes } from './routes/admin.js';
 
 export function createApp({ db } = {}) {
   const app = express();
@@ -35,15 +37,19 @@ export function createApp({ db } = {}) {
   // 64KB 상한 — 주문/메뉴 payload는 모두 수십~수백 바이트.
   app.use(express.json({ limit: '64kb' }));
 
+  // 관리자 세션 — /admin/login + 모든 /admin/api/* 보호 가드의 전제.
+  app.use(sessionMiddleware());
+
   // 헬스체크 — DB·외부 의존 없이 프로세스 살아있음만 확인.
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true });
   });
 
-  // DB 주입 시에만 영업 가드 + 사용자 라우트 활성화.
+  // DB 주입 시에만 영업 가드 + 라우트 활성화.
   if (db) {
     app.use(businessStateGuard(db));
     app.use(customerRoutes(db));
+    app.use(adminRoutes(db));
   }
 
   // 404 fallback — 등록되지 않은 모든 경로.

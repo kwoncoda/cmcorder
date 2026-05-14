@@ -1,9 +1,12 @@
-// Task 6.8 — admin-auth middleware 회귀.
+// Task 6.7/6.8 — admin-auth middleware + loginAdmin 회귀.
 // req.session.adminId 없으면 401 UNAUTHORIZED.
+// loginAdmin: PIN 일치 → admin.id / 불일치 → null / 시드 X → throw.
 import { describe, it, expect } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { requireAdmin } from '../admin-auth.js';
+import Database from 'better-sqlite3';
+import { requireAdmin, loginAdmin } from '../admin-auth.js';
+import { bootstrapDatabase, hashPin } from '../../db/bootstrap.js';
 
 function makeApp({ session } = {}) {
   const app = express();
@@ -36,5 +39,30 @@ describe('requireAdmin', () => {
     const res = await request(app).get('/admin/me');
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
+  });
+});
+
+describe('loginAdmin', () => {
+  function seededDb(pin = '111111') {
+    const db = new Database(':memory:');
+    bootstrapDatabase(db);
+    db.prepare('INSERT INTO admins (pin_hash) VALUES (?)').run(hashPin(pin));
+    return db;
+  }
+
+  it('일치 PIN → admin.id 반환', () => {
+    const db = seededDb('111111');
+    expect(loginAdmin(db, '111111')).toBe(1);
+  });
+
+  it('불일치 PIN → null', () => {
+    const db = seededDb('111111');
+    expect(loginAdmin(db, '000000')).toBeNull();
+  });
+
+  it('admins 시드 없음 → throw', () => {
+    const db = new Database(':memory:');
+    bootstrapDatabase(db);
+    expect(() => loginAdmin(db, '111111')).toThrow();
   });
 });

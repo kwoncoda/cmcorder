@@ -685,6 +685,13 @@
 - 자동 ZIP에도 PII 포함 → Docker volume 보안 + 사후 폐기 정책 엄수
 - 운영진이 자동 스냅샷의 존재를 모를 시 USB 복사 누락 가능 — 운영 가이드에 명시
 
+**2026-05-13 변경 — 주기 30분 → 2시간:**
+- 단일 부스 + 30 동시(G3) 부하 가정에서 30분 주기는 과보호 (디스크 I/O 부담)
+- 회전 6개 유지(보존 12시간 = 운영 1일 커버) + 새 손실 윈도우 ≤ 2시간 (KPI 변경)
+- 절정시간 운영 중 동기 SQLite checkpoint × 30분 = 부하 누적 위험 → 2시간으로 완화
+- 구현: `AUTO_SNAPSHOT_INTERVAL_MIN` env 기본값 120, `AUTO_SNAPSHOT_ROTATE` 기본값 6
+- Task 6.9 구현 (`server/jobs/auto-snapshot.js`) — `startAutoSnapshot` + WAL checkpoint + 회전
+
 ---
 
 ## ADR-023: 배포 = Docker 기반 (Docker volume 영속화)
