@@ -37,6 +37,9 @@ const SAMPLE_SETTLEMENT = {
   total_amount: 756000,
   in_progress_count: 0,
   is_closed: false,
+  // P1-3: 정산 보조 — 쿠폰 요약 백엔드 합쳐서 응답.
+  coupon_count: 5,
+  coupon_discount_total: 5000,
 };
 
 const IN_PROGRESS_SETTLEMENT = {
@@ -170,6 +173,28 @@ describe('SettlementPage', () => {
     const btn = screen.getByTestId('close-settlement-btn');
     expect(btn).toHaveTextContent(/마감 완료/);
     expect(btn).toBeDisabled();
+  });
+
+  // ── P1-3 (Codex 리뷰) 정산 보조 ────────────────────────────
+  it('★ P1-3 — 쿠폰 사용 N건 / 할인 합 표시', () => {
+    renderPage();
+    // SAMPLE_SETTLEMENT.coupon_count = 5, coupon_discount_total = 5000
+    expect(screen.getByText(/쿠폰/)).toBeInTheDocument();
+    expect(screen.getByTestId('coupon-summary')).toHaveTextContent(/5\s*건/);
+    expect(screen.getByTestId('coupon-summary')).toHaveTextContent(/5[,.]?000/);
+  });
+
+  it('★ P1-3 — 통장 입금 합계 입력 → 차이 계산 표시', () => {
+    renderPage();
+    const input = screen.getByTestId('bank-total-input');
+    fireEvent.change(input, { target: { value: '700000' } });
+    // 매출 756,000 - 통장 700,000 = +56,000 (회수 부족 표시)
+    expect(screen.getByTestId('bank-diff')).toHaveTextContent(/56[,.]?000/);
+  });
+
+  it('★ P1-3 — 통장 합계 미입력 시 차이 0 또는 비표시', () => {
+    renderPage();
+    expect(screen.queryByTestId('bank-diff')).toBeNull();
   });
 
   it('★ ZIP 버튼 클릭 시 window.open 호출', () => {

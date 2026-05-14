@@ -42,8 +42,12 @@ export function canCloseSettlement(db, operating_date) {
   return row.c === 0;
 }
 
+// P1-3 (Codex 리뷰): ADR-019 쿠폰 정액 할인. 정산 요약에 합산용.
+const COUPON_DISCOUNT_PER = 1000;
+
 /**
  * 정산 요약 (마감 전 미리보기 / 마감 후 결과 공통).
+ * P1-3: 쿠폰 사용 건수 + 총 할인액 포함.
  */
 export function getSettlementSummary(db, operating_date) {
   const totals = db
@@ -65,12 +69,24 @@ export function getSettlementSummary(db, operating_date) {
     .prepare('SELECT id FROM settlements WHERE operating_date = ?')
     .get(operating_date);
 
+  // P1-3: 해당 일자 쿠폰 사용 건수 — used_coupons.order_id를 orders.operating_date로 JOIN.
+  const coupon = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM used_coupons uc
+       JOIN orders o ON o.id = uc.order_id
+       WHERE o.operating_date = ?`,
+    )
+    .get(operating_date);
+  const couponCount = coupon?.c ?? 0;
+
   return {
     operating_date,
     total_orders: totals.total_orders,
     total_amount: totals.total_amount,
     in_progress_count: inProgress.c,
     is_closed: !!closed,
+    coupon_count: couponCount,
+    coupon_discount_total: couponCount * COUPON_DISCOUNT_PER,
   };
 }
 

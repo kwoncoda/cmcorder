@@ -1,11 +1,7 @@
-// A-6/A-7 정산 + ZIP (IMPLEMENTATION_PLAN §5.5).
-//
-// 핵심 결정:
-//  - 정산 요약 + "오늘 정산 마감" 버튼 + ZIP 다운로드 (수동).
-//  - ADR-012: in_progress_count > 0 시 마감 차단 (UI · 백엔드 양쪽 가드).
-//  - G13: 마감 성공 시 businessState 'CLOSED' 전이 — 사용자 측 423 단일 reactive 진입점.
-//  - 401 → /admin/login (effect — render 중 navigate 금지).
-//  - 페이지 ≤120줄.
+// A-6/A-7 정산 + ZIP — Task 5.5 + P1-3 (Codex 리뷰) (§3.5 1조 ≤120줄).
+//  - 요약 + 통장 합계 입력 + 차이 계산 + 쿠폰 요약 + 마감 + ZIP.
+//  - ADR-012: in_progress > 0 시 마감 차단 (UI/백엔드 양쪽).
+//  - G13: 마감 성공 시 businessState 'CLOSED'. 401 → /admin/login.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
@@ -19,16 +15,16 @@ import PriceTag from '../../components/molecules/PriceTag.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
 
-// 서버 응답 스키마 — 추가 필드는 옵션 처리 (방어).
 const SettlementSchema = z.object({
   operating_date: z.string(),
   total_orders: z.number(),
   total_amount: z.number(),
   in_progress_count: z.number(),
   is_closed: z.boolean().optional(),
+  coupon_count: z.number().optional(),
+  coupon_discount_total: z.number().optional(),
 });
 
-// 모든 분기에 admin-settlement-page testid 유지 — App.test 라우팅 회귀.
 function Wrapper({ children }) {
   return <section data-testid="admin-settlement-page" className="flex flex-col gap-md p-md">{children}</section>;
 }
@@ -38,16 +34,13 @@ export default function SettlementPage() {
   const setStatus = useBusinessStateStore((s) => s.setStatus);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState(null);
+  const [bankTotalInput, setBankTotalInput] = useState('');
 
   const query = useApi(
     ({ signal }) => apiFetch('/admin/api/settlement', { schema: SettlementSchema, signal }),
     [],
   );
-
-  // 401 → 로그인.
-  useEffect(() => {
-    if (query.error?.status === 401) navigate('/admin/login');
-  }, [query.error, navigate]);
+  useEffect(() => { if (query.error?.status === 401) navigate('/admin/login'); }, [query.error, navigate]);
 
   if (query.isLoading) return <Wrapper><LoadingState variant="page" label="정산 로딩 중…" minimumDelay={0} /></Wrapper>;
   if (query.error) {
@@ -57,43 +50,50 @@ export default function SettlementPage() {
 
   const settlement = query.data;
   const canClose = settlement.in_progress_count === 0 && !settlement.is_closed;
+  const couponCount = settlement.coupon_count ?? 0;
+  const couponDiscountTotal = settlement.coupon_discount_total ?? 0;
+  const bankTotal = bankTotalInput ? Number(bankTotalInput.replace(/\D/g, '')) : null;
+  const diff = bankTotal !== null && Number.isFinite(bankTotal) ? settlement.total_amount - bankTotal : null;
 
   const handleClose = async () => {
     if (!canClose) return;
-    setClosing(true);
-    setCloseError(null);
+    setClosing(true); setCloseError(null);
     try {
       await apiFetch(API.ADMIN_SETTLEMENT_CLOSE, { method: 'POST', body: {} });
-      setStatus('CLOSED');
-      query.refetch();
+      setStatus('CLOSED'); query.refetch();
     } catch (err) {
       setCloseError(err instanceof ApiError ? err.message : '마감에 실패했어요.');
-    } finally {
-      setClosing(false);
-    }
+    } finally { setClosing(false); }
   };
 
-  const handleDownloadZip = () => {
-    // 새 탭 GET — 브라우저가 Content-Disposition 헤더로 자동 다운로드.
-    window.open(API.ADMIN_SETTLEMENT_ZIP, '_blank');
-  };
+  const handleDownloadZip = () => window.open(API.ADMIN_SETTLEMENT_ZIP, '_blank');
 
   return (
     <Wrapper>
       <h1 className="font-display font-black text-2xl">📊 정산 — {settlement.operating_date}</h1>
       <div className="bg-elevated rounded-md p-md flex flex-col gap-sm" data-testid="settlement-summary">
-        <div className="flex justify-between">
-          <span className="text-muted">총 주문 수</span>
-          <span className="font-mono tabular-nums font-bold">{settlement.total_orders}건</span>
+        <div className="flex justify-between"><span className="text-muted">총 주문 수</span><span className="font-mono tabular-nums font-bold">{settlement.total_orders}건</span></div>
+        <div className="flex justify-between"><span className="text-muted">총 매출</span><PriceTag value={settlement.total_amount} className="font-bold" /></div>
+        <div className="flex justify-between"><span className="text-muted">진행 중 주문</span><span className="font-mono tabular-nums">{settlement.in_progress_count}건</span></div>
+        <div className="flex justify-between" data-testid="coupon-summary">
+          <span className="text-muted">🎫 쿠폰</span>
+          <span className="font-mono tabular-nums">{couponCount}건 · -{couponDiscountTotal.toLocaleString('ko-KR')}원</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted">총 매출</span>
-          <PriceTag value={settlement.total_amount} className="font-bold" />
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted">진행 중 주문</span>
-          <span className="font-mono tabular-nums">{settlement.in_progress_count}건</span>
-        </div>
+      </div>
+
+      <div className="bg-elevated rounded-md p-md flex flex-col gap-sm" data-testid="bank-section">
+        <label htmlFor="bank-total" className="text-sm text-muted">통장 입금 합계 (수동 입력)</label>
+        <input id="bank-total" data-testid="bank-total-input" inputMode="numeric" placeholder="예: 700000"
+          value={bankTotalInput} onChange={(e) => setBankTotalInput(e.target.value.replace(/\D/g, ''))}
+          className="bg-bg text-ink p-sm rounded-md border border-divider font-mono tabular-nums" />
+        {diff !== null && (
+          <div className="flex justify-between" data-testid="bank-diff">
+            <span className="text-muted">매출 − 통장 = 차이</span>
+            <span className={`font-mono tabular-nums font-bold ${diff === 0 ? 'text-ink' : 'text-warning'}`}>
+              {diff > 0 ? '+' : ''}{diff.toLocaleString('ko-KR')}원
+            </span>
+          </div>
+        )}
       </div>
 
       {settlement.in_progress_count > 0 && !settlement.is_closed && (
