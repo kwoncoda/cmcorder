@@ -48,3 +48,12 @@
 
 - 학생이 "학번 없음" 체크 → 이름만 입력 → 완료 화면에 token 포함 URL 표시
 - 외부인은 그 URL을 새 시크릿 탭에서 열어 상태 추적 가능 (학번 기반 자동 권한 없음)
+
+## D-day + 7일 — PII 폐기 (ADR-027 / 2026-05-28까지)
+
+운영 종료 후 7일 이내 *반드시*:
+1. `/admin/settlement` → "📦 ZIP 다운로드" → 학생회 클라우드(학과 폴더)에 업로드.
+2. `docs/operations/pii-deletion.md` 절차로 DB PII 폐기.
+3. docker volume `chickenedak-data` 삭제.
+
+**미수행 시 GDPR/개인정보보호법 위반 소지** — 학번·이름·이체 정보의 불필요한 장기 보유 금지.
