@@ -1,0 +1,116 @@
+/* ============================================================
+   디자인 토큰 — 오늘 저녁은 치킨이닭!
+   출처: docs/DESIGN.md §3-§9 (2026-05-14 결정 반영)
+   * 군복 톤 하이브리드: 베이스(짙은 카키그린) + 카드(흙색)
+   * 액센트: 형광 옐로 #F4D200 (호명/CTA 신호)
+   * 외부 디자인 시스템 X — 본 docs가 single source of truth
+   ============================================================ */
+
+:root {
+  /* ── 베이스 (페이지 = 군복 톤) ── */
+  --color-bg:           #2E3A26;
+  --color-surface:      #3A4A2E;
+  --color-elevated:     #485B38;
+  --color-ink:          #E8E0C8;
+  --color-muted:        #A8A48C;
+  --color-divider:      #4F5A3B;
+
+  /* ── 카드 영역 (메뉴·주문폼 = 밝은 흙색, PUBG 인벤토리 톤) ── */
+  --color-card-bg:      #C8B894;
+  --color-card-surface: #B8A684;
+  --color-card-ink:     #2A2820;
+  --color-card-muted:   #48402C;       /* 2026-05-14 #5C5040 → #48402C 명도 조정 */
+  --color-card-divider: #9C8C68;
+
+  /* ── 포인트: 형광 옐로 ── */
+  --color-accent:         #F4D200;
+  --color-accent-pressed: #D9BB00;
+
+  /* ── 카모 액센트 (10% 이하 사용) ── */
+  --camo-olive: #5C5D3A;
+  --camo-sand:  #9A8E6B;
+  --camo-earth: #4F3D2A;
+  --camo-leaf:  #6E7544;
+
+  /* ── 시맨틱 ── */
+  --color-success: #5A8C42;
+  --color-warning: #E59B0C;
+  --color-danger:  #C73E1D;
+  --color-info:    #3A6B7E;
+
+  /* ── 도장 ── */
+  --stamp-red:   #B5301A;
+  --stamp-black: #1F1B14;
+  --stamp-green: #4A6B2D;
+
+  /* ── 타이포그래피 ── */
+  --font-body:    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-display: 'Pretendard Variable', Pretendard, sans-serif;
+  --font-mono:    'JetBrains Mono', 'D2Coding', 'Courier New', monospace;
+  --font-stencil: 'Black Ops One', 'Pretendard Variable', sans-serif;
+
+  --text-3xs: 10px;
+  --text-2xs: 12px;
+  --text-xs:  14px;
+  --text-sm:  16px;
+  --text-base:18px;
+  --text-lg:  20px;
+  --text-xl:  24px;
+  --text-2xl: 32px;
+  --text-3xl: 48px;
+  --text-4xl: 64px;
+
+  --weight-normal:   400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+  --weight-black:    900;
+
+  /* ── 간격 (4px base) ── */
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs:  8px;
+  --space-sm:  12px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  /* ── 라디우스 ── */
+  --radius-none: 0px;
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-tag:  8px 8px 4px 4px;
+  --radius-pill: 9999px;
+
+  /* ── 그림자 (하드 오프셋만 — 부드러운 그림자는 SaaS 슬롭) ── */
+  --shadow-card:     2px 2px 0 rgba(0,0,0,0.30);
+  --shadow-elevated: 4px 4px 0 rgba(0,0,0,0.35);
+  --shadow-stamp:    2px 2px 0 currentColor;
+  --shadow-tag:      0 4px 0 -1px rgba(0,0,0,0.4), 0 8px 16px rgba(0,0,0,0.25);
+
+  /* ── 모션 ── */
+  --duration-tap:    100ms;
+  --duration-card:   200ms;
+  --duration-stamp:  150ms;
+  --duration-tag:    600ms;
+  --duration-mascot: 400ms;
+
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-stamp: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-tag:   cubic-bezier(0.17, 0.67, 0.32, 1.5);
+}
+
+/* ============================================================
+   카모 gradient — 2026-05-13 F 결정 (SVG → CSS gradient 기본)
+   헤더·sticky bar 배경 5-10% opacity로 합성
+   ============================================================ */
+.camo-gradient {
+  background-image:
+    linear-gradient(135deg, rgba(92,93,58,0.10) 0%, rgba(92,93,58,0) 40%),
+    linear-gradient(45deg, rgba(154,142,107,0.08) 0%, rgba(154,142,107,0) 50%),
+    linear-gradient(180deg, rgba(79,61,42,0.06) 0%, rgba(79,61,42,0) 60%);
+}

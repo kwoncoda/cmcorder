@@ -1,0 +1,42 @@
+/* ============================================================
+   전역 스타일 — reset + body 기본 + 접근성
+   * Tailwind base/components/utilities 적재
+   * tokens.css 의 CSS 변수 위에서 동작
+   ============================================================ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  color: var(--color-ink);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+button { font-family: inherit; cursor: pointer; }
+input, select, textarea { font-family: inherit; }
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   prefers-reduced-motion — 접근성 (DESIGN §9.5)
+   .dropping / .pulse 등 모션 클래스를 일괄 정적화
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
