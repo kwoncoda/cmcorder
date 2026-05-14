@@ -2,7 +2,8 @@
 # - 1단계: Vite로 프론트 빌드 → dist/
 # - 2단계: production 의존성만 따로 (node_modules 슬림화)
 # - 3단계: node:20-alpine 런타임에 백엔드 코드 + dist + node_modules 조립
-# Express 정적 서빙 라우트는 이번 Task에서 추가 X — Phase 6.6에서 dist/ 서빙 합류.
+# Express는 server/app.js에서 DIST_PATH=/app/dist를 통해 SPA 정적 서빙 + fallback.
+# (P0-1 Codex 리뷰 — 2026-05-15 추가)
 
 # ===== 1단계 — 프론트 빌드 =====
 FROM node:20-alpine AS frontend-build
@@ -32,11 +33,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV DIST_PATH=/app/dist
 
 # 백엔드 코드
 COPY server ./server
 
-# 프론트 빌드 결과 (Phase 6.6에서 Express가 정적 서빙 예정)
+# 프론트 빌드 결과 — Express SPA 정적 서빙용 (server/app.js).
 COPY --from=frontend-build /app/dist ./dist
 
 # production node_modules
