@@ -39,6 +39,8 @@ sessions.sqlite
 
 # Claude Code 메타데이터
 .claude/
+.agents/
+skills-lock.json
 
 # 원본 zip (이미 docs/design-bundle/에 풀려 있음)
 comorder.zip
