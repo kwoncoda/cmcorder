@@ -165,7 +165,7 @@ describe('AdminCardColumn', () => {
   });
 
   it('depositorName 없을 때 "(이름 없음)" 표시', () => {
-    const orders = [mkOrder({ id: 17, no: 17, depositorName: null })];
+    const orders = [mkOrder({ id: 17, no: 17, depositorName: null, depositor_name: null, name: null })];
     render(
       <AdminCardColumn
         title="x"
@@ -175,6 +175,53 @@ describe('AdminCardColumn', () => {
       />,
     );
     expect(screen.getByText('(이름 없음)')).toBeInTheDocument();
+  });
+
+  // ── P1-2 (Codex 리뷰) 서버 응답 shape 정합 ────────────────────
+  it('★ P1-2 — depositor_name (snake_case, 서버 실제 shape) 표시', () => {
+    const orders = [
+      {
+        id: 99, no: 99, status: 'TRANSFER_REPORTED',
+        depositor_name: '서버케이스',
+        total_price: 25000,
+        transferred_at: '2026-05-20T17:28:00',
+      },
+    ];
+    render(
+      <AdminCardColumn title="이체" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByText('서버케이스')).toBeInTheDocument();
+  });
+
+  it('★ P1-2 — depositor_name 없을 때 name fallback', () => {
+    const orders = [
+      {
+        id: 100, no: 100, status: 'ORDERED',
+        name: '주문자이름',
+        total_price: 18000,
+        created_at: '2026-05-20T17:25:00',
+      },
+    ];
+    render(
+      <AdminCardColumn title="주문중" status="ORDERED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByText('주문자이름')).toBeInTheDocument();
+  });
+
+  it('★ P1-2 — 카드에 금액(total_price) 표시 (F-A-007 요구)', () => {
+    const orders = [
+      {
+        id: 101, no: 101, status: 'TRANSFER_REPORTED',
+        depositor_name: '홍길동',
+        total_price: 36000,
+        transferred_at: '2026-05-20T17:28:00',
+      },
+    ];
+    render(
+      <AdminCardColumn title="이체" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    // 36,000원 또는 ₩36,000 형식 — 정확한 토큰은 PriceTag 출력 따름.
+    expect(screen.getByText(/36[,.]?000/)).toBeInTheDocument();
   });
 
   // ★ React.memo 회귀 — OrderCard가 memo로 감싸져 있는지 검증 (§3.5 7조).

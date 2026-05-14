@@ -34,19 +34,28 @@ function elapsedTone(minutes) {
   return 'border-divider';
 }
 
+// P1-2 (Codex 리뷰): 서버 실제 shape 호환.
+//  - 이름: depositor_name (snake) → depositorName (camel) → name 순 fallback.
+//  - 금액: total_price 표시 (F-A-007 요구).
+function pickName(order) {
+  return order.depositor_name ?? order.depositorName ?? order.name ?? null;
+}
+function formatPrice(n) {
+  if (typeof n !== 'number') return '';
+  return `${n.toLocaleString('ko-KR')}원`;
+}
+
 // OrderCard — React.memo 적용. 동일 props (order reference + tick) 시 리렌더 X.
 // ※ named export — 테스트에서 memo wrap 회귀 검증용.
 const OrderCard = memo(function OrderCard({ order, tick, onSelect }) {
-  // tick props가 같으면 deps 동일 → 캐시된 elapsedMin 반환.
-  // tick이 1분 단위로 갱신되면 재계산.
   const elapsedMin = useMemo(
     () => calcElapsedMinutes(order.transferred_at, new Date(tick)),
     [order.transferred_at, tick],
   );
   const tone = elapsedTone(elapsedMin);
+  const displayName = pickName(order);
+  const priceText = formatPrice(order.total_price);
 
-  // 시맨틱 button — focus-visible·Enter·Space 기본 처리.
-  // 카드 톤: bg-card-bg + text-card-ink (DESIGN — 본문 영역과 구분).
   const cls = [
     'text-left w-full',
     'bg-card-bg text-card-ink',
@@ -65,9 +74,16 @@ const OrderCard = memo(function OrderCard({ order, tick, onSelect }) {
       data-testid={`admin-order-card-${order.id}`}
       className={cls}
     >
-      <div className="font-display font-bold text-base">#{order.no}</div>
+      <div className="flex items-baseline justify-between gap-sm">
+        <div className="font-display font-bold text-base">#{order.no}</div>
+        {priceText && (
+          <span className="font-mono tabular-nums text-sm text-card-ink">
+            {priceText}
+          </span>
+        )}
+      </div>
       <div className="text-xs text-card-muted truncate">
-        {order.depositorName ?? '(이름 없음)'}
+        {displayName ?? '(이름 없음)'}
       </div>
       <div className="mt-2xs flex items-center justify-between gap-sm">
         <StatusChip status={order.status} size="sm" />
