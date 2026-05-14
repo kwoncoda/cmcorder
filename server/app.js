@@ -3,13 +3,17 @@
 //
 // 이번 Task(0.5)는 부트스트랩만: /healthz · 404 fallback · 글로벌 에러 핸들러 3종.
 // API 라우트(/api/menus 등)는 Phase 6에서 추가된다.
+//
+// Task 6.1: db 옵션 추가 — server.js가 better-sqlite3 핸들을 주입하면
+// 라우트에서 req.app.locals.db로 접근. 테스트(supertest)는 db 없이 호출 가능.
 import express from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import { logger } from './lib/logger.js';
 
-export function createApp() {
+export function createApp({ db } = {}) {
   const app = express();
+  app.locals.db = db;
 
   // 보안 헤더. CSP는 Phase 6 SPA 정적 호스팅 시 dist 경로·인라인 정책 함께 결정.
   app.use(helmet({ contentSecurityPolicy: false }));
