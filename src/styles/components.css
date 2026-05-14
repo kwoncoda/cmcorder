@@ -30,12 +30,37 @@
   animation: dogtag-pulse-yellow 1.2s ease-in-out infinite;
 }
 
+/* ── MascotState (Task 2.4) — cross-fade 200ms ──
+   state 변경 시 매 mount 마다 자연스러운 전환. 부모에서 `key={state}` 패턴으로
+   unmount/remount 시 자동 트리거. tokens.css 의 --ease-out 사용. */
+@keyframes mascot-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.mascot-fade {
+  animation: mascot-fade-in 200ms var(--ease-out, ease-out) both;
+}
+
+/* ── MascotState — cooking 상태 idle 흔들 ──
+   조리 중에만 발화. 살짝 좌우로 흔들리고 위아래 살짝 — 1.6s 무한 반복. */
+@keyframes mascot-cooking-idle {
+  0%, 100% { transform: rotate(-2deg) translateY(0); }
+  50%      { transform: rotate(2deg) translateY(-4px); }
+}
+
+.mascot-cooking-idle {
+  animation: mascot-cooking-idle 1.6s ease-in-out infinite;
+}
+
 /* ── reduced motion — 모션 일괄 정적화 ──
    globals.css 가 animation-duration 0.01ms 강제하지만, 명시적 'none' 으로 한 번 더 차단.
    (DESIGN §9.5 · §9.6) */
 @media (prefers-reduced-motion: reduce) {
   .dogtag-drop,
-  .dogtag-pulse {
+  .dogtag-pulse,
+  .mascot-fade,
+  .mascot-cooking-idle {
     animation: none;
   }
 }
