@@ -954,6 +954,37 @@ F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 
 
 ---
 
+## ADR-032: Rate limit Phase 2 강등 (P2-2 Codex v3 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- `docs/API_DRAFT.md:639-644`는 `POST /api/orders` IP당 5회/분, `POST /admin/login` IP당 10회/분 rate limit 명세.
+- 실제 구현은 미설치 (`express-rate-limit` 등 dependency 없음).
+- Codex v3 P2-2 지적 — 명세와 코드 불일치.
+
+**결정:**
+**Phase 2로 강등**. 일회성 부스 운영(2026-05-20·21)에 rate limit 미도입.
+
+**사유:**
+- **외부 노출 낮음** — 부스 노트북 로컬 와이파이 환경. 외부 인터넷 노출 가능성 낮음.
+- **중복 주문 방어는 이미 다층**:
+  - 클라이언트 `submitting` 가드
+  - 서버 `access_token` 발급 (주문당 1개)
+  - 쿠폰 `UNIQUE(student_id, name)` 제약
+  - 학번 unique
+- **admin/login brute force 위험 낮음** — 6자리 PIN × timingSafeEqual = 약 100만회 시도 필요 + 운영자가 컴퓨터 옆 상주.
+- **도입 비용 ≫ 가치** — 의존성 +1, 운영자 1명 환경에 over-engineering.
+
+**Trade-off:**
+- 학생이 카트 버튼을 연타하면 서버 부담 가능. 그러나 ≤30 동시 + access_token 1개 제약으로 실제 영향 미미.
+- 외부 호스팅/공개 운영으로 확장 시 ADR 재검토 필수.
+
+**문서 갱신:**
+- `docs/API_DRAFT.md §5` rate limit 표를 Phase 2 후보로 강등 표기.
+
+---
+
 ## ADR-031: 세션 쿠키 secure flag 환경변수 분리 (P0-A Codex v2 리뷰)
 
 **상태:** Accepted (2026-05-15)
