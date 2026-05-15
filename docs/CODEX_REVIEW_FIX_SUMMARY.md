@@ -1,6 +1,75 @@
-# Codex 리뷰 자동 수정 — 결과 요약
+# Codex 리뷰 자동 수정 — 결과 요약 (v1 + v2 + v3)
 
-작성일: 2026-05-15
+작성일: 2026-05-15 (3차 누적)
+브랜치: `fix/codex-review-findings`
+범위:
+- v1 — `docs/codex리뷰결과.md` P0 5 + P1 6 + P2 3 (11 커밋)
+- v2 — `docs/codex리뷰결과_v2.md` P0 2 + 충돌 6 (11 커밋, `CODEX_REVIEW_v2_FIX_SUMMARY.md`)
+- **v3 — `docs/codex리뷰결과_v3.md` P1 6 (본 갱신 — 7 커밋)**
+
+## v3 신규 항목 결과 (P1 6건)
+
+| 항목 | 결과 | 커밋 |
+|---|---|---|
+| P1-3 access_token 로그 redaction | ✅ 완료 (보안 최우선) | `59ed909` |
+| P1-2 자동 백업 Docker volume 경로 | ✅ 완료 | `e516250` |
+| P1-4 /admin/menu → /admin/menus + AdminLayout nav | ✅ 완료 | `5646757` |
+| P1-5 일자별 정산 + 합산 UI | ✅ 완료 | `2e6870d` |
+| P1-1 정산 ZIP 구성 보강 | ✅ 완료 (manifest/orders.csv/coupons.csv/menu) | `d33dcd2` |
+| P1-6 E2E 14 시나리오 | 🚧 **BLOCKED** (D-1 리허설로 대체) | `ee80cff` |
+
+### v3 변경 상세
+
+**P1-3 — token 로그 redaction (보안):**
+- `server/lib/logger.js` redact.paths + serializers.req censorUrl
+- `pinoHttpRedactOptions()` 별도 export → app.js pino-http에 적용
+- 회귀 5건 (unit 4 + supertest 통합 1)
+
+**P1-2 — backup Docker volume:**
+- docker-compose `BACKUP_DIR=/data/backups` 환경변수 추가
+- server.js가 BACKUP_DIR 명시 읽고 startAutoSnapshot dir 옵션 전달
+- 회귀 5건 (compose grep 3 + server.js grep 1 + 통합 1)
+
+**P1-4 — admin route + nav:**
+- `/admin/menu` → `/admin/menus` (plural)
+- `src/components/layouts/AdminLayout.jsx` 신규: 본부/메뉴/정산/이체확인 NavLink
+- 회귀 5건 (App.test에 admin nav 4 케이스 + login 예외)
+
+**P1-5 — 일자별 정산 UI:**
+- `src/pages/admin/settlement-aggregate.js` 신규: OPERATING_DATES, aggregateSettlements, fetchAggregateSettlement
+- SettlementPage 일자 selector (5/20 / 5/21 / 합산)
+- 합산 모드: 두 일자 fetch + 클라 sum
+- 페이지 ≤120줄 유지 (도메인 분리)
+- 회귀 9건 (헬퍼 unit 6 + page 3)
+
+**P1-1 — ZIP 구성 보강:**
+- `createSettlementZip` 확장: manifest.json + orders.csv + coupons.csv + menu-snapshot.json + settlement.sql + summary.json
+- CSV: UTF-8 BOM (Excel 한글 호환) + RFC 4180 이스케이프
+- PDF/images는 운영 폴더 별도 (manifest에 명시)
+- 회귀 2건
+
+**P1-6 — BLOCKED:**
+- E2E 14 자동화는 비용 ≫ 가치 (일회성 2일 + 운영자 1명 + Playwright Vite-only webServer)
+- `docs/operations/d1-rehearsal.md` 10 섹션 체크리스트로 동일 시나리오 수동 검증
+- TEST_PLAN.md §8.2에 BLOCKED 표 + 각 시나리오 대체 검증 위치 매핑
+
+### v3 회귀 매트릭스
+
+| 영역 | v2 종료 | v3 종료 | Δ |
+|---|---|---|---|
+| 단위·통합 | 905 | **934** | +29 |
+| E2E | 2 | 2 | 변동 X (BLOCKED) |
+| build | 89.89 kB | 90.65 kB | +0.76 kB (CSV helper) |
+
+---
+
+## v1 + v2 — 이전 작업 (참조)
+
+`docs/CODEX_REVIEW_v2_FIX_SUMMARY.md` 참조. 아래는 v1 작업 원본 요약.
+
+---
+
+작성일: 2026-05-15 (v1 원본)
 브랜치: `fix/codex-review-findings`
 대상: `docs/codex리뷰결과.md` 의 P0 5건 · P1 6건 · P2 3건
 실행 방식: Superpowers subagent-driven + TDD (자동, 무승인)
