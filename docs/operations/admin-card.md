@@ -13,6 +13,8 @@
 
 > **세션 쿠키 (P0-A, ADR-031 2026-05-15):** `docker-compose.yml`은 `SESSION_COOKIE_SECURE=false` 기본. HTTP 로컬 운영 호환. **HTTPS reverse proxy 도입 시 `SESSION_COOKIE_SECURE=true`로 변경 + Express `trust proxy` 설정 필요.** 부스 로컬 와이파이는 HTTP가 정상 경로.
 
+> **자동 백업 (P1-2 Codex v3, 2026-05-15):** `BACKUP_DIR=/data/backups` 환경변수가 `chickenedak-data` named volume 안쪽으로 강제. 컨테이너 재생성·이미지 재빌드·`docker compose down` 후에도 ZIP 6개 회전 보존. `docker compose exec chickenedak ls /data/backups`로 확인 가능. PII 폐기 시 (`docs/operations/pii-deletion.md`) volume 삭제 전에 ZIP을 학생회 클라우드로 옮길 것.
+
 ## 운영 중 (한 화면)
 
 대시보드는 6 컬럼 칸반(Kanban) 형태로 표시.
