@@ -15,7 +15,7 @@ import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
-import { logger } from './lib/logger.js';
+import { logger, pinoHttpRedactOptions } from './lib/logger.js';
 import { businessStateGuard } from './middleware/business-state.js';
 import { sessionMiddleware } from './middleware/admin-auth.js';
 import { errorHandler } from './middleware/error.js';
@@ -37,9 +37,11 @@ export function createApp({ db, distPath } = {}) {
   app.use(helmet({ contentSecurityPolicy: false }));
 
   // 요청 로깅. /healthz는 부스 모니터링용으로 자주 호출되므로 autoLogging에서 제외.
+  // P1-3 (Codex v3): pinoHttpRedactOptions로 req.url의 token query 마스킹.
   app.use(
     pinoHttp({
       logger,
+      ...pinoHttpRedactOptions(),
       autoLogging: {
         ignore: (req) => req.url === '/healthz',
       },
