@@ -25,6 +25,7 @@ export const API = {
   ADMIN_MENU_TOGGLE: (id) => `/admin/api/menus/${id}/toggle`,
   ADMIN_BUSINESS_STATE: '/admin/api/business/state',
   ADMIN_BUSINESS_OPEN: '/admin/api/business/open',
+  ADMIN_SETTLEMENT_BASE: '/admin/api/settlement',
   ADMIN_SETTLEMENT_CLOSE: '/admin/api/settlement/close',
   ADMIN_SETTLEMENT_ZIP: '/admin/api/settlement/zip',
 };

@@ -197,6 +197,42 @@ describe('SettlementPage', () => {
     expect(screen.queryByTestId('bank-diff')).toBeNull();
   });
 
+  // ── P1-5 (Codex v3) 일자별/합산 정산 UI ─────────────────────
+  it('★ P1-5 — 일자 셀렉터 렌더 (5/20 / 5/21 / 합산 3개 옵션)', () => {
+    renderPage();
+    const sel = screen.getByTestId('settlement-date-select');
+    expect(sel).toBeInTheDocument();
+    const opts = sel.querySelectorAll('option');
+    const values = Array.from(opts).map((o) => o.value);
+    expect(values).toEqual(expect.arrayContaining(['2026-05-20', '2026-05-21', 'all']));
+  });
+
+  it('★ P1-5 — 5/21 선택 시 useApi가 date=2026-05-21 query 호출', () => {
+    renderPage();
+    fireEvent.change(screen.getByTestId('settlement-date-select'), {
+      target: { value: '2026-05-21' },
+    });
+    // useApi mock의 마지막 호출 fn을 재실행하면 그 URL 안에 2026-05-21이 포함되어야 함
+    const lastCall = useApi.mock.calls[useApi.mock.calls.length - 1];
+    const fetchFn = lastCall[0];
+    apiFetch.mockResolvedValueOnce({});
+    fetchFn({ signal: new AbortController().signal });
+    const calledPath = apiFetch.mock.calls[0]?.[0] ?? '';
+    expect(calledPath).toContain('date=2026-05-21');
+  });
+
+  it('★ P1-5 — 합산(all) 선택 시 settlement-aggregate-summary testid + 헤더 "합산" 라벨', () => {
+    // 합산 실제 sum 로직은 settlement-aggregate.test.js의 unit으로 검증.
+    // 페이지 레벨에서는 selectedDate='all' 시 testid 전환 + 헤더 라벨만 검증.
+    // (useApi mock이 SAMPLE_SETTLEMENT를 반환하므로 합산 수치는 페이지에서 검증 불가)
+    renderPage();
+    fireEvent.change(screen.getByTestId('settlement-date-select'), {
+      target: { value: 'all' },
+    });
+    expect(screen.getByTestId('settlement-aggregate-summary')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/합산/);
+  });
+
   it('★ ZIP 버튼 클릭 시 window.open 호출', () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     renderPage();
