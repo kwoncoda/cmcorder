@@ -22,6 +22,7 @@ import ErrorPage from './pages/customer/ErrorPage.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import LoadingState from './components/state/LoadingState.jsx';
 import CustomerLayout from './components/layouts/CustomerLayout.jsx';
+import AdminLayout from './components/layouts/AdminLayout.jsx';
 
 // 관리자 6 페이지 — React.lazy 로 별도 chunk 분리.
 const AdminLoginPage = lazy(() => import('./pages/admin/LoginPage.jsx'));
@@ -74,16 +75,17 @@ export function AppRoutes() {
             <Route path="/closed" element={<ClosedPage />} />
           </Route>
 
-          {/* 관리자 — React.lazy 코드 스플릿. Phase 5에서 AdminLayout 별도. */}
-          <Route path="/admin/login" element={<AdminLoginPage />} />
-          <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-          <Route
-            path="/admin/orders/:id"
-            element={<AdminOrderDetailPage />}
-          />
-          <Route path="/admin/transfers" element={<AdminTransfersPage />} />
-          <Route path="/admin/menu" element={<AdminMenuPage />} />
-          <Route path="/admin/settlement" element={<AdminSettlementPage />} />
+          {/* 관리자 — React.lazy 코드 스플릿 + AdminLayout 공통 nav (P1-4 Codex v3).
+              login은 nav 미렌더 (인증 전 — AdminLayout 내부에서 분기). */}
+          <Route element={<AdminLayout />}>
+            <Route path="/admin/login" element={<AdminLoginPage />} />
+            <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+            <Route path="/admin/orders/:id" element={<AdminOrderDetailPage />} />
+            <Route path="/admin/transfers" element={<AdminTransfersPage />} />
+            {/* P1-4: /admin/menu → /admin/menus (plural — 문서 SCREEN §3 정합) */}
+            <Route path="/admin/menus" element={<AdminMenuPage />} />
+            <Route path="/admin/settlement" element={<AdminSettlementPage />} />
+          </Route>
 
           {/* 404 catch-all */}
           <Route path="*" element={<ErrorPage code={404} />} />

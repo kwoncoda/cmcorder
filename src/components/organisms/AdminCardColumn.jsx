@@ -1,18 +1,17 @@
-// AdminCardColumn — organism (IMPLEMENTATION_PLAN §2.7 / §3.5 6조·7조 / ADR-021).
+// AdminCardColumn — organism (IMPLEMENTATION_PLAN §2.7 / §3.5 6조 / ADR-021).
 // 본부 대시보드 칸반 컬럼 — 상태별 주문 카드 묶음.
 //
-// 설계 결정 (§3.5 7조 메모이즈):
-// - **OrderCard는 모듈 최상위** (§3.5 6조) — AdminCardColumn 안에 정의하면
-//   부모 리렌더마다 새 함수 reference 생성 → React.memo 무용지물.
-// - **React.memo로 OrderCard 감쌈** — 5초 폴링 후 *변하지 않은 카드는 리렌더 X*.
-//   props가 primitive 또는 안정 reference (order 객체 reference 유지) 가정.
-// - **useMemo([order.transferred_at, tick])** — elapsed_minutes는 카드 내부에서
-//   재계산. tick은 부모(KanbanBoard)가 1분 단위 발행 → 1분당 1회 재계산.
-//   transferred_at 안 바뀌면 캐시 유지.
+// 설계 결정:
+// - **OrderCard는 모듈 최상위** (§3.5 6조) — 단순 함수 컴포넌트.
+// - **React.memo 미적용 (P2-3 Codex v3 2026-05-15, A 방향):** 5초 폴링마다
+//   fresh JSON으로 order reference가 매번 새로 생성 → memo 효과 0. 카드 ≤30개
+//   운영 부하 미미. 단순화 우선.
+// - **useMemo([order.transferred_at, tick])** — elapsed_minutes 재계산. tick은
+//   부모가 1분 단위 발행 → 1분당 1회만 재계산.
 // - 5분/10분 경과 시 노란/빨간 border 강조 — 운영자 시각 신호.
 // - key={order.id} — index 금지 (§3.5 7조).
 // - 카드 클릭은 시맨틱 <button> — 키보드 Enter·Space 기본 동작 (focus-visible 자동).
-import { forwardRef, memo, useMemo } from 'react';
+import { forwardRef, useMemo } from 'react';
 import StatusChip from '../molecules/StatusChip.jsx';
 
 // 경과 분 계산 — transferred_at 없으면 0, 잘못된 ISO 문자열도 0 fallback.
@@ -34,19 +33,28 @@ function elapsedTone(minutes) {
   return 'border-divider';
 }
 
-// OrderCard — React.memo 적용. 동일 props (order reference + tick) 시 리렌더 X.
-// ※ named export — 테스트에서 memo wrap 회귀 검증용.
-const OrderCard = memo(function OrderCard({ order, tick, onSelect }) {
-  // tick props가 같으면 deps 동일 → 캐시된 elapsedMin 반환.
-  // tick이 1분 단위로 갱신되면 재계산.
+// P1-2 (Codex 리뷰): 서버 실제 shape 호환.
+//  - 이름: depositor_name (snake) → depositorName (camel) → name 순 fallback.
+//  - 금액: total_price 표시 (F-A-007 요구).
+function pickName(order) {
+  return order.depositor_name ?? order.depositorName ?? order.name ?? null;
+}
+function formatPrice(n) {
+  if (typeof n !== 'number') return '';
+  return `${n.toLocaleString('ko-KR')}원`;
+}
+
+// OrderCard — 단순 함수 컴포넌트 (P2-3 Codex v3 — memo 제거, A 방향).
+// 폴링 5초마다 order reference 새로 생성되므로 memo 효과 0이라 단순화.
+function OrderCard({ order, tick, onSelect }) {
   const elapsedMin = useMemo(
     () => calcElapsedMinutes(order.transferred_at, new Date(tick)),
     [order.transferred_at, tick],
   );
   const tone = elapsedTone(elapsedMin);
+  const displayName = pickName(order);
+  const priceText = formatPrice(order.total_price);
 
-  // 시맨틱 button — focus-visible·Enter·Space 기본 처리.
-  // 카드 톤: bg-card-bg + text-card-ink (DESIGN — 본문 영역과 구분).
   const cls = [
     'text-left w-full',
     'bg-card-bg text-card-ink',
@@ -65,9 +73,16 @@ const OrderCard = memo(function OrderCard({ order, tick, onSelect }) {
       data-testid={`admin-order-card-${order.id}`}
       className={cls}
     >
-      <div className="font-display font-bold text-base">#{order.no}</div>
+      <div className="flex items-baseline justify-between gap-sm">
+        <div className="font-display font-bold text-base">#{order.no}</div>
+        {priceText && (
+          <span className="font-mono tabular-nums text-sm text-card-ink">
+            {priceText}
+          </span>
+        )}
+      </div>
       <div className="text-xs text-card-muted truncate">
-        {order.depositorName ?? '(이름 없음)'}
+        {displayName ?? '(이름 없음)'}
       </div>
       <div className="mt-2xs flex items-center justify-between gap-sm">
         <StatusChip status={order.status} size="sm" />
@@ -77,7 +92,7 @@ const OrderCard = memo(function OrderCard({ order, tick, onSelect }) {
       </div>
     </button>
   );
-});
+}
 
 const AdminCardColumn = forwardRef(function AdminCardColumn(
   {

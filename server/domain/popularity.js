@@ -1,40 +1,30 @@
 // ============================================================
-// Task 6.4 — 정적 BEST (결정 E).
+// Task 6.4 + P2-1 (Codex v3 2026-05-15) — BEST 메뉴 (어드민 토글 단일).
 //
-// 백엔드는 단순 "recommended=1 우선 N개" + 부족 시 첫 N개 fallback.
-// 동적 집계 X — 정적 추천 토글만 사용.
+// 사용자 결정 (2026-05-15):
+//   - 실시간 랭킹 X (동적 집계 X)
+//   - 어드민이 메뉴 관리에서 recommended 토글로 BEST 직접 선택
+//   - 판매 수 표시 X (응답에도 미포함)
+//   - fallback("recommended 0개면 첫 N개") 제거 — 어드민 미선택 시 BEST 빈 배열
+//
+// ADR-017 변경 (2026-05-15): 동적 랭킹·판매 수·fallback 모두 폐기.
 // 품절 메뉴는 항상 제외.
 // ============================================================
 
 /**
- * 인기 메뉴 N개 반환 (정적 BEST).
+ * BEST 메뉴 반환 — 어드민이 토글한 recommended=1 메뉴 중 품절 제외.
  * @param {import('better-sqlite3').Database} db
  * @param {number} [limit=3]
  */
 export function getPopularMenus(db, limit = 3) {
   if (limit <= 0) return [];
 
-  const recommended = db
+  return db
     .prepare(
-      `SELECT * FROM menus
+      `SELECT id, code, name, category, base_price, image, sold_out, recommended
+       FROM menus
        WHERE recommended = 1 AND sold_out = 0
        ORDER BY id LIMIT ?`,
     )
     .all(limit);
-
-  if (recommended.length >= limit) return recommended;
-
-  const fillCount = limit - recommended.length;
-  const fillIds = recommended.map((m) => m.id);
-  const placeholders =
-    fillIds.length > 0 ? `AND id NOT IN (${fillIds.map(() => '?').join(',')})` : '';
-  const filler = db
-    .prepare(
-      `SELECT * FROM menus
-       WHERE sold_out = 0 ${placeholders}
-       ORDER BY id LIMIT ?`,
-    )
-    .all(...fillIds, fillCount);
-
-  return [...recommended, ...filler];
 }

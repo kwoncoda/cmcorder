@@ -18,6 +18,13 @@ services:
       PORT: 3000
       # SQLite 파일은 named volume 안쪽 경로로 강제 — 컨테이너 재기동에도 데이터 보존.
       DB_PATH: /data/order.sqlite
+      # P1-2 (Codex v3 2026-05-15): 자동 백업 ZIP도 named volume 안쪽.
+      # 컨테이너 재생성/이미지 재빌드 시에도 backups 보존 (ADR-022/023).
+      BACKUP_DIR: /data/backups
+      # P0-A (Codex v2 2026-05-15): 세션 쿠키 secure flag 명시적 opt-in.
+      # 부스 노트북 로컬 HTTP 운영 기본 false. HTTPS reverse proxy 도입 시 'true'.
+      # secure=true + HTTP 환경이면 cookie 발송 안 됨 → admin 로그인 실패.
+      SESSION_COOKIE_SECURE: "false"
     volumes:
       - chickenedak-data:/data
     healthcheck:

@@ -89,6 +89,31 @@ describe('getSettlementSummary', () => {
     expect(s.total_amount).toBe(0);
     expect(s.in_progress_count).toBe(0);
   });
+
+  // ── P1-3 (Codex 리뷰) 정산 보조 ──────────────────────────────
+  it('★ P1-3 — coupon_count / coupon_discount_total 포함', () => {
+    insertOrder({ status: 'DONE', total: 17000, no: 1 });
+    insertOrder({ status: 'DONE', total: 17000, no: 2 });
+    insertOrder({ status: 'DONE', total: 21000, no: 3 });
+    // 쿠폰 사용 2건 (해당 일자)
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637001', 'A', 1)",
+    ).run();
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637002', 'B', 2)",
+    ).run();
+
+    const s = getSettlementSummary(db, DATE);
+    expect(s.coupon_count).toBe(2);
+    expect(s.coupon_discount_total).toBe(2000); // 2건 × 1,000원 ADR-019
+  });
+
+  it('★ P1-3 — 쿠폰 0건 시 0 반환', () => {
+    insertOrder({ status: 'DONE', total: 18000, no: 1 });
+    const s = getSettlementSummary(db, DATE);
+    expect(s.coupon_count).toBe(0);
+    expect(s.coupon_discount_total).toBe(0);
+  });
 });
 
 describe('closeSettlement — G13 자동 트랜잭션', () => {

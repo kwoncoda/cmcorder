@@ -1,5 +1,7 @@
 # 테스트 전략 — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** §7 "SSE 통합 테스트" → `useOrderPolling` 폴링 hook 테스트로 대체 (ADR-015 변경). E2E-05 등 SSE 의존 시나리오는 폴링 기반. 본문 잔존 SSE 표기는 historical.
+
 **작성일:** 2026-05-04 (`/plan-eng-review` 1차)
 **관련 문서:** `ARCHITECTURE.md`, `API_DRAFT.md`, `DB_DRAFT.md`, `DECISIONS.md`
 **상태:** DRAFT
@@ -401,49 +403,26 @@ describe('POST /api/orders (통합)', () => {
 
 ---
 
-## 7. SSE 통합 테스트 (특수)
+## 7. ~~SSE 통합 테스트~~ → **폴링 hook 테스트 (ADR-015 변경, 2026-05-15)**
 
-SSE는 supertest로 단순 GET이 안 되므로:
+**상태:** SSE 미구현. SSE 통합 테스트 → `src/hooks/__tests__/useOrderPolling.test.jsx`로 대체.
 
 ```javascript
-import { EventSource } from 'eventsource';   // 또는 Node 21+ 내장
-import { createServer } from 'http';
-
-it('상태 변경 시 클라가 SSE 이벤트 수신', async () => {
-  const app = createApp({ db });
-  const server = createServer(app).listen(0);
-  const port = server.address().port;
-
-  const order = createTestOrder(db);
-  const url = `http://localhost:${port}/api/orders/${order.id}/stream?student_id=${order.student_id}&order_no=${order.order_no}`;
-  const es = new EventSource(url);
-
-  const events = [];
-  es.addEventListener('snapshot', e => events.push({ type: 'snapshot', data: JSON.parse(e.data) }));
-  es.addEventListener('status', e => events.push({ type: 'status', data: JSON.parse(e.data) }));
-
-  await waitFor(() => events.length >= 1);   // snapshot 수신
-  expect(events[0].type).toBe('snapshot');
-
-  // 상태 변경 트리거
-  await transitionOrder(db, order.id, 'PAID');
-  await transitionOrder(db, order.id, 'COOKING');
-
-  await waitFor(() => events.length >= 3);
-  expect(events[1].data.status).toBe('PAID');
-  expect(events[2].data.status).toBe('COOKING');
-
-  es.close();
-  server.close();
-});
+// 실제 회귀: src/hooks/__tests__/useOrderPolling.test.jsx
+// - 5초 폴링 + AbortController + cleanup
+// - status 전이 시 onStatusChange 콜백
+// - BusinessClosedError(423) → 전역 위임
+// - 인증 실패(401/403) → error state
 ```
 
-**테스트 대상 케이스:**
-- snapshot 이벤트 1회 수신
-- 상태 변경 시 status 이벤트 push
-- 인증 실패 시 401 (SSE 시작 전)
-- keepalive 15초 주기 (fake timer)
-- 연결 끊김 시 hub Set에서 제거 (메모리 누수 방지)
+**테스트 대상 케이스 (현행):**
+- 첫 fetch 후 snapshot 표시 (`useOrderPolling`)
+- status 전이 시 콜백 발화 (READY 진동 등)
+- `enabled=false` 시 폴링 X
+- StrictMode mount-unmount-mount 시 활성 폴링 1개
+- BusinessClosedError 전역 위임
+
+SSE 도입 시 (Phase 2) 동일 시그니처 hook으로 무중단 전환 가능.
 
 ---
 
@@ -476,20 +455,24 @@ export default {
 
 | # | 시나리오 | viewport | 우선순위 |
 |---|---|---|---|
-| **E2E-01** | 학생 주문 → 도그태그 발급 → 조리 현황 | mobile | P0 |
-| **E2E-02** | 외부인 주문 → 토큰 발급 → 조리 현황 | mobile | P0 |
-| **E2E-03** | 쿠폰 prefix 위조 거부 | mobile | P0 |
-| **E2E-04** | 동시 동일 쿠폰 1건만 통과 | mobile | P1 |
-| **E2E-05** | 사용자 신고 → 본부 확인 → 조리 시작 → SSE 갱신 | mobile + desktop | P0 |
-| **E2E-06** | 본부 HOLD → 사용자 재시도 | mobile + desktop | P1 |
-| **E2E-07** | 정산 마감 가드 → 진행 주문 종결 → 마감 성공 | desktop | P0 |
-| **E2E-08** | ZIP 다운로드 → 헤더·콘텐트 검증 | desktop | P1 |
-| **E2E-09** | 관리자 PIN 로그인·세션 유지·로그아웃 | desktop | P0 |
-| **E2E-10** | 자동 스냅샷 2시간 후 backups/ 디렉터리에 파일 생성 (timer 가속) | (timer 가속) | P2 |
-| **E2E-11** | 🚀 **장사 시작 흐름 (G13)** — CLOSED 상태 진입 → 사용자 /menu → /closed redirect → 관리자 "장사 시작" 클릭 → 사용자 새로고침 → /menu 정상 표시 | mobile + desktop | **P0** |
-| **E2E-12** | 🔒 **정산 마감 자동 CLOSED (G13)** — OPEN 상태 + 진행 주문 0건 → 관리자 "오늘 정산 마감" → business_state.status='CLOSED' 자동 → 사용자 새로고침 → /closed redirect | mobile + desktop | **P0** |
-| **E2E-13** | 🗺️ **부스 미니맵 모달 (G12)** — 메뉴 화면 우상단 🗺️ 클릭 → 풀스크린 모달 → 약도 이미지 또는 CSS 그리드 fallback → Esc로 닫기 | mobile | **P1** |
-| **E2E-14** | **init.sql 첫 부팅 (G13/G14)** — volume 비우고 docker compose up → 로그에 '[INIT] Generated admin PIN' 1회 출력 → admins 테이블 1행 → business_state.status='CLOSED' | (Docker compose) | **P1** |
+> **상태 (P1-6 Codex v3 2026-05-15):** 본 14 시나리오는 **BLOCKED — 일회성 운영 + D-1 리허설로 대체**. 사유: ① 자동 E2E 14건 작성 ≫ 가치(부스 2일 운영) ② Playwright webServer가 현재 Vite-only라 API/SSE 시나리오는 백엔드 통합 인프라 추가 필요 ③ `docs/operations/d1-rehearsal.md` 10 섹션 체크리스트가 동일 시나리오를 수동으로 검증. 자동화는 Phase 2 가정상 X. **현재 자동 E2E는 `tests/smoke.spec.js` 1건(홈 → /menu redirect)만 운영**.
+
+| ~~ID~~ (BLOCKED) | 시나리오 | 수동 검증 위치 |
+|---|---|---|
+| ~~E2E-01~~ | 학생 주문 → 도그태그 → 조리 현황 | d1-rehearsal.md §주문 흐름 |
+| ~~E2E-02~~ | 외부인 주문 → 토큰 → 조리 현황 | d1-rehearsal.md §외부인 흐름 |
+| ~~E2E-03~~ | 쿠폰 prefix 위조 거부 | server/domain/__tests__/coupon.test.js 단위 |
+| ~~E2E-04~~ | 동시 동일 쿠폰 1건만 통과 | server/routes/__tests__/customer.test.js (P0-3) |
+| ~~E2E-05~~ | 사용자 신고 → 본부 확인 → 조리 시작 → ~~SSE~~ 폴링 갱신 | d1-rehearsal.md §본부 처리 |
+| ~~E2E-06~~ | 본부 HOLD → 사용자 재시도 | d1-rehearsal.md §보류 흐름 |
+| ~~E2E-07~~ | 정산 마감 가드 | server/domain/__tests__/settlement.test.js |
+| ~~E2E-08~~ | ZIP 다운로드 → 헤더·콘텐트 | server/jobs/__tests__/auto-snapshot.test.js (P1-1) |
+| ~~E2E-09~~ | 관리자 PIN 로그인·세션 | server/routes/__tests__/admin.test.js |
+| ~~E2E-10~~ | 자동 스냅샷 backups/ 디렉터리 생성 | server/__tests__/backup-volume-config.test.js (P1-2) |
+| ~~E2E-11~~ | 장사 시작 (G13) | server/middleware/__tests__/business-state.test.js + d1-rehearsal §가동 |
+| ~~E2E-12~~ | 정산 마감 자동 CLOSED (G13) | server/domain/__tests__/settlement.test.js + d1-rehearsal §정산 |
+| ~~E2E-13~~ | 부스 미니맵 모달 (G12) | src/components/organisms/__tests__/BoothMinimapModal.test.jsx |
+| ~~E2E-14~~ | init.sql 첫 부팅 | server/__tests__/bootstrap.test.js + d1-rehearsal §첫 부팅 |
 
 ### 8.3 E2E-01 스크립트 예시
 

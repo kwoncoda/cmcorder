@@ -8,6 +8,7 @@ export const API = {
   // 사용자
   MENUS: '/api/menus',
   POPULAR: '/api/popular',
+  BUSINESS_STATE: '/api/business-state',
   ORDERS: '/api/orders',
   ORDER: (id) => `/api/orders/${id}`,
   ORDER_TRANSFER_REPORT: (id) => `/api/orders/${id}/transfer-report`,
@@ -24,6 +25,7 @@ export const API = {
   ADMIN_MENU_TOGGLE: (id) => `/admin/api/menus/${id}/toggle`,
   ADMIN_BUSINESS_STATE: '/admin/api/business/state',
   ADMIN_BUSINESS_OPEN: '/admin/api/business/open',
+  ADMIN_SETTLEMENT_BASE: '/admin/api/settlement',
   ADMIN_SETTLEMENT_CLOSE: '/admin/api/settlement/close',
   ADMIN_SETTLEMENT_ZIP: '/admin/api/settlement/zip',
 };

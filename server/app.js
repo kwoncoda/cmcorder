@@ -6,18 +6,30 @@
 //   - customerRoutes (12 엔드포인트 중 6개)
 //   - errorHandler (도메인 에러 → HTTP 상태)
 //
-// db 옵션 — 주입 시 사용자 API 마운트 / 부재 시 부트스트랩만 (healthz 단독 테스트용).
+// 옵션:
+//   - db: 주입 시 사용자/관리자 API 마운트 / 부재 시 부트스트랩만.
+//   - distPath: 주입 시 SPA 정적 서빙 + 비 API GET fallback. 부재 시 404 유지.
+//     (P0-1 Codex 리뷰 — Docker 컨테이너에서 /menu 등 SPA 경로 접근)
 import express from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
-import { logger } from './lib/logger.js';
+import path from 'node:path';
+import { existsSync } from 'node:fs';
+import { logger, pinoHttpRedactOptions } from './lib/logger.js';
 import { businessStateGuard } from './middleware/business-state.js';
 import { sessionMiddleware } from './middleware/admin-auth.js';
 import { errorHandler } from './middleware/error.js';
 import { customerRoutes } from './routes/customer.js';
 import { adminRoutes } from './routes/admin.js';
 
-export function createApp({ db } = {}) {
+// SPA fallback 제외 prefix — JSON API/헬스체크는 항상 JSON 응답 유지.
+const API_PREFIXES = ['/api/', '/admin/api/', '/admin/login', '/admin/logout', '/healthz'];
+
+function isApiPath(p) {
+  return API_PREFIXES.some((pref) => p === pref.replace(/\/$/, '') || p.startsWith(pref));
+}
+
+export function createApp({ db, distPath } = {}) {
   const app = express();
   app.locals.db = db;
 
@@ -25,9 +37,11 @@ export function createApp({ db } = {}) {
   app.use(helmet({ contentSecurityPolicy: false }));
 
   // 요청 로깅. /healthz는 부스 모니터링용으로 자주 호출되므로 autoLogging에서 제외.
+  // P1-3 (Codex v3): pinoHttpRedactOptions로 req.url의 token query 마스킹.
   app.use(
     pinoHttp({
       logger,
+      ...pinoHttpRedactOptions(),
       autoLogging: {
         ignore: (req) => req.url === '/healthz',
       },
@@ -50,6 +64,22 @@ export function createApp({ db } = {}) {
     app.use(businessStateGuard(db));
     app.use(customerRoutes(db));
     app.use(adminRoutes(db));
+  }
+
+  // SPA 정적 서빙 — distPath 주입 + 디렉토리 존재 시.
+  // /assets, /favicon.ico 같은 직접 파일 요청은 express.static이 우선 처리.
+  // 그 다음 비-API GET 요청은 index.html로 fallback (React Router 처리).
+  const resolvedDist = distPath ? path.resolve(distPath) : null;
+  if (resolvedDist && existsSync(resolvedDist)) {
+    const indexHtml = path.join(resolvedDist, 'index.html');
+    app.use(express.static(resolvedDist, { index: false, fallthrough: true }));
+    app.get('*', (req, res, next) => {
+      if (req.method !== 'GET') return next();
+      if (isApiPath(req.path)) return next();
+      if (!existsSync(indexHtml)) return next();
+      res.setHeader('Cache-Control', 'no-cache');
+      return res.sendFile(indexHtml);
+    });
   }
 
   // 404 fallback — 등록되지 않은 모든 경로.

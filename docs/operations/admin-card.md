@@ -11,6 +11,10 @@
 4. 영업 상태 빨간 CLOSED 배지 확인 → "장사 시작" 큰 노란 버튼 클릭 → 녹색 OPEN
 5. 모바일 폰에서 `http://<노트북IP>:3000/menu` 진입 → 메뉴 정상 표시 확인
 
+> **세션 쿠키 (P0-A, ADR-031 2026-05-15):** `docker-compose.yml`은 `SESSION_COOKIE_SECURE=false` 기본. HTTP 로컬 운영 호환. **HTTPS reverse proxy 도입 시 `SESSION_COOKIE_SECURE=true`로 변경 + Express `trust proxy` 설정 필요.** 부스 로컬 와이파이는 HTTP가 정상 경로.
+
+> **자동 백업 (P1-2 Codex v3, 2026-05-15):** `BACKUP_DIR=/data/backups` 환경변수가 `chickenedak-data` named volume 안쪽으로 강제. 컨테이너 재생성·이미지 재빌드·`docker compose down` 후에도 ZIP 6개 회전 보존. `docker compose exec chickenedak ls /data/backups`로 확인 가능. PII 폐기 시 (`docs/operations/pii-deletion.md`) volume 삭제 전에 ZIP을 학생회 클라우드로 옮길 것.
+
 ## 운영 중 (한 화면)
 
 대시보드는 6 컬럼 칸반(Kanban) 형태로 표시.
@@ -48,3 +52,12 @@
 
 - 학생이 "학번 없음" 체크 → 이름만 입력 → 완료 화면에 token 포함 URL 표시
 - 외부인은 그 URL을 새 시크릿 탭에서 열어 상태 추적 가능 (학번 기반 자동 권한 없음)
+
+## D-day + 7일 — PII 폐기 (ADR-027 / 2026-05-28까지)
+
+운영 종료 후 7일 이내 *반드시*:
+1. `/admin/settlement` → "📦 ZIP 다운로드" → 학생회 클라우드(학과 폴더)에 업로드.
+2. `docs/operations/pii-deletion.md` 절차로 DB PII 폐기.
+3. docker volume `chickenedak-data` 삭제.
+
+**미수행 시 GDPR/개인정보보호법 위반 소지** — 학번·이름·이체 정보의 불필요한 장기 보유 금지.

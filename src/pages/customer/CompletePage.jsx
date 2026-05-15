@@ -1,21 +1,14 @@
-// C-4 주문 완료 페이지 — Task 4.5 (절정 ★).
-// 도그태그 + WINNER WINNER + 계좌 안내 + 이체 CTA.
-//
-// 설계 (§3.5 1조 — 페이지 ≤120줄):
-//  - useParams.id 기반 fetch (Zustand order slice X — 결정).
-//  - DogTagFrame dropping=true → 첫 진입 1회 모션 (sessionStorage 자체 처리, 결정 h).
-//  - "WINNER WINNER CHICKEN DINNER" 2줄 강제 (DESIGN §5.2 + 결정 g).
-//  - 계좌 복사 3단계 fallback (HTTP/학교 와이파이 대비, SCREEN §7):
-//      1) navigator.clipboard.writeText  → 정상 경로
-//      2) document.execCommand('copy')   → fallback
-//      3) 둘 다 실패 → "길게 눌러 복사" 안내
-//  - 3분기 처리: Loading / Error / 404 redirect.
+// C-4 주문 완료 — Task 4.5 (§3.5 1조 ≤120줄, 절정 ★).
+//  - 도그태그 + WINNER WINNER 2줄(DESIGN §5.2) + 계좌 안내 + 이체 CTA.
+//  - 계좌 복사 3단계 fallback (clipboard → execCommand → manual hint).
+//  - P0-4: useOrderToken 으로 ?token= 자동 부착.
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
 import { apiFetch } from '../../api/client.js';
 import { OrderSchema } from '../../api/schemas.js';
 import { API } from '../../api/routes.js';
+import { useOrderToken } from '../../hooks/useOrderToken.js';
 import DogTagFrame from '../../components/molecules/DogTagFrame.jsx';
 import Button from '../../components/atoms/Button.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
@@ -55,11 +48,13 @@ async function copyText(text) {
 export default function CompletePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [copyState, setCopyState] = useState('idle'); // idle | copied | manual
+  // P0-4: 학생/외부인 모두 access_token 필수.
+  const { token, query: tokenQuery, withQuery } = useOrderToken(id);
+  const [copyState, setCopyState] = useState('idle');
 
   const orderQuery = useApi(
-    ({ signal }) => apiFetch(API.ORDER(id), { schema: OrderSchema, signal }),
-    [id],
+    ({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }),
+    [id, token],
   );
 
   if (orderQuery.isLoading) {
@@ -110,7 +105,7 @@ export default function CompletePage() {
           </p>
         )}
       </div>
-      <Button variant="primary" size="lg" block onClick={() => navigate(`/orders/${id}/transfer`)}>
+      <Button variant="primary" size="lg" block onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
         이체 완료하고 확인 요청
       </Button>
     </section>

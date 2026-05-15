@@ -12,19 +12,25 @@ import { logger } from './lib/logger.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const DB_PATH = process.env.DB_PATH ?? './data/order.sqlite';
+// P0-1 (Codex 리뷰) — SPA 정적 서빙. Docker에서 frontend-build dist를 /app/dist로 복사.
+const DIST_PATH = process.env.DIST_PATH ?? './dist';
+// P1-2 (Codex v3 리뷰) — 자동 백업 Docker named volume 영속화.
+// docker-compose.yml의 BACKUP_DIR=/data/backups가 named volume(chickenedak-data) 안쪽.
+// 컨테이너 재생성/이미지 재빌드에도 백업 보존.
+const BACKUP_DIR = process.env.BACKUP_DIR ?? './backups';
 
 // DB 초기화 — 신규 DB면 init.sql 실행, 어드민 PIN 시드.
 const db = openDatabase(DB_PATH);
 bootstrapDatabase(db);
 seedAdmin(db);
 
-const app = createApp({ db });
+const app = createApp({ db, distPath: DIST_PATH });
 
 // 자동 ZIP 백업 — 2시간 + 6개 회전 (ADR-022 변경). 테스트 환경에서는 disable.
 const snapshotStop =
   process.env.NODE_ENV === 'test'
     ? () => {}
-    : startAutoSnapshot(db, { dbPath: DB_PATH });
+    : startAutoSnapshot(db, { dbPath: DB_PATH, dir: BACKUP_DIR });
 
 const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, `[server] 치킨이닭 백엔드 가동 — http://localhost:${PORT}`);

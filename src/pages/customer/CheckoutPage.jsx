@@ -1,17 +1,13 @@
-// C-3 주문 정보 입력 — Task 4.4.
-// 학번·이름·"학번 없음"·수령·테이블·쿠폰 폼 + 서버 POST.
-//
-// 설계 (§3.5 1조 — 페이지 ≤120줄):
-//  - useState controlled (react-hook-form 미설치) — §3.5 7조 조건부 필드 OK.
-//  - 학번 정규식 (ADR-019): ^\d{2}\d{2}37\d{3}$ — 시작년+입학년+학과37+일련번호.
-//  - "학번 없음" 체크 시 외부인 — 학번/쿠폰 미렌더 (ADR-021).
-//  - apiFetch 페이로드 (ADR-020 Pattern B): menu_id·quantity·coupon 만 — 가격 X.
-//  - BusinessClosedError throw → CustomerLayout useGlobalErrorHandler catch (G13).
+// C-3 주문 정보 입력 — Task 4.4 (§3.5 1조 ≤120줄).
+//  - useState controlled · 학번 정규식 ADR-019 · 외부인 "학번 없음" ADR-021.
+//  - 페이로드 ADR-020 Pattern B (가격 X). BusinessClosedError → G13 위임.
+//  - P0-4: 응답 access_token sessionStorage 저장 + URL search 전파.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore, { cartSelectors } from '../../store/cart.js';
 import { apiFetch, BusinessClosedError, ApiError } from '../../api/client.js';
 import { API } from '../../api/routes.js';
+import { storeOrderToken } from '../../hooks/useOrderToken.js';
 import Label from '../../components/atoms/Label.jsx';
 import Input from '../../components/atoms/Input.jsx';
 import Checkbox from '../../components/atoms/Checkbox.jsx';
@@ -65,8 +61,11 @@ export default function CheckoutPage() {
           coupon: !isExternal && useCoupon ? { used: true } : null,
         },
       });
+      // P0-4: access_token 저장 + URL search param 전파.
+      storeOrderToken(order.id, order.access_token);
       clearCart();
-      navigate(`/orders/${order.id}/complete`);
+      const tq = order.access_token ? `?token=${encodeURIComponent(order.access_token)}` : '';
+      navigate(`/orders/${order.id}/complete${tq}`);
     } catch (err) {
       if (err instanceof BusinessClosedError) throw err; // useGlobalErrorHandler 위임
       setSubmitError(err instanceof ApiError ? err.message : '주문 접수에 실패했어요.');

@@ -341,7 +341,14 @@
 
 ## ADR-015: 사용자 조리 현황판(실시간) MVP 도입
 
-**상태:** Accepted (2026-05-02) · 2026-05-03 실시간 메커니즘 = SSE 결정 · 2026-05-04 인증 정책 확정 (D17 closed, ADR-021과 결합)
+**상태:** Accepted (2026-05-02) · 2026-05-03 실시간 메커니즘 = SSE 결정 · 2026-05-04 인증 정책 확정 (D17 closed, ADR-021과 결합) · **2026-05-15 변경: SSE → 5초 폴링 fallback (Codex 리뷰 P0-2)**
+
+**2026-05-15 변경 (P0-2):**
+서버 SSE 라우트(`GET /api/orders/:id/stream`)는 구현 보류. 클라이언트는 `useOrderPolling` (5초 폴링)로 fallback.
+- 사유: 일회성 부스 운영(2일), 동시 사용자 ≤ 30명 — 5초 × 30 = 6 req/s 부담 무시 수준
+- F-S-010/011도 폴링 fallback으로 표기 변경
+- 시그니처는 `useOrderStream`과 동일 — 추후 SSE 도입 시 무중단 교체 가능
+- 회귀: `src/hooks/__tests__/useOrderPolling.test.jsx`
 
 **컨텍스트:**
 - ADR-010으로 대기시간 표시를 통으로 제거했으나, 사용자의 "조리 완료됐나?" 불안은 그대로 남아 부스 문의 폭증 우려
@@ -425,36 +432,40 @@
 
 ---
 
-## ADR-017: 인기 메뉴 실시간 랭킹 + 동적 카피 MVP 도입
+## ADR-017: BEST 메뉴 — 어드민 토글 단일 (실시간 랭킹/판매수 폐기)
 
-**상태:** Accepted (2026-05-02)
+**상태:** Accepted (2026-05-02) · 2026-05-13 정적 BEST 변경 · **2026-05-15 어드민 토글 단일 + 판매 수 폐기 (P2-1 Codex v3, 사용자 결정)**
 
-**컨텍스트:**
-- 기획서 §9.3에 "인기 메뉴 표시"가 이미 있었으나 정적 배지 수준
-- 사용자가 추가 기획에서 "압도적 1위 / 추격 중" 같은 동적 카피로 사회적 증거(social proof) 효과 강화 제안
-- 축제 분위기에선 "남들이 많이 먹는 거"가 강한 구매 영향
+**2026-05-15 변경 (P2-1 Codex v3):**
 
-**결정:**
-실시간 인기 메뉴 랭킹 + 규칙 기반 동적 카피를 MVP에 포함한다.
+사용자 결정으로 동적 랭킹·판매 수·fallback 로직 모두 폐기. 어드민이 메뉴 관리 페이지(`/admin/menus`)에서 `recommended` 토글로 BEST 메뉴를 직접 선택하고, 미선택 시 BEST 영역은 노출되지 않는다.
 
-**핵심 명세:**
-- TOP 3 메뉴를 판매량과 함께 표시
-- 갱신 주기: 5~10분
-- 동적 카피 규칙:
-  - 1위가 2위 격차 큼 → "압도적 1위"
-  - 1위·2위 격차 작음 → "추격 중"
-  - 첫 운영(데이터 부족) → "학생회 추천 BEST" 임시 라벨
-  - 빠른 상승세 → "🚀 급상승"
-- 운영진이 카피 룰을 ON/OFF 가능 (편향 우려 시)
+**현행 명세 (최종):**
+- 어드민이 메뉴 관리에서 "🔥 BEST 표시" 버튼으로 토글
+- 사용자 메뉴 페이지는 `recommended=true` 메뉴만 BEST 영역에 노출 (최대 3개)
+- 어드민이 0개 선택하면 BEST 영역 자체 미렌더
+- **판매 수 표시 X · 동적 카피 X · fallback("없으면 첫 3개") X**
 
-**결과:**
-- §9.3 메뉴 화면 상단에 "🔥 실시간 인기 메뉴 TOP 3" 섹션
-- 관리자 판매 현황 화면에도 동일 데이터 표시 (운영진 시야 확보)
-- 카피 생성 로직 (서버 또는 클라이언트 — 구현 시 결정)
+**구현:**
+- `server/domain/popularity.js` — recommended=1 AND sold_out=0 LIMIT 3, fallback 제거
+- `src/hooks/useMenuData.js` — `menus.filter(m => m.recommended).slice(0,3)`, fallback 제거
+- `src/components/organisms/RecommendedBanner.jsx` — 빈 배열이면 미렌더
+- `src/pages/admin/MenuAdminPage.jsx` — `🔥 BEST 표시` 토글
+
+**폐기 사유:**
+- "정적 BEST + 판매 수 동시 표시"는 의미 충돌 (사장님 선정 vs 실시간 집계)
+- 운영 1시간 단위 판매 수 0~5 → 통계적 의미 X
+- 일회성 부스 운영에 동적 랭킹/카피 룰 비용 ≫ 가치
+- ADR-017 본문(실시간 랭킹)이 2026-05-13/15 두 차례 결정과 모순 → 본 갱신으로 정합
 
 **Trade-off:**
-- 첫 운영(5/20 16:30)부터 30분~1시간은 데이터 부족 → 임시 라벨로 fallback
-- 동적 카피가 사용자 선택을 편향시킴 → 운영진 OFF 토글로 완화
+- 어드민이 토글 미설정 시 BEST 영역 빈 화면 → MenuAdminPage 운영 가이드에 D-1 리허설 체크리스트 포함 (5/20 16:30 전 BEST 1~3개 토글 확인)
+
+---
+
+### 이전 결정 (Historical)
+
+- 2026-05-02 (원본): 실시간 랭킹 + 규칙 기반 동적 카피 ("압도적 1위" / "추격 중" / "🚀 급상승") MVP 도입 결정. 사용자 사회적 증거(social proof) 강화 목적. → 2026-05-13 결정 E로 정적 BEST 전환 → 2026-05-15 어드민 토글 단일화로 본 결정 폐기.
 
 ---
 
@@ -878,6 +889,182 @@
 - E2E 10개는 16일에 다 작성하면 부담 — P0 4개 + P1 4개 우선
 - CI 미도입으로 머지 전 자동 검증 X — 솔로 개발이라 본인이 매번 수동 실행 (운영 가이드)
 - Playwright Docker 안에서 실행 시 Chromium 다운로드 ~200MB — 호스트에서 실행하거나 별도 image
+
+---
+
+## ADR-030: 정산 그래프 + ZIP 이력 Phase 2 강등 (P1-3 Codex 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- `docs/FEATURE_LIST.md:197` F-A-032: 메뉴별 판매·매출·시간대별 그래프 P0.
+- `docs/FEATURE_LIST.md:200` F-A-035: ZIP 다운로드 이력 표시 P0.
+- 실제 구현은 요약 + 통장 합계 + 쿠폰 요약만 (P1-3, 2026-05-15).
+- 운영 1시간 정산 목표 + 운영자 1명 환경.
+
+**결정:**
+F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 후보로 강등** (P0 → P2).
+
+**사유:**
+- 메뉴별 판매: ZIP의 `summary.json` + `settlement.sql` 덤프로 사후 Excel/SQLite 분석 가능.
+- 시간대별 그래프: 부스 운영 중 의사결정에 사용되지 않음 (사후 회고용).
+- ZIP 이력: 운영자 1명이라 본인이 다운로드 직접 추적 가능.
+- 그래프 UI 비용 (Chart 라이브러리 + 데이터 집계 API) ≫ 가치.
+
+**Trade-off:**
+- 사후 회고에서 Excel 작업 필요. 그러나 ZIP에 모든 raw 데이터 포함이라 분석 자체는 가능.
+- Phase 2 가정상 X.
+
+**문서 갱신:**
+- `docs/FEATURE_LIST.md:197` F-A-032 P0 → P2 강등.
+- `docs/FEATURE_LIST.md:200` F-A-035 P0 → P2 강등.
+
+---
+
+## ADR-029: 메뉴 CRUD 범위 축소 — 가격 + 토글만 (P1-4 Codex 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- `docs/FEATURE_LIST.md:184` F-A-024: 이름·가격·분류·이미지 전체 CRUD를 P0로 요구.
+- 실제 구현은 가격 편집 + 품절/추천 토글만 (`src/pages/admin/MenuAdminPage.jsx`).
+- Codex v2 §3/§4 충돌-5 지적.
+
+**결정:**
+일회성 운영(2026-05-20·21, G14) 동안 메뉴는 **8개 고정** (`src/constants/menus.js` + `init.sql` SoT).
+관리자 UI는 **운영 중 변동 가능한 항목만**:
+- ✅ 가격 편집 (재료비 변동 대응)
+- ✅ 품절 토글 (재고 소진)
+- ✅ 추천 토글 (사장님 추천 강조)
+- ❌ 이름·분류·이미지 편집 (시드 단계에서 확정)
+- ❌ 새 메뉴 생성·삭제 (시드 단계에서 확정)
+
+**사유:**
+- 운영자 1명이 부스 한 시간 정산 목표 → CRUD 폼 비용 ≫ 가치.
+- 이름/분류/이미지 변동 시 정산·통계 재계산 위험.
+- Phase 2 가정상 X.
+
+**Trade-off:**
+- 운영 중 새 메뉴 추가 불가. 그러나 D-1 리허설에서 메뉴 확정.
+- 이미지 오기입 시 시드 수정 + 재배포 필요 — `docker compose down && db migrate && up`.
+
+**문서 갱신:**
+- `docs/FEATURE_LIST.md:184` F-A-024 축소 표기.
+- `docs/SCREEN_STRUCTURE.md:380` "[+ 새 메뉴 추가]" 제거 안내.
+
+---
+
+## ADR-032: Rate limit Phase 2 강등 (P2-2 Codex v3 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- `docs/API_DRAFT.md:639-644`는 `POST /api/orders` IP당 5회/분, `POST /admin/login` IP당 10회/분 rate limit 명세.
+- 실제 구현은 미설치 (`express-rate-limit` 등 dependency 없음).
+- Codex v3 P2-2 지적 — 명세와 코드 불일치.
+
+**결정:**
+**Phase 2로 강등**. 일회성 부스 운영(2026-05-20·21)에 rate limit 미도입.
+
+**사유:**
+- **외부 노출 낮음** — 부스 노트북 로컬 와이파이 환경. 외부 인터넷 노출 가능성 낮음.
+- **중복 주문 방어는 이미 다층**:
+  - 클라이언트 `submitting` 가드
+  - 서버 `access_token` 발급 (주문당 1개)
+  - 쿠폰 `UNIQUE(student_id, name)` 제약
+  - 학번 unique
+- **admin/login brute force 위험 낮음** — 6자리 PIN × timingSafeEqual = 약 100만회 시도 필요 + 운영자가 컴퓨터 옆 상주.
+- **도입 비용 ≫ 가치** — 의존성 +1, 운영자 1명 환경에 over-engineering.
+
+**Trade-off:**
+- 학생이 카트 버튼을 연타하면 서버 부담 가능. 그러나 ≤30 동시 + access_token 1개 제약으로 실제 영향 미미.
+- 외부 호스팅/공개 운영으로 확장 시 ADR 재검토 필수.
+
+**문서 갱신:**
+- `docs/API_DRAFT.md §5` rate limit 표를 Phase 2 후보로 강등 표기.
+
+---
+
+## ADR-031: 세션 쿠키 secure flag 환경변수 분리 (P0-A Codex v2 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- 기존 `server/middleware/admin-auth.js`는 `secure: process.env.NODE_ENV === 'production'`
+- Docker compose가 `NODE_ENV=production` + 부스 노트북 HTTP 로컬 운영 → secure 쿠키가 HTTP에서 발송 안 됨 → admin 로그인 200이지만 세션 유실
+- Codex v2 P0 지적 (`docs/codex리뷰결과_v2.md` §4 P0-1)
+- 환경 라벨(NODE_ENV)과 전송 프로토콜(HTTPS)을 혼동했던 설계 결함
+
+**결정:**
+`SESSION_COOKIE_SECURE` env로 명시적 opt-in.
+- 기본 (미설정) → `secure: false` (HTTP 호환)
+- `SESSION_COOKIE_SECURE=true` → `secure: true` (HTTPS reverse proxy 가정)
+
+`docker-compose.yml` 기본은 `SESSION_COOKIE_SECURE=false`. HTTPS proxy 도입 시 `true` + `app.set('trust proxy', 1)` 추가 필요.
+
+**대안 — 거부됨:**
+- `secure: 'auto'` (express-session) — `trust proxy` 설정 의존, 행동 예측 어려움
+- HTTPS 강제 — 부스 단발 운영 인프라에 과스펙
+
+**Trade-off:**
+- 기본 false는 sniffing 가능. 그러나 부스 로컬 와이파이 환경 + 운영자 단일 노트북 사용이라 위협 모델 낮음.
+- HTTPS 도입 시 환경변수 1개만 바꾸면 됨 (운영 가이드 안내).
+
+**회귀:** `server/middleware/__tests__/admin-auth.test.js` P0-A 케이스 3건.
+
+---
+
+## ADR-028: react-hook-form 미채택 → controlled inputs 유지 (P2-2 Codex 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- IMPLEMENTATION_PLAN §1.3 초기 계획: `react-hook-form + zod` 사용 명시.
+- 실제 구현은 `useState` controlled inputs + 정규식/조건 검증 (CheckoutPage, TransferReportForm).
+- Codex 리뷰 P2-2가 계획-실제 불일치를 지적.
+
+**결정:**
+**미채택을 공식화**. controlled inputs 유지.
+
+**사유:**
+- 폼 복잡도 낮음 (CheckoutPage 5필드, TransferReportForm 4필드).
+- react-hook-form 도입 시 의존성 +1, 빌드 크기 +12kb gzip, 학습 곡선 추가.
+- 일회성 운영 + ADR-021 학번 정규식은 단순 RegExp.test로 충분.
+- §3.5 1조 페이지 ≤120줄 제약상 hook 추가가 오히려 복잡도 증가.
+
+**Trade-off:**
+- 폼 1개 추가 시 검증 보일러플레이트 재작성 필요. 그러나 일회성 운영이라 변동 X.
+- Phase 2 (가정상 X) 폼 추가 시 도입 재검토.
+
+**문서 갱신:**
+- IMPLEMENTATION_PLAN.md §1.3 `react-hook-form` 라인을 본 ADR로 참조.
+
+---
+
+## ADR-027: PII 자동 삭제 → 운영자 수동 폐기로 대체 (P1-5 Codex 리뷰)
+
+**상태:** Accepted (2026-05-15)
+
+**컨텍스트:**
+- F-I-006 명세는 "정산 후 N일 PII 자동 삭제 (cron 또는 startup task)"
+- 일회성 운영(2026-05-20, 5-21)이라 cron 잡 도입 비용 > 가치 (인수인계 X)
+- 학번/이름/이체 정보 등 PII는 GDPR/개인정보보호법상 *필요 최소 보유* 원칙
+
+**결정:**
+정산 후 7일 내 운영자가 수동으로 DB PII 폐기 + 백업 ZIP은 학생회 클라우드에 보존.
+- 절차 문서: `docs/operations/pii-deletion.md`
+- 실행 책임자: 본부 PIN 보유자
+- 검증: 학생회 부회장
+- 보존 ZIP: 1년 (학교 회계 감사 대비)
+
+**Trade-off:**
+- cron 자동화 없음 → 운영자 누락 시 보관 기간 초과 위험.
+- 그러나 일회성이라 D-day + 7일이라는 명확한 마감 시점이 있음 → 누락 위험 낮음.
+- Phase 2 (가정상 X) 진행 시 ADR 재검토.
+
+**대안 — 거부됨:**
+- 서버 startup task로 자동 삭제: 인스턴스 재기동이 거의 없으므로 트리거 신뢰도 낮음.
+- node-cron: 추가 의존성. 일회성 운영에 과스펙.
 
 ---
 

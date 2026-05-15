@@ -90,7 +90,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
     expect(res.body.total_price).toBe(18000);
   });
 
-  it('외부인 + 토큰 생성', async () => {
+  it('외부인 + 토큰 생성 (P0-4: external_token 응답 미노출, access_token만 노출)', async () => {
     const app = createApp({ db: freshDb() });
     const res = await request(app)
       .post('/api/orders')
@@ -101,7 +101,10 @@ describe('사용자 API — POST /api/orders (정상)', () => {
       });
     expect(res.status).toBe(200);
     expect(res.body.is_external).toBe(true);
-    expect(res.body.external_token).toBeTruthy();
+    // P0-4: external_token은 응답에서 노출 X. POST 응답에만 access_token 포함.
+    expect(res.body.external_token).toBeUndefined();
+    expect(typeof res.body.access_token).toBe('string');
+    expect(res.body.access_token.length).toBeGreaterThan(10);
   });
 
   it('items 비어있으면 400', async () => {
@@ -174,6 +177,91 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
     expect(dup.status).toBe(400);
     expect(dup.body.error).toBe('ALREADY_USED');
   });
+
+  // ── P0-3 (Codex 리뷰) 쿠폰 할인 위변조 방어 ───────────────────
+  // pricing.js는 coupon.used만 보고 1,000원 할인. 이후 consumeCoupon은 student_id가
+  // 있을 때만 실행하므로, 외부인이거나 학번 없이 coupon: { used: true } 보내면
+  // 할인만 받고 used_coupons 기록은 안 남는다. 서버가 거부해야.
+  it('P0-3 — 외부인이 coupon.used=true 보내면 400 COUPON_REQUIRES_STUDENT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('COUPON_REQUIRES_STUDENT');
+    // DB에 어떤 주문도 생성되지 X (트랜잭션 보호)
+    const orderCount = db.prepare('SELECT COUNT(*) AS c FROM orders').get().c;
+    expect(orderCount).toBe(0);
+  });
+
+  it('P0-3 — student_id 없이 coupon.used=true 보내면 400 COUPON_REQUIRES_STUDENT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: null,
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('COUPON_REQUIRES_STUDENT');
+  });
+
+  it('P0-3 — 잘못된 학번 형식 + coupon.used=true → 400 INVALID_FORMAT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '12345', // 형식 X (학과 코드 37 누락)
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_FORMAT');
+  });
+
+  it('P0-3 — 학과 코드 37이 아닌 학번 + coupon.used=true → 400 INVALID_FORMAT', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202612001', // 학과 코드 12 (다른 학과)
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_FORMAT');
+  });
+
+  it('P0-3 — 쿠폰 미사용(coupon.used=false) + 외부인 → 정상 주문 (할인 없음)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        coupon: { used: false },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.total_price).toBe(18000); // 할인 X
+  });
 });
 
 describe('사용자 API — 영업 외 가드', () => {
@@ -192,42 +280,125 @@ describe('사용자 API — 영업 외 가드', () => {
     expect(res.body.error).toBe('BUSINESS_CLOSED');
   });
 
-  it('CLOSED 상태에서도 GET /api/menus 통과', async () => {
+  it('CLOSED 상태에서 GET /api/menus → 302 /closed (충돌-3 정합, API_DRAFT §1.12)', async () => {
     const db = new Database(':memory:');
     bootstrapDatabase(db);
     const app = createApp({ db });
     const res = await request(app).get('/api/menus');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/closed');
+  });
+
+  it('CLOSED 상태에서도 GET /api/business-state는 통과 (SPA가 영업 상태 알아야 함)', async () => {
+    const db = new Database(':memory:');
+    bootstrapDatabase(db);
+    const app = createApp({ db });
+    const res = await request(app).get('/api/business-state');
     expect(res.status).toBe(200);
+    expect(res.body.status).toBe('CLOSED');
   });
 });
 
 describe('사용자 API — GET /api/orders/:id', () => {
-  it('생성 후 조회', async () => {
+  it('생성 후 access_token 으로 조회', async () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     expect(create.status).toBe(200);
+    // P0-4: POST 응답에 access_token 포함
+    expect(typeof create.body.access_token).toBe('string');
+    expect(create.body.access_token.length).toBeGreaterThan(10);
 
-    const get = await request(app).get(`/api/orders/${create.body.id}`);
+    const get = await request(app)
+      .get(`/api/orders/${create.body.id}?token=${create.body.access_token}`);
     expect(get.status).toBe(200);
     expect(get.body.id).toBe(create.body.id);
     expect(get.body.no).toBe(create.body.no);
+    // P0-4: GET 응답에서 access_token, external_token 미노출
+    expect(get.body.access_token).toBeUndefined();
+    expect(get.body.external_token).toBeUndefined();
+  });
+
+  it('P0-4 — token 없이 조회 → 401 UNAUTHORIZED', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+      });
+    const get = await request(app).get(`/api/orders/${create.body.id}`);
+    expect(get.status).toBe(401);
+    expect(get.body.error).toBe('UNAUTHORIZED');
+  });
+
+  it('P0-4 — 잘못된 token → 403 FORBIDDEN', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+      });
+    const get = await request(app)
+      .get(`/api/orders/${create.body.id}?token=wrong-token-value`);
+    expect(get.status).toBe(403);
+    expect(get.body.error).toBe('FORBIDDEN');
+  });
+
+  it('P0-4 — 외부인 주문도 access_token 발급되고 동일 인증', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+      });
+    expect(create.status).toBe(200);
+    expect(typeof create.body.access_token).toBe('string');
+
+    const get = await request(app)
+      .get(`/api/orders/${create.body.id}?token=${create.body.access_token}`);
+    expect(get.status).toBe(200);
+    expect(get.body.external_token).toBeUndefined();
+    expect(get.body.access_token).toBeUndefined();
+  });
+
+  it('P0-4 — 타인 주문 ID + 본인 token → 403 FORBIDDEN (ID 추측 차단)', async () => {
+    const app = createApp({ db: freshDb() });
+    const a = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A' });
+    const b = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B' });
+    expect(a.body.id).not.toBe(b.body.id);
+
+    // A 의 token으로 B 의 주문 조회 시도
+    const cross = await request(app)
+      .get(`/api/orders/${b.body.id}?token=${a.body.access_token}`);
+    expect(cross.status).toBe(403);
   });
 
   it('존재 X → 404 ORDER_NOT_FOUND', async () => {
     const app = createApp({ db: freshDb() });
-    const res = await request(app).get('/api/orders/9999');
+    // P0-4: 토큰 없으면 401 우선. 토큰 있고 주문이 없으면 404.
+    const res = await request(app).get('/api/orders/9999?token=anything');
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('ORDER_NOT_FOUND');
   });
 });
 
 describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
-  it('이체 신고 → status TRANSFER_REPORTED', async () => {
+  it('이체 신고 (token 포함) → status TRANSFER_REPORTED', async () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
@@ -237,7 +408,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
       });
 
     const report = await request(app)
-      .post(`/api/orders/${create.body.id}/transfer-report`)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({
         bank: '국민',
         depositorName: '김철수',
@@ -248,7 +419,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     expect(report.body.depositor_name).toBe('김철수');
   });
 
-  it('이체 신고 필드 누락 → 400', async () => {
+  it('이체 신고 필드 누락 → 400 (token 있어도 검증 후)', async () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
@@ -258,8 +429,65 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
       });
 
     const report = await request(app)
-      .post(`/api/orders/${create.body.id}/transfer-report`)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({ bank: '국민' }); // amount, depositorName 누락
     expect(report.status).toBe(400);
+  });
+
+  // ── P0-B (Codex v2) transfer-report 인증 ──────────────────────
+  it('P0-B — token 없이 POST → 401 UNAUTHORIZED', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+
+    const report = await request(app)
+      .post(`/api/orders/${create.body.id}/transfer-report`)
+      .send({ bank: '국민', depositorName: '김철수', amount: 18000 });
+    expect(report.status).toBe(401);
+    expect(report.body.error).toBe('UNAUTHORIZED');
+  });
+
+  it('P0-B — 잘못된 token → 403 FORBIDDEN', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+
+    const report = await request(app)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=wrong-token`)
+      .send({ bank: '국민', depositorName: '김철수', amount: 18000 });
+    expect(report.status).toBe(403);
+    expect(report.body.error).toBe('FORBIDDEN');
+  });
+
+  it('P0-B — 타인 주문 ID + 본인 token → 403 (ID 추측 차단)', async () => {
+    const app = createApp({ db: freshDb() });
+    const a = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A' });
+    const b = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B' });
+
+    // A의 token으로 B 주문에 transfer-report 시도 → 403, B 주문 상태 변경 X
+    const cross = await request(app)
+      .post(`/api/orders/${b.body.id}/transfer-report?token=${a.body.access_token}`)
+      .send({ bank: '국민', depositorName: 'A가 B 주문에 이체 보고 시도', amount: 18000 });
+    expect(cross.status).toBe(403);
+
+    // B 주문은 여전히 ORDERED (상태 변경 X)
+    const bGet = await request(app).get(`/api/orders/${b.body.id}?token=${b.body.access_token}`);
+    expect(bGet.body.status).toBe('ORDERED');
+    expect(bGet.body.depositor_name).toBeFalsy();
+  });
+
+  it('P0-B — 존재하지 않는 주문 ID + 임의 token → 404 (token 검증 후)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders/9999/transfer-report?token=anything')
+      .send({ bank: '국민', depositorName: 'X', amount: 1000 });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('ORDER_NOT_FOUND');
   });
 });

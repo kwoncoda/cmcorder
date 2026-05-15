@@ -70,13 +70,37 @@ describe('App 라우팅 — 관리자 페이지 (React.lazy 코드 스플릿)', 
     ['/admin/dashboard', 'admin-dashboard-page'],
     ['/admin/orders/17', 'admin-order-detail-page'],
     ['/admin/transfers', 'admin-transfers-page'],
-    ['/admin/menu', 'admin-menu-page'],
+    // P1-4 (Codex v3): /admin/menu → /admin/menus (plural — 문서 SCREEN §3 정합)
+    ['/admin/menus', 'admin-menu-page'],
     ['/admin/settlement', 'admin-settlement-page'],
   ])('%s lazy 로드 완료 후 testid=%s 렌더', async (path, testid) => {
     renderAt(path);
     await waitFor(() => {
       expect(screen.getByTestId(testid)).toBeInTheDocument();
     });
+  });
+});
+
+// ── P1-4 (Codex v3) 관리자 nav ─────────────────────────────────
+describe('App 라우팅 — 관리자 공통 nav (P1-4 F-A-004)', () => {
+  it.each(['/admin/dashboard', '/admin/menus', '/admin/settlement', '/admin/transfers'])(
+    '%s 진입 시 관리자 nav가 본부/메뉴/정산/이체확인 링크를 렌더',
+    async (path) => {
+      renderAt(path);
+      const nav = await screen.findByTestId('admin-nav');
+      expect(nav).toBeInTheDocument();
+      // 네 링크 모두 nav 안에 있어야 함
+      expect(screen.getByTestId('admin-nav-dashboard')).toHaveAttribute('href', '/admin/dashboard');
+      expect(screen.getByTestId('admin-nav-menus')).toHaveAttribute('href', '/admin/menus');
+      expect(screen.getByTestId('admin-nav-settlement')).toHaveAttribute('href', '/admin/settlement');
+      expect(screen.getByTestId('admin-nav-transfers')).toHaveAttribute('href', '/admin/transfers');
+    },
+  );
+
+  it('/admin/login은 nav 미렌더 (인증 전)', async () => {
+    renderAt('/admin/login');
+    await screen.findByTestId('admin-login-page');
+    expect(screen.queryByTestId('admin-nav')).toBeNull();
   });
 });
 

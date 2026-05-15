@@ -1,5 +1,7 @@
 # 사용자 여정 (User Flow) — 오늘 저녁은 치킨이닭!
 
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** 본문이 ADR와 충돌하면 ADR 우선. 핵심 변경: ① SSE → 5초 폴링 (ADR-015 변경) ② PII 자동 삭제 → 수동 폐기 (ADR-027 신규). 본문의 SSE/EventSource/`stream` 표기 + "PII 자동 삭제"는 폴링/수동 절차로 읽으세요. CLOSED 사용자 GET은 서버 middleware가 302 /closed redirect 처리.
+
 | 항목 | 값 |
 |---|---|
 | 작성일 | 2026-05-13 (`/office-hours` 2차) |
@@ -416,7 +418,7 @@
        [전체 합산 보기] → 양일 합계 학생회 회의 자료
           │
           ▼
-       7-14일 후 PII 자동 삭제 + ZIP 사본 폐기
+       D+7일 운영자 수동 PII 폐기 (ADR-027) + ZIP 학생회 클라우드 보존
 ```
 
 ### 6.2 정산 ZIP 구조

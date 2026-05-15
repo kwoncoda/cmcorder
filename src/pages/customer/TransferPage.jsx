@@ -12,6 +12,7 @@ import { apiFetch, BusinessClosedError, ApiError } from '../../api/client.js';
 import { API } from '../../api/routes.js';
 import { useApi } from '../../hooks/useApi.js';
 import { OrderSchema } from '../../api/schemas.js';
+import { useOrderToken } from '../../hooks/useOrderToken.js';
 import TransferReportForm from '../../components/organisms/TransferReportForm.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
@@ -19,12 +20,13 @@ import ErrorState from '../../components/state/ErrorState.jsx';
 export default function TransferPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { token, query: tokenQuery, withQuery } = useOrderToken(id);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState(null);
 
   const orderQuery = useApi(
-    ({ signal }) => apiFetch(API.ORDER(id), { schema: OrderSchema, signal }),
-    [id],
+    ({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }),
+    [id, token],
   );
 
   if (orderQuery.isLoading) {
@@ -42,11 +44,12 @@ export default function TransferPage() {
     setSubmitting(true);
     setServerError(null);
     try {
-      await apiFetch(API.ORDER_TRANSFER_REPORT(id), {
+      // P0-B (Codex v2): ?token= 강제. token 없으면 서버 401.
+      await apiFetch(withQuery(API.ORDER_TRANSFER_REPORT(id)), {
         method: 'POST',
         body: formData,
       });
-      navigate(`/orders/${id}/status`);
+      navigate(`/orders/${id}/status${tokenQuery}`);
     } catch (err) {
       if (err instanceof BusinessClosedError) throw err; // useGlobalErrorHandler 위임
       setServerError(err instanceof ApiError ? err.message : '이체 신고에 실패했어요.');

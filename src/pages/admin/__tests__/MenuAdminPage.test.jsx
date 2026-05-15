@@ -134,7 +134,8 @@ describe('MenuAdminPage', () => {
         expect.objectContaining({ method: 'POST', body: { recommended: true } }),
       );
     });
-    expect(screen.getByTestId('toggle-recommended-1')).toHaveTextContent(/추천중/);
+    // P2-1 (Codex v3 2026-05-15): "추천중" → "BEST 표시중" 카피 변경
+    expect(screen.getByTestId('toggle-recommended-1')).toHaveTextContent(/BEST 표시중/);
   });
 
   it('★ API 실패 시 낙관 롤백 + 인라인 에러 메시지', async () => {
@@ -153,6 +154,29 @@ describe('MenuAdminPage', () => {
     renderPage();
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
     expect(screen.getByText(/메뉴가 없어요/)).toBeInTheDocument();
+  });
+
+  // ── P1-4 (Codex 리뷰) 메뉴 가격 편집 UI ───────────────────────
+  it('★ P1-4 — "가격 편집" 클릭 시 input 표시, 저장 → base_price patch', async () => {
+    apiFetch.mockResolvedValue({});
+    renderPage();
+    fireEvent.click(screen.getByTestId('edit-price-1'));
+    const input = await screen.findByTestId('price-input-1');
+    fireEvent.change(input, { target: { value: '20000' } });
+    fireEvent.click(screen.getByTestId('save-price-1'));
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    const calls = apiFetch.mock.calls;
+    expect(calls[0][0]).toContain('/admin/api/menus/1/toggle');
+    expect(calls[0][1].method).toBe('POST');
+    expect(calls[0][1].body).toEqual({ base_price: 20000 });
+  });
+
+  it('★ P1-4 — 가격 편집 취소 버튼은 input을 닫는다', async () => {
+    renderPage();
+    fireEvent.click(screen.getByTestId('edit-price-1'));
+    expect(screen.getByTestId('price-input-1')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('cancel-price-1'));
+    expect(screen.queryByTestId('price-input-1')).toBeNull();
   });
 
   it('★ a11y 위반 없음', async () => {

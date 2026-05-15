@@ -8,6 +8,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { requireAdmin, loginAdmin } from '../middleware/admin-auth.js';
+import { requireCsrf, csrfTokenHandler } from '../middleware/csrf.js';
 import {
   listMenus,
   toggleMenu,
@@ -99,6 +100,11 @@ export function adminRoutes(db) {
 
   // 이하 모두 requireAdmin
   router.use('/admin/api', requireAdmin);
+  // P1-6 (Codex 리뷰): mutation 보호. GET/HEAD/OPTIONS는 통과.
+  router.use('/admin/api', requireCsrf);
+
+  // ── GET /admin/api/csrf-token (P1-6) ──
+  router.get('/admin/api/csrf-token', csrfTokenHandler);
 
   // ── GET /admin/api/business/state ──
   router.get('/admin/api/business/state', (_req, res) => {
