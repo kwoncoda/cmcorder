@@ -23,7 +23,9 @@ import { customerRoutes } from './routes/customer.js';
 import { adminRoutes } from './routes/admin.js';
 
 // SPA fallback 제외 prefix — JSON API/헬스체크는 항상 JSON 응답 유지.
-const API_PREFIXES = ['/api/', '/admin/api/', '/admin/login', '/admin/logout', '/healthz'];
+// /admin/login·/admin/logout은 *POST API + GET SPA 페이지* 이중 목적이므로 prefix 제외 X.
+// (POST는 라우터가 먼저 매칭되어 fallback까지 안 옴 — GET만 SPA로 흘려보내야 React Router가 처리)
+const API_PREFIXES = ['/api/', '/admin/api/', '/healthz'];
 
 function isApiPath(p) {
   return API_PREFIXES.some((pref) => p === pref.replace(/\/$/, '') || p.startsWith(pref));

@@ -69,6 +69,19 @@ describe('SPA 정적 서빙 — dist 존재 시', () => {
     expect(res.text).toContain('<div id="root">');
   });
 
+  it('GET /admin/login → 200 HTML (POST API와 공존하는 SPA 페이지)', async () => {
+    const res = await request(app).get('/admin/login');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    expect(res.text).toContain('<div id="root">');
+  });
+
+  it('GET /admin/logout → 200 HTML (POST API와 공존하는 SPA 경로)', async () => {
+    const res = await request(app).get('/admin/logout');
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('<div id="root">');
+  });
+
   it('GET /assets/app-test.js → 200 + JS 자원', async () => {
     const res = await request(app).get('/assets/app-test.js');
     expect(res.status).toBe(200);
