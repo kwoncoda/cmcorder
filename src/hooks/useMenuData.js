@@ -1,12 +1,12 @@
-// useMenuData hook — Task 4.2.
+// useMenuData hook — Task 4.2 + P2-1 (Codex v3 2026-05-15).
 //
 // MenuPage 의 data 위임. useApi + zod 스키마 검증을 캡슐화하고,
-// "popular" 는 별도 fetch 없이 menus 에서 파생 (결정 E — 정적 BEST).
+// "popular" 는 별도 fetch 없이 menus 에서 파생 (어드민 recommended 토글 단일).
 //
-// 결정 E 규칙:
-//  - recommended=true 메뉴 → TOP 3 (학생회가 메뉴 관리자에서 토글)
-//  - 없으면 menus 첫 3개 fallback (메뉴 적을 때도 영역 채움)
-//  - 동적 인기 집계 X — 백엔드 GET /api/popular 미구현 + 일회성 서비스.
+// 사용자 결정 (2026-05-15, ADR-017 변경):
+//  - 실시간 랭킹 X · 판매 수 X
+//  - 어드민이 메뉴 관리에서 recommended 토글로 BEST 직접 선택 (최대 3개)
+//  - fallback("recommended 없으면 첫 3개") 제거 — 어드민 미선택 시 BEST 영역 미표시
 //
 // 사용 예:
 //   const { menus, popular, isLoading, error, refetch } = useMenuData();
@@ -22,9 +22,8 @@ export function useMenuData() {
   );
 
   const menus = menuQuery.data ?? [];
-  // popular 파생: recommended=true 우선, 없으면 첫 3개. 둘 다 최대 3.
-  const recommended = menus.filter((m) => m.recommended).slice(0, 3);
-  const popular = recommended.length > 0 ? recommended : menus.slice(0, 3);
+  // popular 파생: recommended=true 만, 최대 3개. 없으면 빈 배열 (어드민 책임).
+  const popular = menus.filter((m) => m.recommended).slice(0, 3);
 
   return {
     menus,

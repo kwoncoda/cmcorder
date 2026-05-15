@@ -46,13 +46,13 @@ describe('useMenuData', () => {
     expect(result.current.popular.map((m) => m.id)).toEqual([1, 3]);
   });
 
-  it('★ popular — recommended 없을 시 첫 3개 fallback', async () => {
+  it('★ P2-1 — popular: recommended 0개일 때 빈 배열 (fallback 제거, ADR-017 변경 2026-05-15)', async () => {
+    // 사용자 결정 (2026-05-15): 어드민이 토글로 BEST 직접 선택. 미선택 시 BEST 영역 미표시.
     const noRecommended = FULL_MENUS.map((m) => ({ ...m, recommended: false }));
     apiFetch.mockResolvedValueOnce(noRecommended);
     const { result } = renderHook(() => useMenuData());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.popular).toHaveLength(3);
-    expect(result.current.popular.map((m) => m.id)).toEqual([1, 2, 3]);
+    expect(result.current.popular).toEqual([]);
   });
 
   it('★ 에러 시 menus 빈 배열 + error 노출', async () => {

@@ -1,6 +1,6 @@
 # PRD — 오늘 저녁은 치킨이닭!
 
-> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** 본문이 ADR와 충돌하면 ADR 우선. 핵심 변경: ① SSE → 5초 폴링 (ADR-015 변경) ② PII 자동 삭제 → 수동 폐기 (ADR-027 신규) ③ react-hook-form → controlled inputs (ADR-028 신규) ④ 메뉴 CRUD 축소 (ADR-029 신규) ⑤ 정산 그래프/ZIP 이력 P0 → P2 (ADR-030 신규) ⑥ 세션 쿠키 secure env 분리 (ADR-031 신규). 본문의 옛 표기(SSE/EventSource/`stream`, "정산 후 N일 자동 삭제", "react-hook-form" 등)는 historical 보존이며 코드는 위 ADR 기준.
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md` + v3 P1/P2):** 본문이 ADR와 충돌하면 ADR 우선. 핵심 변경: ① SSE → 5초 폴링 (ADR-015 변경) ② PII 자동 삭제 → 수동 폐기 (ADR-027 신규) ③ react-hook-form → controlled inputs (ADR-028 신규) ④ 메뉴 CRUD 축소 (ADR-029 신규) ⑤ 정산 그래프/ZIP 이력 P0 → P2 (ADR-030 신규) ⑥ 세션 쿠키 secure env 분리 (ADR-031 신규) ⑦ **BEST 메뉴: 어드민 토글 단일, 실시간 랭킹·판매 수 폐기 (ADR-017 변경 2026-05-15)**. 본문의 옛 표기(SSE/EventSource/`stream`, "정산 후 N일 자동 삭제", "react-hook-form", "실시간 인기 랭킹", "판매 수" 등)는 historical 보존이며 코드는 위 ADR 기준.
 
 **Product Requirements Document**
 

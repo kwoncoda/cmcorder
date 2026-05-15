@@ -95,7 +95,7 @@ export default function MenuAdminPage() {
                 {m.soldOut ? '품절됨 (해제)' : '품절 토글'}
               </Button>
               <Button size="sm" variant={m.recommended ? 'primary' : 'secondary'} onClick={() => togglePatch(m.id, { recommended: !m.recommended })} data-testid={`toggle-recommended-${m.id}`}>
-                {m.recommended ? '추천중 (해제)' : '사장님 추천'}
+                {m.recommended ? '🔥 BEST 표시중 (해제)' : '🔥 BEST 표시'}
               </Button>
             </div>
           </li>

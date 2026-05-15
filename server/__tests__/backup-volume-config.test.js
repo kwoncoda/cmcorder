@@ -57,16 +57,21 @@ describe('P1-2 — startAutoSnapshot이 dir 옵션 경로에 ZIP 생성', () => 
       const stop = startAutoSnapshot(db, {
         dbPath: '',
         dir,
-        intervalMs: 50,
+        intervalMs: 100,
         maxBackups: 6,
       });
-      // intervalMs=50 후 첫 tick 발생까지 대기.
-      await new Promise((r) => setTimeout(r, 200));
+      // intervalMs=100 후 첫 tick + archiver 비동기 finalize 충분 마진.
+      // vitest 병렬 실행 부하 시 flaky 방지 — 충분히 길게.
+      await new Promise((r) => setTimeout(r, 800));
       stop();
+      // stop 후에도 in-flight archiver finalize 대기.
+      await new Promise((r) => setTimeout(r, 100));
       const files = readdirSync(dir).filter((f) => f.endsWith('.zip'));
       expect(files.length).toBeGreaterThan(0);
       expect(files[0]).toMatch(/^auto-/);
     } finally {
+      // Windows: 핸들 해제 대기.
+      await new Promise((r) => setTimeout(r, 100));
       rmSync(dir, { recursive: true, force: true });
       db.close();
     }

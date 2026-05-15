@@ -134,7 +134,8 @@ describe('MenuAdminPage', () => {
         expect.objectContaining({ method: 'POST', body: { recommended: true } }),
       );
     });
-    expect(screen.getByTestId('toggle-recommended-1')).toHaveTextContent(/추천중/);
+    // P2-1 (Codex v3 2026-05-15): "추천중" → "BEST 표시중" 카피 변경
+    expect(screen.getByTestId('toggle-recommended-1')).toHaveTextContent(/BEST 표시중/);
   });
 
   it('★ API 실패 시 낙관 롤백 + 인라인 에러 메시지', async () => {
