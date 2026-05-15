@@ -92,4 +92,28 @@ describe('useApi', () => {
     await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.data.value).toBe(2));
   });
+
+  // ── P2-4 (Codex v3 2026-05-15) refetch reference 안정성 ──────
+  // 문제: refetch가 매 렌더 새 함수로 반환되면 effect deps에 넣을 때
+  //       매번 setup/cleanup 발생 (interval churn). useCallback으로 안정화.
+  it('★ P2-4 — refetch는 안정 reference (재렌더 시에도 동일 함수)', async () => {
+    const fetcher = vi.fn(async () => ({ value: 1 }));
+    const { result, rerender } = renderHook(() => useApi(fetcher, []));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const refetchA = result.current.refetch;
+    rerender();
+    rerender();
+    const refetchB = result.current.refetch;
+    expect(refetchB).toBe(refetchA);
+  });
+
+  it('★ P2-4 — refetch 호출 후에도 안정 reference 유지', async () => {
+    const fetcher = vi.fn(async () => ({ value: 1 }));
+    const { result } = renderHook(() => useApi(fetcher, []));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const refetchA = result.current.refetch;
+    act(() => result.current.refetch());
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    expect(result.current.refetch).toBe(refetchA);
+  });
 });

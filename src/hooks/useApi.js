@@ -22,7 +22,7 @@
 // onBusinessClosed 콜백:
 //  - 어떤 API 호출이든 423 응답 받으면 발화.
 //  - 호출자(Layout)가 navigate('/closed') 처리 → 폴링 불필요.
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BusinessClosedError } from '../api/client.js';
 
 export function useApi(fetcher, deps = [], { onBusinessClosed } = {}) {
@@ -70,9 +70,13 @@ export function useApi(fetcher, deps = [], { onBusinessClosed } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, refetchCounter]);
 
-  const refetch = () => {
+  // P2-4 (Codex v3 2026-05-15): useCallback 안정 reference.
+  // 호출자(예: DashboardPage)가 effect deps에 refetch를 넣어도 매 렌더 새 함수가
+  // 아니라 setup/cleanup churn이 발생하지 않음. setRefetchCounter는 setState 함수라
+  // 자체적으로 안정 reference이므로 deps 빈 배열 안전.
+  const refetch = useCallback(() => {
     setRefetchCounter((c) => c + 1);
-  };
+  }, []);
 
   return { ...state, refetch };
 }
