@@ -1,6 +1,6 @@
 # IMPLEMENTATION_PLAN — React 기준 (2026-05-14 재작성)
 
-> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** SSE → 폴링 (ADR-015 변경) · PII 수동 폐기 (ADR-027) · react-hook-form 미채택 (ADR-028) · 메뉴 CRUD 축소 (ADR-029) · 정산 그래프 P2 강등 (ADR-030) · 세션 secure env 분리 (ADR-031). Task 본문의 옛 표기는 historical, 코드는 ADR 기준.
+> ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md` / `docs/CODEX_REVIEW_v3_FIX_PLAN.md`):** SSE → 폴링 (ADR-015 변경) · PII 수동 폐기 (ADR-027) · react-hook-form 미채택 (ADR-028) · 메뉴 CRUD 축소 (ADR-029) · 정산 그래프 P2 강등 (ADR-030) · 세션 secure env 분리 (ADR-031) · **E2E 14 시나리오 BLOCKED → D-1 리허설 + 단위/통합 테스트로 대체 (P1-6 Codex v3, 2026-05-15)**. Task 본문의 옛 표기는 historical, 코드는 ADR 기준.
 
 > **For agentic workers:** Use `superpowers:subagent-driven-development` (권장) 또는 `superpowers:executing-plans`로 Task 단위로 진행. 각 Task는 `- [ ]` 체크박스로 트래킹.
 
