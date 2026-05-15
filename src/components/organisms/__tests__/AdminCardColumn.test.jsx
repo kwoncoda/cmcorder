@@ -224,12 +224,15 @@ describe('AdminCardColumn', () => {
     expect(screen.getByText(/36[,.]?000/)).toBeInTheDocument();
   });
 
-  // ★ React.memo 회귀 — OrderCard가 memo로 감싸져 있는지 검증 (§3.5 7조).
-  // memo 결과는 { $$typeof: Symbol.for('react.memo'), type: ... } 객체.
-  it('★ OrderCard는 React.memo로 감싸져 있다 (§3.5 7조)', () => {
-    expect(typeof OrderCard).toBe('object');
-    expect(OrderCard.$$typeof).toBeDefined();
-    expect(OrderCard.$$typeof.toString()).toMatch(/react\.memo/);
+  // P2-3 (Codex v3 2026-05-15): React.memo 제거 결정 (A 방향).
+  // 사유: 5초 폴링마다 fresh JSON → order object reference 매번 새로 생성 →
+  //       memo 효과 0 (referential equality 깨짐). 카드 ≤30개 운영 부하 미미 →
+  //       memo 제거로 코드 단순화. §3.5 7조의 "list memoization"은
+  //       *효과 있는 경우만* 적용. 본 케이스는 폴링 구조상 무용.
+  it('★ P2-3 — OrderCard는 일반 함수 컴포넌트 (React.memo 제거됨)', () => {
+    expect(typeof OrderCard).toBe('function');
+    // memo wrap 시 $$typeof가 react.memo Symbol — 본 검증으로 회귀 방지.
+    expect(OrderCard.$$typeof).toBeUndefined();
   });
 
   it('forwardRef 로 section 참조 전달', () => {
