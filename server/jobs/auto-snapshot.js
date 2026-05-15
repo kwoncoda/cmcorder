@@ -72,6 +72,16 @@ export async function createSnapshotZip(db, dbPath, outputPath) {
 /**
  * 정산용 ZIP — Buffer 즉시 반환 (HTTP 응답 다운로드).
  *
+ * P1-1 (Codex v3 2026-05-15): ADR-016/F-A-034 요구 구성물 보강.
+ *   - manifest.json: 운영 일자/생성 시각/파일 목록 (회계 자료 식별)
+ *   - orders.csv: 운영자/회계용 (Excel 호환 UTF-8 BOM)
+ *   - coupons.csv: 학번·이름·시각·주문 매핑
+ *   - menu-snapshot.json: 메뉴 8개 시드 상태 (가격/품절/추천)
+ *   - settlement.sql: 전체 dump (기존)
+ *   - summary.json: 집계 (기존)
+ *
+ * PDF/images는 별도 트랙 (자산 부재 — 운영 폴더 별도 보관).
+ *
  * @param {import('better-sqlite3').Database} db
  * @returns {Promise<Buffer>}
  */
@@ -82,13 +92,73 @@ export async function createSettlementZip(db) {
     archive.on('data', (chunk) => chunks.push(chunk));
     archive.on('end', () => resolve(Buffer.concat(chunks)));
     archive.on('error', reject);
-    const dump = serializeDb(db);
-    archive.append(dump, { name: 'settlement.sql' });
-    archive.append(JSON.stringify(exportSummary(db), null, 2), {
-      name: 'summary.json',
-    });
+
+    const summary = exportSummary(db);
+    const filesIncluded = [
+      'manifest.json',
+      'summary.json',
+      'orders.csv',
+      'coupons.csv',
+      'menu-snapshot.json',
+      'settlement.sql',
+    ];
+    const manifest = {
+      generated_at: new Date().toISOString(),
+      operating_date: summary.operating_date,
+      files: filesIncluded,
+      adr: ['ADR-016', 'ADR-022', 'ADR-027 — PII 폐기 절차 참조'],
+      note: 'PDF / images 자산은 운영 폴더 별도 보관. PII는 D+7일 수동 폐기 (docs/operations/pii-deletion.md).',
+    };
+
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+    archive.append(JSON.stringify(summary, null, 2), { name: 'summary.json' });
+    archive.append(exportOrdersCsv(db), { name: 'orders.csv' });
+    archive.append(exportCouponsCsv(db), { name: 'coupons.csv' });
+    archive.append(exportMenuSnapshot(db), { name: 'menu-snapshot.json' });
+    archive.append(serializeDb(db), { name: 'settlement.sql' });
     archive.finalize();
   });
+}
+
+// ── P1-1 helpers ─────────────────────────────────────────────────
+// Excel 한글 호환 — UTF-8 BOM 선두 부착.
+const UTF8_BOM = '﻿';
+
+function csvEscape(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+function rowsToCsv(headers, rows) {
+  const head = headers.join(',');
+  const body = rows.map((r) => headers.map((h) => csvEscape(r[h])).join(',')).join('\n');
+  return `${UTF8_BOM}${head}\n${body}\n`;
+}
+
+function exportOrdersCsv(db) {
+  const headers = [
+    'id', 'no', 'operating_date', 'status', 'name', 'student_id', 'is_external',
+    'delivery_type', 'table_no', 'total_price', 'depositor_name', 'bank',
+    'amount', 'created_at', 'transferred_at', 'paid_at', 'cooking_at',
+    'ready_at', 'done_at',
+  ];
+  const rows = db.prepare(`SELECT ${headers.join(', ')} FROM orders ORDER BY operating_date, no`).all();
+  return rowsToCsv(headers, rows);
+}
+
+function exportCouponsCsv(db) {
+  const headers = ['id', 'student_id', 'name', 'order_id', 'used_at'];
+  const rows = db.prepare(`SELECT ${headers.join(', ')} FROM used_coupons ORDER BY id`).all();
+  return rowsToCsv(headers, rows);
+}
+
+function exportMenuSnapshot(db) {
+  const menus = db
+    .prepare('SELECT id, code, name, category, base_price, sold_out, recommended FROM menus ORDER BY id')
+    .all();
+  return JSON.stringify({ generated_at: new Date().toISOString(), menus }, null, 2);
 }
 
 /**
