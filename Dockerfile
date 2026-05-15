@@ -9,6 +9,10 @@
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
 
+# better-sqlite3 네이티브 빌드 fallback용 — Alpine은 musl이라 prebuild 누락 잦음.
+# 같은 단계 안에서만 쓰이고 최종 런타임 이미지엔 안 따라가므로 cleanup 불요.
+RUN apk add --no-cache python3 make g++
+
 # 의존성 캐시 최적화 — package*.json만 먼저 복사 후 ci
 COPY package.json package-lock.json ./
 RUN npm ci --include=dev
@@ -24,6 +28,10 @@ RUN npm run build
 # ===== 2단계 — production 의존성만 =====
 FROM node:20-alpine AS prod-deps
 WORKDIR /app
+
+# 동일 — prod 의존성에도 better-sqlite3가 들어있으므로 빌드 도구 필요.
+RUN apk add --no-cache python3 make g++
+
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
