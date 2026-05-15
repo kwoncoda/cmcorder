@@ -1,11 +1,72 @@
 # Codex 리뷰 자동 수정 — 결과 요약 (v1 + v2 + v3)
 
-작성일: 2026-05-15 (3차 누적)
+작성일: 2026-05-15 (4차 누적 — v3 P1 + v3 P2)
 브랜치: `fix/codex-review-findings`
 범위:
 - v1 — `docs/codex리뷰결과.md` P0 5 + P1 6 + P2 3 (11 커밋)
 - v2 — `docs/codex리뷰결과_v2.md` P0 2 + 충돌 6 (11 커밋, `CODEX_REVIEW_v2_FIX_SUMMARY.md`)
-- **v3 — `docs/codex리뷰결과_v3.md` P1 6 (본 갱신 — 7 커밋)**
+- v3 P1 — `docs/codex리뷰결과_v3.md` P1 6 (7 커밋)
+- **v3 P2 — 사용자 결정 기반 P2 4건 + 1 운영성 (본 갱신 — 5 커밋)**
+
+## v3 P2 결과 (사용자 결정 반영)
+
+| 항목 | 결정 | 결과 | 커밋 |
+|---|---|---|---|
+| P2-3 OrderCard memo | A 방향 (제거) | ✅ 완료 | `da73f1c` |
+| P2-4 useApi.refetch 안정화 | 추천 (useCallback) | ✅ 완료 | `5488a5f` |
+| P2-1 인기/판매수 | **어드민 BEST 토글 단일, 판매수 X** | ✅ 완료 + 문서 일괄 정리 | `d441507` |
+| P2-2 rate limit | **Phase 2 강등 + ADR-032 신규** | ✅ 완료 | `54121cd` |
+| P2-5 테스트 로그 노이즈 | 우선순위 낮음 — 운영 영향 0 | 보류 (Phase 2) | — |
+
+### v3 P2 변경 상세
+
+**P2-3 — OrderCard React.memo 제거:**
+- 5초 폴링마다 order reference 새로 생성 → memo 효과 0
+- 카드 ≤30개 운영 부하 미미 → 단순화 우선
+- 회귀 1건 갱신 ("memo로 감싸졌다" → "일반 함수 컴포넌트")
+
+**P2-4 — useApi.refetch useCallback:**
+- 매 렌더 새 함수 → effect deps 사용 시 setup/cleanup churn
+- `useCallback(() => setRefetchCounter(c => c + 1), [])` 적용
+- 회귀 2건 (재렌더 후 동일 reference + 호출 후 동일 reference)
+
+**P2-1 — BEST 메뉴 어드민 토글 단일 ★ 기획 결함 해결:**
+- ADR-017 본문(실시간 랭킹) vs FEATURE_LIST(정적 BEST + 판매 수) vs 실제 구현(정적 BEST, 판매 수 X)의 3중 충돌 해소
+- 사용자 결정: 어드민이 메뉴 관리에서 `🔥 BEST 표시` 토글로 직접 선택, 판매 수 X
+- 코드: `popularity.js` + `useMenuData.js` fallback 제거, `MenuAdminPage` 카피 갱신
+- 문서: ADR-017 본문 재작성 (이전 결정 historical 보존), FEATURE_LIST/PRD/MVP_SCOPE/SCREEN_STRUCTURE 정합
+- 회귀: server 6 + client 4 + admin 1
+
+**P2-2 — rate limit Phase 2 강등 ★ 기획 결함 해결:**
+- API_DRAFT 명세 vs 미구현 충돌 해소
+- 사유: 부스 외부 노출 낮음 + 다층 방어 이미 존재(access_token, 쿠폰 UNIQUE, submitting) + 도입 비용 ≫ 가치
+- ADR-032 신규 + API_DRAFT §5 "현재 방어 메커니즘 표"로 재구성
+
+### v3 P2 회귀 매트릭스
+
+| 영역 | v3 P1 종료 | v3 P2 종료 | Δ |
+|---|---|---|---|
+| 단위·통합 | 934 | **937** | +3 (P2-4 2 + P2-3 갱신 1 - useMenuData fallback 케이스 갱신 외 popularity 신규 1) |
+| E2E | 2 | 2 | 변동 X |
+| build | 90.65 kB | 90.66 kB | +0.01 kB |
+
+### 누적 ADR (v1 + v2 + v3)
+
+| ADR | 상태 | 결정 |
+|---|---|---|
+| ADR-015 | 변경 (v1) | SSE → 5초 폴링 |
+| ADR-017 | 변경 (v3 P2) | **BEST 메뉴 어드민 토글 단일, 판매 수·동적 랭킹 폐기** |
+| ADR-024 | 변경 (이전) | EJS+Alpine → React 18 SPA |
+| ADR-027 | 신규 (v1/v2) | PII 자동 → 수동 폐기 |
+| ADR-028 | 신규 (v1) | react-hook-form 미채택 |
+| ADR-029 | 신규 (v2) | 메뉴 CRUD 축소 |
+| ADR-030 | 신규 (v2) | 정산 그래프/ZIP 이력 P2 강등 |
+| ADR-031 | 신규 (v2) | 세션 쿠키 secure env 분리 |
+| **ADR-032** | **신규 (v3 P2)** | **Rate limit Phase 2 강등** |
+
+---
+
+
 
 ## v3 신규 항목 결과 (P1 6건)
 
