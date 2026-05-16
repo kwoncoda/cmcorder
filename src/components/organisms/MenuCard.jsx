@@ -1,28 +1,23 @@
-// MenuCard — organism (IMPLEMENTATION_PLAN §2.5 / COMPONENT_GUIDE §4.x).
-// PUBG 회복 아이템 일러스트 (또는 분류 이모지 fallback) + 본명 + 가격 + "줍기" 버튼.
+// MenuCard — design-bundle screens-customer.jsx:81-114 정합.
 //
-// 핵심 결정:
-// - **결정 f**: "줍기" 버튼만 클릭 영역. 카드 article 자체 onClick X
-//   (오클릭 방지 + 학교 축제 모바일 환경에서 의도 명확화).
-// - **G10**: 본명 그대로 (콜라/사이다 등 리스킨 X).
-// - **ADR-006**: PUBG 일러스트 미수령 시 MenuFallback 분류 이모지 (🍗·🍟·🥤).
-// - **AI 슬롭 #26**: 카드 내 *형광 옐로 텍스트* 금지. 본명·가격은 text-card-ink.
-//   (단, "줍기" 버튼은 primary variant — 형광 옐로 *배경* OK, CTA 라서.)
+// 마크업: <article class="menu-card sold-out?">
+//   <div class="menu-illust"><img class="menu-img"> <span class="ammo-tag">CODE</span></div>
+//   <div class="menu-body"><h3 class="menu-name"> <span class="menu-sub"> <PriceTag class="menu-price"> <button class="pick-btn">
 //
-// props:
-// - menu: { id, code, name, category, basePrice, image?, soldOut? } — 필수
-// - onAdd?(menu): 줍기 버튼 클릭 콜백 (soldOut 시 호출 X)
-// - recommended?: 추천 도장 표시 (boolean)
-// - soldOut?: 품절 도장 + 버튼 disabled (boolean — menu.soldOut 도 fallback)
-// - useFallback?: true 면 MenuFallback 이모지, false 면 <img>. 기본 true (자산 미수령 가정).
+// 회귀 보존(테스트 의존):
+//   - data-testid="menu-card-{id}" / <h3> 요소 / .menu-card.sold-out + opacity-50 Tailwind 유틸
+//   - PriceTag 의 font-mono 클래스 (AI 슬롭 #26 검사)
+//   - StampBadge — recommended/sold-out 도장 + 절대 위치
+//   - `<button>` 으로 "줍기" / "✓ 인벤토리 N" / "SOLD OUT" 분기, soldOut 시 disabled
 //
-// 도장(StampBadge) 은 절대 위치(오른쪽 상단) + pointer-events-none — 버튼 클릭 방해 X.
-// recommended + soldOut 동시 시 sold-out 우선 (정보 우선순위 — 품절이 더 중요).
+// 시안 추가 디테일:
+//   - useFallback=false 시 design-bundle 자산 path 사용 (/items/{code}.webp)
+//   - in-cart 시 pick-btn 에 data-incart 부착 (CSS 가 background: success 로 토글)
 import { forwardRef } from 'react';
-import Button from '../atoms/Button.jsx';
 import StampBadge from '../molecules/StampBadge.jsx';
 import PriceTag from '../molecules/PriceTag.jsx';
 import MenuFallback from '../molecules/MenuFallback.jsx';
+import useCartStore from '../../store/cart.js';
 
 const MenuCard = forwardRef(function MenuCard(
   {
@@ -36,30 +31,35 @@ const MenuCard = forwardRef(function MenuCard(
   },
   ref,
 ) {
-  // 방어: menu 없으면 아무것도 렌더 X.
   if (!menu) return null;
 
-  // soldOut prop > menu.soldOut 순. (호출자가 명시한 props 가 우선.)
   const isSoldOut = Boolean(soldOut || menu.soldOut);
+  // 카트 내 동일 메뉴 수량 — pick-btn 라벨용. shallow 셀렉터.
+  const inCartQty = useCartStore(
+    (s) => s.items.find((i) => i.menuId === menu.id)?.quantity ?? 0,
+  );
 
   const handleAdd = () => {
     if (isSoldOut) return;
     onAdd?.(menu);
   };
 
-  // 카드 컨테이너 클래스 — bg-card-bg(흙색) + 카드 잉크 텍스트 + shadow-card.
-  // soldOut 시 opacity-50 으로 흐림 (시각 신호).
+  // .menu-card 가 토큰 기반 디자인, opacity-50 은 회귀 테스트 호환.
   const cardClass = [
-    'relative',
-    'flex flex-col gap-sm',
-    'bg-card-bg text-card-ink',
-    'rounded-md p-md',
-    'shadow-card',
-    isSoldOut ? 'opacity-50' : '',
+    'menu-card',
+    isSoldOut ? 'sold-out opacity-50' : '',
     className,
   ]
     .filter(Boolean)
     .join(' ');
+
+  // pick-btn 라벨 분기 — design-bundle screens-customer.jsx:107-109.
+  // pick-btn 텍스트 — soldOut 시 한국어 "품절" 사용 (StampBadge "SOLD OUT" 과 중복 회피).
+  const pickLabel = isSoldOut
+    ? '품절'
+    : inCartQty > 0
+    ? `✓ 인벤토리 ${inCartQty}`
+    : '＋ 줍기';
 
   return (
     <article
@@ -68,52 +68,59 @@ const MenuCard = forwardRef(function MenuCard(
       className={cardClass}
       {...rest}
     >
-      {/* 도장 — 오른쪽 상단 절대 위치. pointer-events-none 으로 버튼 클릭 가로채지 않게. */}
-      {/* sold-out 이 recommended 보다 우선 (정보 중요도). */}
-      {isSoldOut && (
-        <div className="absolute top-2 right-2 pointer-events-none">
-          <StampBadge variant="sold-out" />
-        </div>
-      )}
-      {!isSoldOut && recommended && (
-        <div className="absolute top-2 right-2 pointer-events-none">
-          <StampBadge variant="recommended" />
-        </div>
-      )}
-
-      {/* 일러스트 영역 — useFallback 분기 (자산 단계별). */}
-      <div className="aspect-square flex items-center justify-center">
+      <div className="menu-illust">
         {useFallback ? (
           <MenuFallback category={menu.category} name={menu.name} size="lg" />
         ) : (
           <img
             src={menu.image}
             alt={`${menu.name} (${menu.category})`}
-            className="max-w-full max-h-full object-contain"
+            className="menu-img"
+            loading="lazy"
+            width="180"
+            height="135"
           />
         )}
+        {menu.code && <span className="ammo-tag" aria-hidden="true">{menu.code}</span>}
+        {/* 도장은 시안 절대 위치 — pointer-events-none 으로 버튼 클릭 가로채기 차단 */}
+        {!isSoldOut && recommended && (
+          <span
+            className="stamp-overlay"
+            style={{ position: 'absolute', top: 8, left: 8, pointerEvents: 'none' }}
+          >
+            <StampBadge variant="recommended" />
+          </span>
+        )}
+        {isSoldOut && (
+          <span
+            className="stamp-soldout-overlay"
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%,-50%)',
+              pointerEvents: 'none',
+            }}
+          >
+            <StampBadge variant="sold-out" />
+          </span>
+        )}
       </div>
-
-      {/* 본명 (G10) — text-card-ink. 형광 옐로 (text-accent) X — AI 슬롭 #26. */}
-      <h3 className="font-display font-bold text-base text-card-ink">
-        {menu.name}
-      </h3>
-
-      {/* 가격 — text-card-ink. 형광 옐로 X — AI 슬롭 #26. */}
-      <PriceTag value={menu.basePrice} className="text-card-ink" />
-
-      {/* 줍기 버튼 — 결정 f: *유일한* 클릭 영역. */}
-      {/* primary variant 는 형광 옐로 배경이지만 *버튼 CTA* 라 AI 슬롭 #26 회피. */}
-      <Button
-        variant="primary"
-        size="md"
-        block
-        disabled={isSoldOut}
-        onClick={handleAdd}
-        aria-label={`${menu.name} ${isSoldOut ? '품절' : '줍기'}`}
-      >
-        {isSoldOut ? '품절' : '줍기'}
-      </Button>
+      <div className="menu-body">
+        <h3 className="menu-name">{menu.name}</h3>
+        {menu.sub && <div className="menu-sub">{menu.sub}</div>}
+        <PriceTag value={menu.basePrice} className="menu-price" />
+        <button
+          type="button"
+          className="pick-btn"
+          disabled={isSoldOut}
+          data-incart={inCartQty > 0 || undefined}
+          onClick={handleAdd}
+          aria-label={`${menu.name} ${isSoldOut ? '품절' : '줍기'}`}
+        >
+          {pickLabel}
+        </button>
+      </div>
     </article>
   );
 });

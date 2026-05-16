@@ -1,7 +1,6 @@
-// C-4 주문 완료 — Task 4.5 (§3.5 1조 ≤120줄, 절정 ★).
-//  - 도그태그 + WINNER WINNER 2줄(DESIGN §5.2) + 계좌 안내 + 이체 CTA.
-//  - 계좌 복사 3단계 fallback (clipboard → execCommand → manual hint).
-//  - P0-4: useOrderToken 으로 ?token= 자동 부착.
+// C-4 주문 완료 (★ 절정) — design-bundle ScreenComplete (screens-customer.jsx:384-467).
+// CustomerLayout 공통 헤더 사용 (P1 #1) — 자체 .app-header 제거.
+// 누락 요소 복원 (P2 #7): 금액 복사 버튼, 주문 내역 receipt, 수령 정보 info banner, 조리 현황 ghost CTA.
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
@@ -10,104 +9,110 @@ import { OrderSchema } from '../../api/schemas.js';
 import { API } from '../../api/routes.js';
 import { useOrderToken } from '../../hooks/useOrderToken.js';
 import DogTagFrame from '../../components/molecules/DogTagFrame.jsx';
-import Button from '../../components/atoms/Button.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
 
-// 계좌 정보 — G9 (모듈 최상위, §3.5 6조).
 const ACCOUNT_BANK = '국민은행';
 const ACCOUNT_NUMBER = '233001-04-403536';
 const ACCOUNT_HOLDER = '박동빈';
 const ACCOUNT_TEXT = `${ACCOUNT_BANK} ${ACCOUNT_NUMBER} ${ACCOUNT_HOLDER}`;
+const fmt = (n) => (n ?? 0).toLocaleString('ko-KR');
 
-// 클립보드 3단계 fallback — clipboard API → execCommand → manual.
-// 'copied' | 'manual' 반환. setState 책임은 호출자.
 async function copyText(text) {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return 'copied';
-    }
-  } catch { /* clipboard 실패 — execCommand 로 폴백 */ }
+  try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return 'copied'; } } catch { /* fallback */ }
   try {
     const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'absolute';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'absolute'; ta.style.left = '-9999px';
+    document.body.appendChild(ta); ta.select();
     const ok = document.execCommand('copy');
     document.body.removeChild(ta);
     return ok ? 'copied' : 'manual';
-  } catch {
-    return 'manual';
-  }
+  } catch { return 'manual'; }
 }
 
 export default function CompletePage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  // P0-4: 학생/외부인 모두 access_token 필수.
   const { token, query: tokenQuery, withQuery } = useOrderToken(id);
   const [copyState, setCopyState] = useState('idle');
+  const [amountCopyState, setAmountCopyState] = useState('idle');
 
   const orderQuery = useApi(
     ({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }),
     [id, token],
   );
 
-  if (orderQuery.isLoading) {
-    return <LoadingState variant="page" label="주문 정보 가져오는 중…" minimumDelay={0} />;
-  }
+  if (orderQuery.isLoading) return <LoadingState variant="page" label="주문 정보 가져오는 중…" minimumDelay={0} />;
   if (orderQuery.error) {
-    if (orderQuery.error.status === 404) {
-      navigate('/error/404', { replace: true });
-      return null;
-    }
-    return (
-      <ErrorState variant="page" title="주문 정보를 불러올 수 없어요"
-        description="잠시 후 다시 시도해 주세요."
-        onAction={orderQuery.refetch} actionLabel="다시 시도" />
-    );
+    if (orderQuery.error.status === 404) { navigate('/error/404', { replace: true }); return null; }
+    return <ErrorState variant="page" title="주문 정보를 불러올 수 없어요" description="잠시 후 다시 시도해 주세요." onAction={orderQuery.refetch} actionLabel="다시 시도" />;
   }
-
   const order = orderQuery.data;
   if (!order) return null;
 
-  const copyAccount = async () => {
-    const result = await copyText(ACCOUNT_TEXT);
-    setCopyState(result);
-    if (result === 'copied') setTimeout(() => setCopyState('idle'), 2000);
-  };
+  const total = order.total_price ?? 0;
+  const items = Array.isArray(order.items) ? order.items : [];
+  const couponApplied = items.length > 0 && items.reduce((a, it) => a + it.base_price * it.quantity, 0) > total;
+
+  const copyAccount = async () => { const r = await copyText(ACCOUNT_TEXT); setCopyState(r); if (r === 'copied') setTimeout(() => setCopyState('idle'), 2000); };
+  const copyAmount = async () => { const r = await copyText(String(total)); setAmountCopyState(r); if (r === 'copied') setTimeout(() => setAmountCopyState('idle'), 2000); };
 
   return (
-    <section data-testid="complete-page" className="flex flex-col items-center gap-md p-md">
-      <div className="font-stencil text-4xl text-accent leading-none text-center" aria-label="치킨 디너 위너">
-        <div>WINNER WINNER</div>
-        <div>CHICKEN DINNER</div>
+    <section data-testid="complete-page">
+      <div className="dogtag-stage">
+        <DogTagFrame no={order.no} total={100} date={order.operating_date} dropping pulse={false} />
+        <h1 className="winner-copy"><span>WINNER WINNER</span><br /><span>CHICKEN DINNER</span></h1>
+        <p className="font-display font-bold text-base text-ink">치킨 디너 위너!</p>
       </div>
-      <p className="font-display font-bold text-base text-ink">치킨 디너 위너!</p>
-      <DogTagFrame no={order.no} total={100} date={order.operating_date} dropping pulse={false} />
-      <div role="region" aria-labelledby="account-title"
-        className="w-full bg-elevated rounded-md p-md flex flex-col gap-sm" data-testid="account-info">
-        <h2 id="account-title" className="font-display font-bold text-base">입금 계좌</h2>
-        <p className="font-mono tabular-nums text-lg text-ink" data-testid="account-number">
-          {ACCOUNT_BANK} {ACCOUNT_NUMBER}
-        </p>
-        <p className="text-sm text-muted">예금주: {ACCOUNT_HOLDER}</p>
-        <Button type="button" variant="secondary" onClick={copyAccount} aria-label="계좌번호 복사">
-          {copyState === 'copied' ? '복사됨' : '계좌번호 복사'}
-        </Button>
-        {copyState === 'manual' && (
-          <p role="alert" className="text-xs text-warning" data-testid="copy-manual-hint">
-            텍스트를 길게 눌러 복사해 주세요.
-          </p>
+
+      <div className="account-card" role="region" aria-labelledby="account-title" data-testid="account-info">
+        <div className="acc-label" id="account-title">💸 입금 안내</div>
+        <div className="acc-bank">{ACCOUNT_BANK} · 예금주 {ACCOUNT_HOLDER}</div>
+        <div className="acc-no" data-testid="account-number">{ACCOUNT_BANK} {ACCOUNT_NUMBER}</div>
+        <div className="acc-amount">{fmt(total)} 원</div>
+        <div className="acc-actions">
+          <button type="button" className="btn btn-secondary btn-sm btn-block" onClick={copyAccount} aria-label="계좌번호 복사">
+            📋 {copyState === 'copied' ? '복사됨' : '계좌번호 복사'}
+          </button>
+          <button type="button" className="btn btn-secondary btn-sm btn-block" onClick={copyAmount} aria-label="금액 복사">
+            📋 {amountCopyState === 'copied' ? '복사됨' : '금액 복사'}
+          </button>
+        </div>
+        {(copyState === 'manual' || amountCopyState === 'manual') && (
+          <p role="alert" className="text-xs text-warning mt-2xs" data-testid="copy-manual-hint">텍스트를 길게 눌러 복사해 주세요.</p>
         )}
       </div>
-      <Button variant="primary" size="lg" block onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
-        이체 완료하고 확인 요청
-      </Button>
+
+      <div className="receipt">
+        {items.map((it) => (
+          <div key={it.menu_id} className="line">
+            <span className="label">{it.name} × {it.quantity}</span>
+            <span className="price">{fmt(it.base_price * it.quantity)}원</span>
+          </div>
+        ))}
+        {couponApplied && (
+          <div className="line"><span className="label">쿠폰 할인</span><span className="price price-discount">−1,000원</span></div>
+        )}
+        <div className="line total"><span className="label">총 결제</span><span className="price price-lg" style={{ color: 'var(--color-accent)' }}>{fmt(total)}원</span></div>
+      </div>
+
+      <div className="warn-banner info">
+        📍 <span><b>{order.table_no ? `매장 식사 · 테이블 ${order.table_no}` : '포장'}</b>{order.table_no && <> · 미니맵에서 위치 확인</>}</span>
+      </div>
+      <div className="warn-banner danger">
+        ⚠️ <span><b>이체 후 "확인 요청" 버튼을 꼭 눌러주세요.</b><br />누르지 않으면 본부가 조리를 시작하지 못해요.</span>
+      </div>
+
+      <div style={{ height: 132 }} />
+      <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40, flexDirection: 'column', gap: 6 }}>
+        <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
+          이체 완료하고 확인 요청
+        </button>
+        <button type="button" className="btn btn-ghost btn-block" onClick={() => navigate(`/orders/${id}/status${tokenQuery}`)} aria-label="조리 현황 보기">
+          🍗 조리 현황 보기
+        </button>
+      </div>
     </section>
   );
 }
