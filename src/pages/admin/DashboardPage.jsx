@@ -1,5 +1,5 @@
-// A-2 본부 대시보드 (IMPLEMENTATION_PLAN §5.2 / G13 / SCREEN §3.7 / 결정 D). 페이지 ≤120줄 (§3.5 1조).
-// CLOSED: Badge + StartCTA. OPEN: 헤더 + 6컬럼 Kanban + 5초 폴링 + 1분 tick + ? 단축키 + 401 navigate.
+// A-2 본부 대시보드 — design-bundle .admin-board 6-col Kanban + .start-cta.urgent 정합.
+// 기능 로직 유지: useApi sync + 5초 폴링 + 1분 tick + ? help + 401 navigate.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
@@ -31,13 +31,11 @@ export default function DashboardPage() {
   const [starting, setStarting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
 
-  // 1분 tick — elapsed_minutes 재계산용 (AdminCardColumn 내부 useMemo deps).
   useEffect(() => {
     const id = setInterval(() => setTick(Date.now()), TICK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
 
-  // ? 키 → 단축키 안내 토글 (결정 D). input/textarea 포커스 시 무시.
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== '?') return;
@@ -48,11 +46,9 @@ export default function DashboardPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // I-2: 마운트 시 서버 영업 상태 sync — 새로고침 후 store 기본값 CLOSED 보정.
   const businessQuery = useApi(({ signal }) => apiFetch(API.ADMIN_BUSINESS_STATE, { schema: BusinessStateSchema, signal }), []);
   useEffect(() => { if (businessQuery.data?.status) syncFromServer(businessQuery.data); }, [businessQuery.data, syncFromServer]);
 
-  // 5초 폴링 — OPEN 상태에서만.
   const ordersQuery = useApi(({ signal }) => apiFetch(API.ADMIN_ORDERS, { signal }), []);
   const { refetch } = ordersQuery;
   useEffect(() => {
@@ -61,58 +57,61 @@ export default function DashboardPage() {
     return () => clearInterval(id);
   }, [status, refetch]);
 
-  // 401 → 로그인으로 이동 (render 중 navigate 금지 → effect).
   useEffect(() => { if (ordersQuery.error?.status === 401) navigate('/admin/login'); }, [ordersQuery.error, navigate]);
 
   const handleStartBusiness = async () => {
-    setStarting(true);
-    setStartError(null);
+    setStarting(true); setStartError(null);
     try {
       await apiFetch(API.ADMIN_BUSINESS_OPEN, { method: 'POST', body: {} });
-      setStatus('OPEN');
-      refetch();
-    } catch (err) {
-      setStartError(err instanceof ApiError ? err.message : '장사 시작에 실패했어요.');
-    } finally {
-      setStarting(false);
-    }
+      setStatus('OPEN'); refetch();
+    } catch (err) { setStartError(err instanceof ApiError ? err.message : '장사 시작에 실패했어요.'); }
+    finally { setStarting(false); }
   };
 
-  // CLOSED — Kanban 숨김 + 큰 형광 옐로 CTA.
   if (status !== 'OPEN') {
     return (
-      <section data-testid="admin-dashboard-page" className="min-h-screen flex flex-col items-center justify-center gap-md p-lg bg-bg">
-        <BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} />
+      <section data-testid="admin-dashboard-page" className="admin-page">
+        <div className={`start-cta ${shouldBeOpen ? 'urgent' : ''}`}>
+          <div className="cta-mascot"><div className="mascot mascot-sm" /></div>
+          <div className="left">
+            <div className="cta-eyebrow">🔴 CLOSED · 사용자 주문 차단 중</div>
+            <h2>🚀 장사 시작</h2><p>버튼을 누르면 사용자 주문이 즉시 활성화됩니다.</p>
+          </div>
+          <BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} />
+        </div>
         <StartBusinessCTA status={status} shouldBeOpen={shouldBeOpen} loading={starting} error={startError} onStart={handleStartBusiness} />
         <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
       </section>
     );
   }
 
-  // OPEN — 3 분기 (Loading / Error / Empty) + Kanban.
   if (ordersQuery.isLoading) return <LoadingState variant="page" label="주문 목록 로딩 중…" minimumDelay={0} />;
   if (ordersQuery.error) {
-    if (ordersQuery.error.status === 401) return null; // navigate 진행 중.
+    if (ordersQuery.error.status === 401) return null;
     return <ErrorState variant="page" title="주문을 불러올 수 없어요" actionLabel="다시 시도" onAction={refetch} />;
   }
   const orders = Array.isArray(ordersQuery.data) ? ordersQuery.data : [];
   const byColumn = groupOrdersByStatus(orders);
 
   return (
-    <section data-testid="admin-dashboard-page" className="flex flex-col gap-md p-md">
-      <header className="flex items-center justify-between">
-        <h1 className="font-display font-black text-2xl">📋 본부 대시보드</h1>
-        <BusinessStateBadge status={status} shouldBeOpen />
+    <section data-testid="admin-dashboard-page" className="admin-page">
+      <div className="open-status">
+        <div className="open-dot"><span className="pulse" />🟢</div>
+        <div className="open-text"><b>영업 중</b> · 사용자 주문 가능</div>
+        <span className="open-hint">영업 종료는 <b>정산 탭 → 오늘 정산 마감</b></span>
+      </div>
+      <header className="admin-page-head">
+        <h1>📋 본부 대시보드</h1>
+        <div style={{ marginLeft: 'auto' }}><BusinessStateBadge status={status} shouldBeOpen /></div>
       </header>
       {orders.length === 0 ? (
         <EmptyState variant="card" title="오늘 첫 주문 대기 중" description="주문이 들어오면 여기에 표시됩니다." />
-      ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-md" data-testid="kanban-board">
-          {ADMIN_COLUMNS.map((col) => (
-            <AdminCardColumn key={col.status} title={col.title} status={col.status} orders={byColumn[col.status]} tick={tick} onSelectOrder={(id) => navigate(`/admin/orders/${id}`)} />
-          ))}
-        </div>
-      )}
+      ) : (<div className="admin-board" data-testid="kanban-board">
+        {ADMIN_COLUMNS.map((col) => (
+          <AdminCardColumn key={col.status} title={col.title} status={col.status}
+            orders={byColumn[col.status]} tick={tick} onSelectOrder={(id) => navigate(`/admin/orders/${id}`)} />
+        ))}
+      </div>)}
       <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
     </section>
   );

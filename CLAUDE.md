@@ -18,10 +18,9 @@
 
 - 자연어·주석·커밋 메시지·UI 카피는 **한국어**. 코드·명령어·고유명사는 원문.
 - 모든 기획 문서는 `docs/`. 중요 결정은 `docs/DECISIONS.md`에 ADR로.
-- 추가 기능·수정은 *작업 절차 4단계* (아래) 준수. 즉시 main 커밋.
+- 추가 기능·수정은 *작업 절차 3단계* (아래) 준수
 - `server/domain/*`(백엔드 도메인)은 **TDD strict + 회귀 테스트 필수**. 다른 영역은 권장.
 - 핵심 회귀 매트릭스(아래 "절대 깨지면 안 되는 것")는 *언제든 `npm test`로 검증 가능*해야 함.
-
 
 ## 작업 절차 (필수)
 
@@ -31,9 +30,7 @@
 
 2.**테스트 검증** — 해당 작업이 의도대로 동작하는지 확인 (단위·통합·E2E·수동 — 작업 성격에 맞게)
 
-3.**커밋** — 작업 내용을 *한국어 메시지*로 `git commit` (1 작업 = 1 커밋)
-
-4.**작업 로그 기록** — `docs/tasks/YYYY-MM-DD-<작업명>.md`에 다음 항목 작성:
+3.**작업 로그 기록** — `docs/tasks/YYYY-MM-DD-<작업명>.md`에 다음 항목 작성:
 
    -**목표** — 이 작업으로 달성하려 한 것
 
@@ -44,7 +41,6 @@
    -**테스트 결과** — 통과·실패·수동 검증 내용
 
    -**다음에 할 것** (선택) — 후속 작업 메모
-
 
 ## 절대 깨지면 안 되는 것
 
@@ -70,11 +66,13 @@
 ## 상세는 docs/
 
 ### 구현 산출물 (완료)
+
 - `IMPLEMENTATION_PLAN.md` — 8 Phase / 52 task (모두 ✅ 2026-05-14 완료)
 - `IMPLEMENTATION_PROGRESS.md` — 31 작업 로그 매트릭스 (커밋 SHA 포함)
 - `tasks/2026-05-14-task-*.md` — 작업별 상세 (31개)
 
 ### 결정·기획
+
 - `DECISIONS.md` — ADR 1~26 + 누적 결정 12+건 (ADR-019/022/024 변경 포함)
 - `ARCHITECTURE.md` / `API_DRAFT.md` / `DB_DRAFT.md` / `TEST_PLAN.md`
 - `DESIGN.md` / `UX_STRATEGY.md` / `SCREEN_STRUCTURE.md` / `COMPONENT_GUIDE.md` / `DESIGN_REVIEW.md`
@@ -82,6 +80,7 @@
 - `design-bundle/` — Claude Design React JSX 시안 (변환 베이스, 보존)
 
 ### 운영 자산 ★ (D-1 / 운영 당일 필독)
+
 - `operations/admin-card.md` — 본부 한 장 인쇄 운영 카드 (가동·운영·정산·비상)
 - `operations/d1-rehearsal.md` — 5/19 리허설 10 섹션 체크리스트
 

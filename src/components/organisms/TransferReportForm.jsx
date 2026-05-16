@@ -42,6 +42,10 @@ const TransferReportForm = forwardRef(function TransferReportForm(
     loading = false,
     error = null,
     className = '',
+    // design-bundle: page-level sticky CTA 우선 — 호출자가 hideSubmit=true 로 form 내부 submit 버튼 숨김.
+    // 외부 submit 버튼은 `<button type="submit" form={formId}>` 패턴으로 form id 매칭. default false (기존 회귀 보존).
+    hideSubmit = false,
+    formId,
     ...rest
   },
   ref,
@@ -99,6 +103,7 @@ const TransferReportForm = forwardRef(function TransferReportForm(
   return (
     <form
       ref={ref}
+      id={formId}
       onSubmit={handleSubmit}
       className={wrapperCls}
       noValidate
@@ -193,16 +198,18 @@ const TransferReportForm = forwardRef(function TransferReportForm(
         />
       </div>
 
-      <div className="flex gap-sm">
-        <Button type="submit" variant="primary" block loading={loading}>
-          이체 신고 제출
-        </Button>
-        {onCancel && (
-          <Button type="button" variant="ghost" onClick={onCancel} disabled={loading}>
-            취소
+      {!hideSubmit && (
+        <div className="flex gap-sm">
+          <Button type="submit" variant="primary" block loading={loading}>
+            이체 신고 제출
           </Button>
-        )}
-      </div>
+          {onCancel && (
+            <Button type="button" variant="ghost" onClick={onCancel} disabled={loading}>
+              취소
+            </Button>
+          )}
+        </div>
+      )}
     </form>
   );
 });
