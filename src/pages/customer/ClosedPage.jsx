@@ -3,7 +3,8 @@
 // ClosedScreen organism 합성 (§3.5 1조 — 페이지 ≤120줄).
 //  - ?reason=before-open|after-close|after-settlement|both-days-done
 //  - ?date=YYYY-MM-DD — 오늘 일자 강조 (운영 일정 카드)
-//  - 새로고침 CTA — window.location.reload() (G13 reactive 단일 진입점).
+//  - 새로고침 CTA 제거 (2026-05-17 front_closed_design)
+//    — CustomerLayout 30초 폴링이 OPEN 전환을 자동 수행.
 import { useSearchParams } from 'react-router-dom';
 import ClosedScreen from '../../components/organisms/ClosedScreen.jsx';
 
@@ -16,11 +17,7 @@ export default function ClosedPage() {
 
   return (
     <div data-testid="closed-page">
-      <ClosedScreen
-        reason={reason}
-        operatingDate={operatingDate}
-        onRefresh={() => window.location.reload()}
-      />
+      <ClosedScreen reason={reason} operatingDate={operatingDate} />
     </div>
   );
 }

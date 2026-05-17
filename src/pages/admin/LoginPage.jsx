@@ -2,6 +2,7 @@
 //   * backend 6자리 PIN 호환 (design-bundle 4-cell → 6-cell 확장).
 //   * shake state — 401 시 350ms.
 //   * 테스트 회귀: testid="pin-input" hidden input + 로그인 button.
+//   * 로고 교체 (2026-05-17 front_closed_design) — .brand-mark 마스코트 → 웹로고 <img>.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiFetch, ApiError } from '../../api/client.js';
@@ -37,7 +38,9 @@ export default function LoginPage() {
   return (
     <section data-testid="admin-login-page" className="login-shell">
       <form onSubmit={handleSubmit} className="login-box" noValidate>
-        <div className="login-mark"><div className="brand-mark" aria-hidden="true" /></div>
+        <div className="login-mark">
+          <img src="/web-logo.png" alt="치킨이닭 웹 로고" className="login-logo" />
+        </div>
         <div className="login-title">관리자 로그인</div>
         <div className="login-sub">PIN {PIN_LENGTH}자리를 입력하세요</div>
 

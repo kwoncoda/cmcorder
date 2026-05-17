@@ -2,45 +2,74 @@
 
 학교 축제 부스용 모바일 웹 주문 시스템 ("오늘 저녁은 치킨이닭!"). D-day 2026-05-20.
 
-**현재 단계:** 구현 완료 (2026-05-14). React 18 + Vite + Express 4 + SQLite. 835/835 tests passing, main 49 커밋 ahead. **D-1 리허설 5/19 → D-day 5/20 16:30 운영 시작**. 이후 작업은 *수정·패치·운영 가이드 보강* 단계.
+**현재 단계:** 구현 완료 (2026-05-14). React 18 + Vite + Express 4 + SQLite. 1009/1009 tests passing. **D-1 리허설 5/19 → D-day 5/20 16:30 운영 시작**. 이후 작업은 *수정·패치·운영 가이드 보강* 단계.
 
-## 명령
+## 명령 (★ docker 전용 — ADR-033)
 
-- `npm run dev` — 프론트엔드 dev server (http://localhost:5173)
-- `npm run server` — Express 백엔드 (http://localhost:3000, /healthz)
-- `npm run server:watch` — 백엔드 자동 재시작
-- `npm test` — 단위·통합 (Vitest, 단위 ~85 files / 835 케이스)
-- `npm run test:e2e` — Playwright smoke (사용자 수동 검증은 `docs/operations/d1-rehearsal.md` 사용)
-- `npm run build` — 프론트엔드 production 빌드 (`dist/`)
-- `docker compose up -d` — 운영 컨테이너 / `docker compose logs -f` / `docker compose restart`
+**모든 dev·테스트·검증은 docker 컨테이너 안에서 실행한다. 호스트 `npm` 직접 호출 금지.**
+
+배경: 2026-05-17 사고 — 호스트 `npm test` 1005/1005 통과 상태에서 prod 컨테이너만 CLOSED 가드가 정적 자산을 가로채는 거대 회귀가 들어감. host와 prod 환경 분리가 원인. 자세한 내용은 `docs/DECISIONS.md` ADR-033.
+
+### dev/test 컨테이너 (`docker-compose.dev.yml`)
+```bash
+# 한 번만: dev 컨테이너 띄우기 (백그라운드 유지)
+docker compose -f docker-compose.dev.yml up -d
+
+# 이후 모든 명령은 exec 패턴
+docker compose -f docker-compose.dev.yml exec dev npm test            # 단위·통합 (Vitest, 1009 케이스)
+docker compose -f docker-compose.dev.yml exec dev npm run test:e2e    # Playwright smoke
+docker compose -f docker-compose.dev.yml exec dev npm run dev         # Vite hot reload (호스트 :5173)
+docker compose -f docker-compose.dev.yml exec dev npm run server:watch # Express 자동 재시작 (호스트 :3000)
+docker compose -f docker-compose.dev.yml exec dev npm run build        # 프론트엔드 production 빌드 (dist/)
+docker compose -f docker-compose.dev.yml exec dev npm run lint
+docker compose -f docker-compose.dev.yml exec dev sh                   # 컨테이너 셸 진입
+
+# 정리
+docker compose -f docker-compose.dev.yml down
+```
+
+### 운영 컨테이너 (`docker-compose.yml`)
+```bash
+docker compose up -d                           # 운영 가동
+docker compose build app && docker compose up -d  # 코드 변경 반영 (서버만 변경 시)
+docker compose build --no-cache app && docker compose up -d  # 캐시 무시 풀빌드
+docker compose logs -f                         # 로그 stream
+docker compose restart                         # 재시작
+docker compose exec app sh                     # prod 컨테이너 진입 (디버깅용)
+```
 
 ## 규칙
 
 - 자연어·주석·커밋 메시지·UI 카피는 **한국어**. 코드·명령어·고유명사는 원문.
 - 모든 기획 문서는 `docs/`. 중요 결정은 `docs/DECISIONS.md`에 ADR로.
-- 추가 기능·수정은 *작업 절차 3단계* (아래) 준수
+- 추가 기능·수정은 *작업 절차 4단계* (아래) 준수
 - `server/domain/*`(백엔드 도메인)은 **TDD strict + 회귀 테스트 필수**. 다른 영역은 권장.
-- 핵심 회귀 매트릭스(아래 "절대 깨지면 안 되는 것")는 *언제든 `npm test`로 검증 가능*해야 함.
+- 핵심 회귀 매트릭스(아래 "절대 깨지면 안 되는 것")는 *언제든 docker `npm test`로 검증 가능*해야 함.
+- ★ **호스트 npm 직접 실행 금지** (ADR-033). `npm test`, `npm run dev` 등은 반드시 `docker compose -f docker-compose.dev.yml exec dev npm ...` 형태로.
 
 ## 작업 절차 (필수)
 
 작업(task) 단위마다 *반드시* 다음 4단계 흐름을 지킨다:
 
-1.**작업 실행** — 사용자가 지정한 기능·수정 작업을 수행
+1. **작업 실행** — 사용자가 지정한 기능·수정 작업을 수행
 
-2.**테스트 검증** — 해당 작업이 의도대로 동작하는지 확인 (단위·통합·E2E·수동 — 작업 성격에 맞게)
+2. **테스트 검증 (★ docker 전용)** — 해당 작업이 의도대로 동작하는지 확인. 호스트 npm 직접 실행 금지 (ADR-033).
+   - 단위·통합: `docker compose -f docker-compose.dev.yml exec dev npm test`
+   - E2E: `docker compose -f docker-compose.dev.yml exec dev npm run test:e2e`
+   - 운영 경로 HTTP 검증: `docker compose up -d --build` → `curl -sI http://localhost/<path>` (서버 미들웨어/nginx/정적 자산 회귀 캐치)
+   - 수동 시각: `docker compose -f docker-compose.dev.yml exec dev npm run dev` → 브라우저 http://localhost:5173
 
-3.**작업 로그 기록** — `docs/tasks/YYYY-MM-DD-<작업명>.md`에 다음 항목 작성:
+3. **작업 로그 기록** — `docs/tasks/YYYY-MM-DD-<작업명>.md`에 다음 항목 작성:
 
-   -**목표** — 이 작업으로 달성하려 한 것
+   - **목표** — 이 작업으로 달성하려 한 것
+   - **만든 것** — 추가한 기능·파일 목록
+   - **한 일** — 구체 변경 사항 (파일·라인·결정 근거)
+   - **테스트 결과** — 통과·실패·수동 검증 내용 (docker 명령 + 결과)
+   - **다음에 할 것** (선택) — 후속 작업 메모
 
-   -**만든 것** — 추가한 기능·파일 목록
-
-   -**한 일** — 구체 변경 사항 (파일·라인·결정 근거)
-
-   -**테스트 결과** — 통과·실패·수동 검증 내용
-
-   -**다음에 할 것** (선택) — 후속 작업 메모
+4. **운영 경로 사이드체크 (정적 자산·미들웨어·nginx 영향 시 필수)** — 단위 통과만으로 안전 가정 X. ADR-033 사고 재발 방지:
+   - 서버 미들웨어 / 정적 자산 / nginx 설정 변경 시 → `docker compose build app && docker compose up -d` 후 운영 컨테이너에 직접 `curl -sI` 로 응답 코드·헤더 검증.
+   - CLOSED 상태 가드는 정적 자산 화이트리스트(extension 기반)를 우회하므로 새 자산 prefix 추가 시 `business-state.test.js` 회귀 한 줄 추가.
 
 ## 절대 깨지면 안 되는 것
 
@@ -53,6 +82,7 @@
 - **ADR-023**: 운영은 Docker compose + named volume `chickenedak-data`. PIN은 첫 부팅 시 stdout 출력.
 - **ADR-024 변경 (2026-05-14)**: 프론트엔드는 *React 18 SPA*. EJS+Alpine 후보 폐기.
 - **§3.5 React 가이드 8조**: 페이지 ≤120줄 · Zustand 셀렉터 강제 · `useState(() => ...)` 초기화 패턴 · barrel import 차단 · axe-core dev-only. 회귀: `src/__tests__/appendix-d.test.js` 5 케이스.
+- **ADR-033 (2026-05-18)**: 검증·테스트·dev는 docker 환경에서만 실행. 호스트 `npm` 직접 호출 금지. CLOSED 가드가 정적 자산을 가로채던 거대 회귀가 host vitest 1005/1005 통과 상태에서 prod에 들어간 사고가 직접 계기. 정적 자산 화이트리스트 회귀: `server/middleware/__tests__/business-state.test.js` 16 케이스 (4 신규).
 
 ## 도구
 

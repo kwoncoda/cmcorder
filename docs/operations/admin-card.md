@@ -4,12 +4,18 @@
 
 ## 가동 (5/20 16:30 / 5/21 11:00 전)
 
+> **운영 명령은 운영 compose(`docker-compose.yml`).** dev/test compose(`docker-compose.dev.yml`)는 ADR-033 dev 환경 — 운영 시 사용 X.
+
 1. 부스 노트북에서 `cd C:\ACoding\09_order && docker compose up -d`
 2. 첫 부팅 시 컨테이너 로그에 `[INIT] Generated admin PIN: XXXXXX` 출력 → **메모**
-   - `docker compose logs -f api | head -20` 으로 확인
-3. 노트북 브라우저: `http://localhost:3000/admin/login` 접속 → PIN 6자리 입력
+   - `docker compose logs -f app | head -20` 으로 확인
+3. 노트북 브라우저: `http://localhost/admin/login` 접속 → PIN 6자리 입력 (nginx :80 경유)
 4. 영업 상태 빨간 CLOSED 배지 확인 → "장사 시작" 큰 노란 버튼 클릭 → 녹색 OPEN
-5. 모바일 폰에서 `http://<노트북IP>:3000/menu` 진입 → 메뉴 정상 표시 확인
+5. 모바일 폰에서 `http://<노트북IP>/menu` 진입 → 메뉴 정상 표시 확인
+6. **★ 정적 자산 사이드체크 (ADR-033 사고 재발 방지)** — 노트북 브라우저에서 다음 두 URL이 200으로 떠야 함:
+   - `http://localhost/web-logo.png` (관리자 로그인 + CLOSED 페이지 로고)
+   - `http://localhost/mascot/mascot.png` (헤더 마스코트)
+   - 또는 터미널 `curl -sI http://localhost/web-logo.png` → `HTTP/1.1 200 OK` + `Content-Type: image/png` 기대. 302 또는 423 응답 시 = CLOSED 가드 회귀 → ADR-033 §4 운영 경로 사이드체크 실패. 정적 자산 화이트리스트 fix 필요.
 
 > **세션 쿠키 (P0-A, ADR-031 2026-05-15):** `docker-compose.yml`은 `SESSION_COOKIE_SECURE=false` 기본. HTTP 로컬 운영 호환. **HTTPS reverse proxy 도입 시 `SESSION_COOKIE_SECURE=true`로 변경 + Express `trust proxy` 설정 필요.** 부스 로컬 와이파이는 HTTP가 정상 경로.
 

@@ -48,6 +48,13 @@ describe('LoginPage', () => {
     expect(screen.getByRole('button', { name: '로그인' })).toBeInTheDocument();
   });
 
+  it('★ 카드 상단 웹로고 이미지 렌더 (front_closed_design)', () => {
+    renderPage();
+    const logo = screen.getByAltText('치킨이닭 웹 로고');
+    expect(logo).toBeInTheDocument();
+    expect(logo).toHaveAttribute('src', '/web-logo.png');
+  });
+
   it('★ PIN 5자리 시 버튼 disabled', () => {
     renderPage();
     fireEvent.change(screen.getByTestId('pin-input'), { target: { value: '12345' } });

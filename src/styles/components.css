@@ -1216,6 +1216,15 @@
 .closed-screen .icon {
   font-size: 48px;
 }
+/* 2026-05-17 front_closed_design — 마스코트 자리에 웹로고 (정사각 PNG, 가로형도 대응). */
+.closed-screen .closed-logo {
+  max-width: 160px;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
 .closed-screen h1 {
   margin: 0;
   font-size: 22px;
@@ -1915,6 +1924,15 @@ code.ammo {
   background-repeat: no-repeat;
   border-radius: 8px;
   background-color: transparent;
+}
+/* 2026-05-17 front_closed_design — 웹로고 교체. 가로형 비율 보존. */
+.login-mark .login-logo {
+  max-width: 200px;
+  max-height: 64px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
 }
 .login-title {
   font-family: var(--font-display);

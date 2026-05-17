@@ -63,6 +63,12 @@ export default function CustomerLayout() {
   }, [navigate, location.pathname]);
   useGlobalErrorHandler({ onBusinessClosed: handleBusinessClosed });
 
+  // /closed 페이지에서는 design-bundle ScreenClosed 헤더 정합:
+  //   - 서브명 "CLOSED" (운영 헤더의 캐치프레이즈 대신)
+  //   - 우측 액션(🗺️ / 🎒) 숨김 — 영업 외 상태에서 의미 없음
+  // (2026-05-17 front_closed_design)
+  const isClosedView = location.pathname === '/closed';
+
   return (
     <div className="min-h-screen flex flex-col bg-bg text-ink">
       <header className="app-header camo-gradient">
@@ -70,30 +76,34 @@ export default function CustomerLayout() {
           <div className="brand-mark" aria-hidden="true" />
           <div>
             <div className="brand-name">오늘 저녁은 치킨이닭!</div>
-            <span className="brand-subname">WINNER · WINNER · CHICKEN · DINNER</span>
+            <span className="brand-subname">
+              {isClosedView ? 'CLOSED' : 'WINNER · WINNER · CHICKEN · DINNER'}
+            </span>
             {/* 회귀 보호 — 기존 테스트가 단축 표기 텍스트를 검출 */}
             <span className="sr-only">🍗 치킨이닭</span>
           </div>
         </Link>
-        <div className="head-actions">
-          <Link
-            to="/map"
-            aria-label="부스 미니맵"
-            className="icon-btn"
-            data-testid="header-map-link"
-          >
-            🗺️
-          </Link>
-          <Link
-            to="/cart"
-            aria-label="인벤토리 (장바구니)"
-            className="icon-btn"
-            data-testid="header-cart-link"
-          >
-            🎒
-            {totalQty > 0 && <span className="count-badge">{totalQty}</span>}
-          </Link>
-        </div>
+        {!isClosedView && (
+          <div className="head-actions">
+            <Link
+              to="/map"
+              aria-label="부스 미니맵"
+              className="icon-btn"
+              data-testid="header-map-link"
+            >
+              🗺️
+            </Link>
+            <Link
+              to="/cart"
+              aria-label="인벤토리 (장바구니)"
+              className="icon-btn"
+              data-testid="header-cart-link"
+            >
+              🎒
+              {totalQty > 0 && <span className="count-badge">{totalQty}</span>}
+            </Link>
+          </div>
+        )}
       </header>
 
       <main className="app-body flex-1 flex flex-col">

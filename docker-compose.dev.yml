@@ -1,0 +1,47 @@
+# 치킨이닭 dev/test compose — ADR-033 (2026-05-18).
+#
+# 정책 출처: docs/DECISIONS.md ADR-033 "검증·테스트·dev 명령은 docker 환경에서만".
+#   호스트 npm은 사용 금지. CLOSED 가드가 정적 자산 가로채던 거대 회귀가
+#   host vitest 1005/1005 통과 상태에서 prod에 들어간 사고가 직접 계기.
+#
+# 운영 compose(docker-compose.yml)와 별개 — port/volume 분리.
+#
+# 표준 사용:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml exec dev npm test
+#   docker compose -f docker-compose.dev.yml exec dev npm run dev
+#   docker compose -f docker-compose.dev.yml exec dev npm run server:watch
+#   docker compose -f docker-compose.dev.yml exec dev npm run test:e2e
+#   docker compose -f docker-compose.dev.yml down
+
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: chickenedak-dev:latest
+    container_name: chickenedak-dev
+    # 호스트 코드 실시간 반영 — vite/express 둘 다 hot reload.
+    # node_modules 는 익명 volume 으로 컨테이너 안 버전 유지 (Windows 네이티브 빌드 회피).
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - chickenedak-dev-data:/data
+    # Vite dev(5173) + Express(3000) 둘 다 노출.
+    # 운영(80)과 충돌 X — 운영은 nginx 만 외부 80, 본 dev는 5173/3000 직노출.
+    ports:
+      - "5173:5173"
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_PATH: /data/order.sqlite
+      # Playwright headless 기본.
+      CI: "true"
+    working_dir: /app
+    # 컨테이너 살아있게 유지 → 모든 명령은 exec 패턴.
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  chickenedak-dev-data:
+    driver: local
