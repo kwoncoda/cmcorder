@@ -80,12 +80,34 @@ afterEach(() => {
 });
 
 describe('DashboardPage', () => {
-  it('★ CLOSED 시 BusinessStateBadge + StartBusinessCTA 렌더 + Kanban 숨김', () => {
+  it('★ CLOSED 시 BusinessStateBadge + StartBusinessCTA + 6컬럼 Kanban 동시 렌더 (find_error_v3)', () => {
     useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
     renderPage();
     expect(screen.getByTestId('business-state-badge')).toBeInTheDocument();
     expect(screen.getByTestId('start-business-cta')).toBeInTheDocument();
-    expect(screen.queryByTestId('kanban-board')).not.toBeInTheDocument();
+    // find_error_v3: CLOSED 상태에서도 6컬럼 admin-board 가 유지된다.
+    expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
+    for (const col of ADMIN_COLUMNS) {
+      expect(screen.getByTestId(`admin-column-${col.status}`)).toBeInTheDocument();
+    }
+  });
+
+  it('★ find_error_v3 — CLOSED 시 6컬럼 모두 "해당 상태 주문 없음" (orders=[])', () => {
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
+    const emptyTextNodes = screen.getAllByText('해당 상태 주문 없음');
+    expect(emptyTextNodes.length).toBe(6);
+  });
+
+  it('★ find_error_v3 — CLOSED 시 .start-cta 카드 안에 start-business-cta 버튼 위치', () => {
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    const { container } = renderPage();
+    const startCta = container.querySelector('.start-cta');
+    expect(startCta).not.toBeNull();
+    // 카드 *안*에 start-business-cta testid 가 존재해야 한다.
+    expect(startCta.querySelector('[data-testid="start-business-cta"]')).not.toBeNull();
   });
 
   it('★ "장사 시작" 클릭 시 API 호출 + status=OPEN 전이', async () => {

@@ -6,6 +6,7 @@ import { useApi } from '../../hooks/useApi.js';
 import { apiFetch, ApiError } from '../../api/client.js';
 import { API } from '../../api/routes.js';
 import { MenuListSchema } from '../../api/schemas.js';
+import { effectForCode } from '../../constants/menu-effects.js';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
 import EmptyState from '../../components/state/EmptyState.jsx';
@@ -49,10 +50,10 @@ export default function MenuAdminPage() {
 
   return (
     <Wrap>
-      <div className="admin-page-head"><h1>🍽️ 메뉴 관리</h1></div>
+      <div className="admin-page-head"><h1>메뉴 관리</h1></div>
       {actionError && <p role="alert" className="admin-info-bar warn" data-testid="action-error">{actionError}</p>}
       <div className="admin-info-bar">
-        <span>💡 가격을 클릭하면 직접 편집할 수 있어요.</span>
+        <span>가격을 클릭하면 직접 편집할 수 있어요.</span>
         <span style={{ marginLeft: 'auto', color: 'var(--color-muted)' }}>가격 변경은 사용자 화면에 <b style={{ color: 'var(--color-accent)' }}>즉시 반영</b>됩니다.</span>
       </div>
       <div className="admin-table">
@@ -67,7 +68,7 @@ export default function MenuAdminPage() {
               <div><div className="tbl-name">{m.name}</div><div className="tbl-id">{(m.code ?? '').toUpperCase()}</div></div>
             </div>
             <div><code className="ammo">{m.code ?? '-'}</code></div>
-            <div className="muted">{m.sub ?? '—'}</div>
+            <div className="muted">{effectForCode(m.code)}</div>
             <div className="muted">{CAT_LABEL[m.category] ?? m.category}</div>
             <div className="num">
               {editing.id === m.id ? (
@@ -76,8 +77,8 @@ export default function MenuAdminPage() {
                     onChange={(e) => setEditing({ id: m.id, value: e.target.value.replace(/\D/g, '').slice(0, 7) })}
                     onKeyDown={(e) => { if (e.key === 'Enter') save(m); if (e.key === 'Escape') setEditing({ id: null, value: '' }); }}
                     inputMode="numeric" style={{ width: 90, height: 32, padding: '0 8px', textAlign: 'right' }} />
-                  <button type="button" className="bump-btn" data-testid={`save-price-${m.id}`} onClick={() => save(m)} aria-label="저장">✓</button>
-                  <button type="button" className="bump-btn" data-testid={`cancel-price-${m.id}`} onClick={() => setEditing({ id: null, value: '' })} aria-label="취소">✕</button>
+                  <button type="button" className="bump-btn" data-testid={`save-price-${m.id}`} onClick={() => save(m)} aria-label="저장">저장</button>
+                  <button type="button" className="bump-btn" data-testid={`cancel-price-${m.id}`} onClick={() => setEditing({ id: null, value: '' })} aria-label="취소">취소</button>
                 </div>
               ) : (
                 <button type="button" data-testid={`edit-price-${m.id}`} className="price-display"
@@ -92,7 +93,7 @@ export default function MenuAdminPage() {
             <div>
               <button type="button" data-testid={`toggle-recommended-${m.id}`}
                 className={`pill-toggle ${m.recommended ? 'on accent' : ''}`} aria-pressed={!!m.recommended}
-                onClick={() => patch(m.id, { recommended: !m.recommended })}>{m.recommended ? '🔥 BEST 표시중 (해제)' : '🔥 BEST 표시'}</button>
+                onClick={() => patch(m.id, { recommended: !m.recommended })}>{m.recommended ? 'BEST 표시중 (해제)' : 'BEST 표시'}</button>
             </div>
           </div>
         ))}

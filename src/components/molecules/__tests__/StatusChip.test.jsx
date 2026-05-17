@@ -76,4 +76,17 @@ describe('StatusChip', () => {
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
+
+  // ── find_error_v3 P2 (Codex 리뷰 2026-05-18) — showIcon prop ──
+  it('★ P2: showIcon=false 시 이모지 미렌더 (어드민 화면용)', () => {
+    render(<StatusChip status="COOKING" showIcon={false} />);
+    expect(screen.queryByText('🔥')).not.toBeInTheDocument();
+    expect(screen.getByText('조리 중')).toBeInTheDocument();
+  });
+
+  it('★ P2: showIcon=true (default) 시 이모지 노출 (고객 화면 회귀 보존)', () => {
+    render(<StatusChip status="HOLD" />);
+    expect(screen.getByText('⚠️')).toBeInTheDocument();
+    expect(screen.getByText('보류')).toBeInTheDocument();
+  });
 });

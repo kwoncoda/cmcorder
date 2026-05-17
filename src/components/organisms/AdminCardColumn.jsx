@@ -40,6 +40,14 @@ function elapsedTone(minutes) {
   return 'border-divider';
 }
 
+// find_error_v3 — design-bundle .order-card.warn / .order-card.danger 톤 매핑.
+// elapsedTone 의 결과(Tailwind 클래스)에 대응하는 design-bundle CSS 클래스.
+function orderCardDesignClass(tone) {
+  if (tone === 'border-danger') return 'order-card danger';
+  if (tone === 'border-warning') return 'order-card warn';
+  return 'order-card';
+}
+
 // P1-2 (Codex 리뷰): 서버 실제 shape 호환.
 //  - 이름: depositor_name (snake) → depositorName (camel) → name 순 fallback.
 //  - 금액: total_price 표시 (F-A-007 요구).
@@ -101,6 +109,8 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
   const itemsPreview = previewItems(order.items);
 
   const cls = [
+    // find_error_v3 — design-bundle .order-card / .order-card.warn / .order-card.danger 병행.
+    orderCardDesignClass(tone),
     'text-left w-full',
     'bg-card-bg text-card-ink',
     'rounded-md p-md shadow-card',
@@ -135,7 +145,7 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
         </ul>
       )}
       <div className="mt-2xs flex items-center justify-between gap-sm">
-        <StatusChip status={order.status} size="sm" />
+        <StatusChip status={order.status} size="sm" showIcon={false} />
         <span className="font-mono tabular-nums text-xs text-card-ink">
           {elapsedMin}분 경과
         </span>
@@ -152,7 +162,12 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
               }}
               disabled={isPending}
               aria-busy={isPending || undefined}
-              className={`btn btn-${a.variant ?? 'primary'} btn-sm flex-1`}
+              // find_error_v3 — 위험 액션(취소·보류)은 outline 톤으로 변경 (변경: btn-danger → btn-danger-outline).
+              className={
+                a.variant === 'danger'
+                  ? 'btn btn-danger-outline btn-sm flex-1'
+                  : `btn btn-${a.variant ?? 'primary'} btn-sm flex-1`
+              }
             >
               {a.label}
             </button>
@@ -179,9 +194,11 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
   },
   ref,
 ) {
+  // find_error_v3 — design-bundle .col / .col-head / .col-body 클래스 추가 (Tailwind 병행).
   const wrapperCls = [
+    'col',
     'bg-elevated text-ink',
-    'rounded-md p-md',
+    'rounded-md',
     className,
   ]
     .filter(Boolean)
@@ -195,14 +212,14 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
       aria-label={`${title} 컬럼`}
       {...rest}
     >
-      <header className="flex items-center justify-between mb-sm">
+      <header className="col-head flex items-center justify-between">
         <h2 className="font-display font-bold text-lg">{title}</h2>
-        <span className="font-mono tabular-nums text-sm text-muted">
+        <span className="count font-mono tabular-nums text-sm text-muted">
           {orders.length}
         </span>
       </header>
 
-      <ol className="flex flex-col gap-sm">
+      <ol className="col-body flex flex-col gap-sm">
         {orders.length === 0 ? (
           <li className="text-muted text-xs">해당 상태 주문 없음</li>
         ) : (

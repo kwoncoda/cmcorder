@@ -1,0 +1,342 @@
+# find_error_v3 개발 기획서
+
+## 검토 기준
+
+- 현재 브랜치: `find_error_v3`로 확인됨.
+- 현재 `find_error_v3`와 `main`은 같은 커밋(`90ee213`)을 가리키며, `main...HEAD` 변경 파일은 없음으로 확인됨. 따라서 본 문서는 현재 워킹트리 구현을 기준으로 검토함.
+- 루트의 `design_bundle` 폴더는 없고, 실제 디자인 번들은 `docs/design-bundle`에 있음. 본 문서는 `docs/design-bundle`을 기준으로 비교함.
+- `.env`, 비밀키, 환경변수, 세션/암호 파일은 열람하지 않았음.
+- 실제 앱 소스코드는 수정하지 않았고, 문서만 작성함.
+- 사용자 추가 결정:
+  - 기존 운영 DB는 없으며 DB는 초기화할 예정임.
+  - 자동 백업 로그와 관리자 로그인 로그를 v3 관리자 내역에 포함함.
+  - 이체확인 라우트/API/컴포넌트는 일단 남기고, nav에서만 제거함.
+  - 메뉴 효과 정보는 DB/API 확장 없이 프론트 정적 매핑으로 처리함.
+
+## 표기 기준
+
+- **확인됨**: 코드에서 직접 확인한 사실
+- **추정**: 코드 구조상 가능성이 높은 원인 또는 영향
+- **확인 필요**: 운영 정책, 실제 DB 데이터, 또는 화면 검수로 재확인이 필요한 내용
+
+---
+
+## 1. 쿠폰 중복 기준 변경
+
+- 번호: 1
+- 사용자가 발견한 현상: 쿠폰 사용 시 학번이 같아도 이름이 다르면 쿠폰이 다시 사용됨. 쿠폰 중복 여부는 이름이 아니라 학번 기준이어야 하며, 한 번 사용한 학번은 다시 쿠폰을 사용할 수 없어야 함.
+- 현재 구현에서 문제로 보이는 부분:
+  - **확인됨**: `server/db/init.sql`의 `used_coupons` 테이블은 `UNIQUE(student_id, name)` 제약을 사용함.
+  - **확인됨**: `server/domain/coupon.js`의 `validateCoupon()`은 `SELECT id FROM used_coupons WHERE student_id = ? AND name = ?`로 중복을 확인함.
+  - **확인됨**: `server/repositories/coupon-repo.js`의 `hasCouponBeenUsed()`도 학번+이름 조합을 기준으로 조회함.
+  - **확인됨**: `consumeCoupon()`은 주문 생성 트랜잭션 안에서 실행되며, 현재 쿠폰 검증 실패 시 트랜잭션이 롤백되어 해당 요청의 주문도 생성되지 않음.
+  - **확인됨**: 현재 `student_id` 단일 기준 unique index 또는 애플리케이션 검증은 없음.
+  - **확인됨**: 쿠폰 대상 여부는 `STUDENT_ID_PATTERN = /^\d{2}\d{2}37\d{3}$/`로 검증하며, 주문 가능 여부는 `server/routes/customer.js`에서 9자리 숫자 기준으로 별도 검증함.
+  - 구현 상태 구분: 백엔드의 쿠폰 사용 기록 테이블과 검증은 있으나, 중복 기준이 잘못됨. 프론트는 중복 사용 여부를 사전 조회하지 않음.
+- design_bundle 기준 의도:
+  - **확인됨**: `docs/design-bundle/screens-customer.jsx`는 쿠폰을 컴모융 학생 할인으로 노출하고, 학번 패턴은 쿠폰 자격 검증에만 사용함.
+  - **확인됨**: `docs/design-bundle/치킨이닭 프로토타입.html`에는 학과 코드 `37` 매칭이 명시되어 있음.
+  - **추정**: design-bundle은 쿠폰 중복 기준을 상세 구현하지 않지만, 사용자 요청에 따라 v3 정책은 `student_id` 단일 기준으로 확정해야 함.
+- 관련 프론트 파일:
+  - `src/pages/customer/CheckoutPage.jsx`
+  - `src/api/client.js`
+- 관련 백엔드 파일/API/DB 테이블:
+  - `POST /api/orders`
+  - `server/routes/customer.js`
+  - `server/domain/coupon.js`
+  - `server/repositories/coupon-repo.js`
+  - `server/db/init.sql`
+  - `server/db/bootstrap.js`
+  - `used_coupons`
+- 기능 유형: 쿠폰 정책 수정
+- 심각도: P0
+- 수정 방향:
+  - 쿠폰 중복 검증을 `student_id` 단일 기준으로 변경함.
+  - `used_coupons.student_id`에 unique index 또는 동등한 DB 방어를 추가하는 방향을 우선 검토함.
+  - 쿠폰 대상 여부 검증(`37` 패턴)과 쿠폰 중복 사용 검증(`student_id` 사용 여부)을 함수/에러 코드 수준에서 분리함.
+  - 중복 에러 문구는 `이미 쿠폰을 사용한 학번이에요.`로 사용자 친화적으로 변경함.
+  - 쿠폰 중복 요청은 할인 적용을 막아야 하며, 같은 학번의 쿠폰 없는 일반 주문은 계속 성공해야 함.
+  - 기존 `UNIQUE(student_id, name)` 제약은 신규 초기화 DB 기준으로 `UNIQUE(student_id)` 또는 동일 효력의 unique index로 정리함.
+- 구현 전 확인 필요 사항:
+  - 기존 운영 DB는 없고 DB 초기화 예정이므로 기존 중복 쿠폰 데이터 마이그레이션은 고려하지 않아도 됨.
+  - 쿠폰 중복으로 제출된 주문 요청을 서버가 `400`으로 거부할지, 프론트에서 쿠폰 체크를 해제하도록 안내할지 확인 필요. 단, 쿠폰 없이 다시 제출하는 일반 주문은 반드시 가능해야 함.
+  - 쿠폰 자격 패턴은 현재 `37`로 확인됨. 사용자 문구에 나온 `38`은 이번 범위에서 패턴 변경이 아니라 안내 문구 삭제로 처리하는 것이 맞는지 확인 필요.
+- 테스트 포인트:
+  - 이름 A + 학번 `202637123` 쿠폰 사용 후 이름 B + 같은 학번 `202637123` 쿠폰 사용 시 `ALREADY_USED` 또는 동등 에러로 차단되는지.
+  - 에러 문구가 `이미 쿠폰을 사용한 학번이에요.`로 노출되는지.
+  - 이미 쿠폰을 사용한 학번으로 `coupon: null` 또는 `coupon.used=false` 일반 주문은 성공하는지.
+  - DB unique 제약 또는 애플리케이션 검증으로 race condition이 방어되는지.
+  - 기존 정산의 쿠폰 건수/할인 합계가 새 unique 정책과 충돌하지 않는지.
+
+---
+
+## 2. 관리자 내역 탭 확장
+
+- 번호: 2
+- 사용자가 발견한 현상: design_bundle의 어드민 내역은 전체, 주문, 메뉴, 시스템 탭 구조인데 현재 서비스도 이 구조가 필요함. 주문은 주문 내역, 메뉴는 품절/가격 변경, 시스템은 시스템 시작/관리자 로그인/장사 시작/자동 백업 등 시스템 내역이어야 함.
+- 현재 구현에서 문제로 보이는 부분:
+  - **확인됨**: `server/db/init.sql`과 `server/db/bootstrap.js`에는 `order_events` 테이블이 있음.
+  - **확인됨**: `order_events.order_id`는 `NOT NULL`이라 메뉴/시스템 이벤트를 직접 저장하기 어려움.
+  - **확인됨**: `server/repositories/order-events-repo.js`는 주문 이벤트만 저장/조회함.
+  - **확인됨**: `server/routes/admin.js`의 `GET /admin/api/history`는 `listOrderEvents()`만 반환하며, 유형 필터가 없음.
+  - **확인됨**: `src/pages/admin/HistoryPage.jsx`는 단순 주문 이벤트 목록만 렌더링하고, 전체/주문/메뉴/시스템 필터가 없음.
+  - **확인됨**: 주문 생성, 이체 완료 요청, 관리자 주문 상태 변경은 `order_events`에 기록됨.
+  - **확인됨**: 메뉴 품절/추천/가격 변경은 `POST /admin/api/menus/:id/toggle`에서 가능하지만 이벤트 로그는 기록하지 않음.
+  - **확인됨**: 장사 시작은 `POST /admin/api/business/open`에서 가능하지만 시스템 로그는 기록하지 않음.
+  - **확인됨**: 관리자 로그인은 `POST /admin/login`에서 처리되지만 로그인 로그는 기록하지 않음.
+  - **확인됨**: `server/jobs/auto-snapshot.js`와 `server/server.js`에 자동 ZIP 백업 기능은 실제 존재하지만, 관리자 내역 로그로 저장되지는 않음.
+  - 구현 상태 구분: 주문 로그 백엔드는 일부 구현됨. 메뉴/시스템 로그 저장 구조와 프론트 필터는 없음.
+- design_bundle 기준 의도:
+  - **확인됨**: `docs/design-bundle/screens-admin.jsx`의 `AdminHistory`는 `all | orders | menus | system` 필터를 제공함.
+  - **확인됨**: design-bundle의 시드 로그에는 `SYSTEM_START`, `LOGIN`, `BUSINESS_OPEN`, `PRICE_CHANGED`, `SOLDOUT_ON`, `AUTO_BACKUP`, 주문 상태 전이가 포함됨.
+  - **확인됨**: design-bundle은 검색, CSV 내보내기, `log-feed` 행 구조를 포함함.
+  - **확인됨**: design-bundle 하단 안내는 실제 구현 후보로 `orders_audit` + `menu_audit` 또는 유사 감사 로그 테이블을 언급함.
+- 관련 프론트 파일:
+  - `src/pages/admin/HistoryPage.jsx`
+  - `src/components/layouts/AdminLayout.jsx`
+  - `src/api/routes.js`
+  - `src/api/schemas.js`
+  - `src/styles/components.css`
+- 관련 백엔드 파일/API/DB 테이블:
+  - `GET /admin/api/history`
+  - `POST /api/orders`
+  - `POST /api/orders/:id/transfer-report`
+  - `POST /admin/api/orders/:id/transition`
+  - `POST /admin/api/menus/:id/toggle`
+  - `POST /admin/api/business/open`
+  - `POST /admin/login`
+  - `server/db/init.sql`
+  - `server/db/bootstrap.js`
+  - `server/repositories/order-events-repo.js`
+  - 신규 후보: `admin_events`
+  - 기존: `order_events`, `menus`, `orders`, `business_state`
+- 기능 유형: 관리자 로그 기능 확장
+- 심각도: P1
+- 수정 방향:
+  - v3 최소 목표는 내역 탭에 `전체 / 주문 / 메뉴 / 시스템` 필터를 구현하는 것임.
+  - 주문 로그는 기존 `order_events`를 유지해 사용함.
+  - 메뉴/시스템 로그는 새 범용 테이블 `admin_events`를 추가하는 방식을 우선 제안함. 이유는 기존 `order_events.order_id NOT NULL` 구조가 메뉴/시스템 로그에 맞지 않기 때문임.
+  - `GET /admin/api/history?type=all|orders|menus|system`은 `order_events`와 `admin_events`를 합쳐 최신순으로 반환하도록 설계함.
+  - 메뉴 로그는 `POST /admin/api/menus/:id/toggle`에서 `soldOut`, `recommended`, `base_price` 변경 전/후를 비교해 기록함.
+  - 시스템 로그는 최소 `BUSINESS_OPEN`을 `POST /admin/api/business/open` 성공 시 기록함.
+  - 관리자 로그인 로그는 v3 범위에 포함함. `POST /admin/login` 성공 시 시스템 로그로 기록하고, 표시 주체는 `어드민`으로 매핑함.
+  - 자동 백업 로그는 v3 범위에 포함함. `startAutoSnapshot()` 성공 시 `AUTO_BACKUP` 이벤트를 시스템 로그로 기록함.
+- 구현 전 확인 필요 사항:
+  - 메뉴/시스템 로그는 `admin_events` 신규 테이블 방식을 우선 적용함.
+  - CSV 내보내기와 검색까지 v3에 포함할지, 필터 구현만 우선할지 확인 필요.
+  - 시스템 시작 로그를 서버 부팅마다 DB에 남길지, 운영 시작 이벤트만 남길지 확인 필요.
+  - 메뉴 추천 토글도 메뉴 로그에 포함할지 확인 필요. 사용자 요청은 품절/가격 변경을 예로 들었고 추천은 명시하지 않음.
+- 테스트 포인트:
+  - 내역 탭에 `전체 / 주문 / 메뉴 / 시스템` 필터가 보이는지.
+  - 전체 필터에서 주문/메뉴/시스템 로그가 모두 보이는지.
+  - 주문 필터에서 `CREATED`, `TRANSFER_REPORTED`, 관리자 상태 변경 로그만 보이는지.
+  - 메뉴 필터에서 품절 처리, 품절 해제, 가격 변경 로그가 보이는지.
+  - 시스템 필터에서 장사 시작 로그가 보이는지.
+  - 로그인 로그와 자동 백업 로그가 시스템 필터에서 보이는지.
+
+---
+
+## 3. 메뉴 효과 설명
+
+- 번호: 3
+- 사용자가 발견한 현상: 어드민 페이지 메뉴에 후라이드/양념/뿌링클 등 메뉴별 효과가 표시되어야 함.
+- 현재 구현에서 문제로 보이는 부분:
+  - **확인됨**: `src/constants/menus.js`에는 `sub` 필드로 요청된 효과 값이 이미 들어 있음.
+  - **확인됨**: `docs/design-bundle/data.js`에도 동일한 `sub` 값이 있음.
+  - **확인됨**: `server/db/init.sql`의 `menus` 테이블에는 `sub`, `effect`, `description` 같은 효과 필드가 없음.
+  - **확인됨**: `server/routes/admin.js`의 `serializeMenu()`는 `sub` 또는 효과 값을 내려주지 않음.
+  - **확인됨**: `src/api/schemas.js`의 `MenuSchema`도 `sub` 필드를 정의하지 않음.
+  - **확인됨**: `src/pages/admin/MenuAdminPage.jsx`는 `효과` 컬럼과 `m.sub ?? '—'` 표시 위치를 이미 갖고 있으나, API 데이터에 `sub`가 없어 실제 화면에서는 `—`가 표시될 가능성이 큼.
+  - 구현 상태 구분: 프론트 표시 칸은 있으나 데이터가 API로 전달되지 않음. 백엔드 DB/API에는 효과 필드가 없음. 정적 프론트 상수에는 효과 매핑이 있음.
+- design_bundle 기준 의도:
+  - **확인됨**: `docs/design-bundle/screens-admin.jsx`의 메뉴 관리 테이블은 `효과` 컬럼을 가지고 `m.sub`를 표시함.
+  - **확인됨**: `docs/design-bundle/data.js`의 효과 목록은 사용자 요청과 일치함.
+- 관련 프론트 파일:
+  - `src/pages/admin/MenuAdminPage.jsx`
+  - `src/api/schemas.js`
+  - `src/constants/menus.js`
+  - `src/components/organisms/MenuCard.jsx`
+- 관련 백엔드 파일/API/DB 테이블:
+  - `GET /admin/api/menus`
+  - `GET /api/menus`
+  - `server/routes/admin.js`
+  - `server/routes/customer.js`
+  - `server/repositories/menu-repo.js`
+  - `server/db/init.sql`
+  - `menus`
+- 기능 유형: 메뉴 정보 표시 수정
+- 심각도: P2
+- 수정 방향:
+  - 사용자 요청 범위는 `어드민 페이지 메뉴`이므로 우선 어드민 메뉴 화면에서 효과가 보이게 함.
+  - 사용자 결정에 따라 `MenuAdminPage`에서 `code` 또는 `name` 기준 프론트 정적 효과 매핑을 적용해 표시함.
+  - 이번 v3에서는 `menus` 테이블/API에 `sub`, `effect`, `description` 필드를 추가하지 않음.
+  - 사용자 메뉴 화면까지 효과를 노출하지 않고, 어드민 메뉴 화면에만 반영함.
+- 구현 전 확인 필요 사항:
+  - 프론트 정적 매핑은 메뉴 `code` 기준으로 두는 것을 우선함. 메뉴명이 바뀌어도 효과 매핑이 깨지지 않게 하기 위함임.
+- 테스트 포인트:
+  - 어드민 메뉴 페이지에서 아래 값이 정확히 보이는지.
+  - 후라이드: `회복량 +10`
+  - 양념: `회복량 +75`
+  - 뿌링클: `회복량 +100`
+  - 감자튀김: `부활`
+  - 뿌링감자튀김: `소생`
+  - 칠리스: `부스트 +100%`
+  - 콜라: `부스트 +60%`
+  - 사이다: `부스트 +40%`
+
+---
+
+## 4. 어드민 이체확인 탭 제거
+
+- 번호: 4
+- 사용자가 발견한 현상: 어드민 페이지의 `이체확인` 탭은 필요 없음.
+- 현재 구현에서 문제로 보이는 부분:
+  - **확인됨**: `src/components/layouts/AdminLayout.jsx`의 `ITEMS`에 `/admin/transfers` `이체확인` nav 항목이 있음.
+  - **확인됨**: `src/App.jsx`에는 `/admin/transfers` 라우트와 `TransfersPage` lazy import가 있음.
+  - **확인됨**: `src/pages/admin/TransfersPage.jsx`가 별도 이체 확인 페이지를 구현함.
+  - **확인됨**: `server/routes/admin.js`에는 `GET /admin/api/transfers`가 있음.
+  - **확인됨**: 본부 대시보드의 `AdminCardColumn`에서 `TRANSFER_REPORTED` 상태에 `확인`/`보류` 액션이 있고, `HOLD` 상태에 `이체 확인`/`취소` 액션이 있음.
+  - 구현 상태 구분: 별도 탭/라우트/API가 모두 있음. 하지만 대시보드에서도 이체 확인 처리가 가능함.
+- design_bundle 기준 의도:
+  - **확인됨**: `docs/design-bundle/screens-admin.jsx`의 관리자 nav는 `본부`, `메뉴`, `내역`, `정산`, `쿠폰` 5개이고 `이체확인` 탭은 없음.
+  - **확인됨**: design-bundle의 본부 대시보드 컬럼에 `이체 확인 요청` 상태가 있고 카드 액션으로 확인/보류를 처리함.
+- 관련 프론트 파일:
+  - `src/components/layouts/AdminLayout.jsx`
+  - `src/App.jsx`
+  - `src/pages/admin/TransfersPage.jsx`
+  - `src/components/organisms/AdminCardColumn.jsx`
+  - `src/pages/admin/OrderDetailPage.jsx`
+- 관련 백엔드 파일/API/DB 테이블:
+  - `GET /admin/api/transfers`
+  - `POST /admin/api/orders/:id/transition`
+  - `server/routes/admin.js`
+  - `orders`
+- 기능 유형: 관리자 탭 구조 변경
+- 심각도: P2
+- 수정 방향:
+  - 관리자 nav에서 `이체확인` 탭을 제거함.
+  - 사용자 결정에 따라 `/admin/transfers` 라우트, `TransfersPage`, `GET /admin/api/transfers`는 일단 남김.
+  - 이체 확인 처리는 본부 대시보드의 `TRANSFER_REPORTED` 컬럼 카드 액션에서 계속 가능해야 함.
+- 구현 전 확인 필요 사항:
+  - nav 제거 후에도 `/admin/transfers` 직접 접근은 유지함.
+  - `TransfersPage`와 관련 테스트는 삭제하지 않고, nav 미노출 테스트만 조정함.
+- 테스트 포인트:
+  - 관리자 nav에 `이체확인`이 보이지 않는지.
+  - `/admin/dashboard`의 `이체 확인 요청` 컬럼에서 확인/보류 처리가 가능한지.
+  - 제거 후 관리자 nav 레이아웃이 모바일에서 깨지지 않는지.
+
+---
+
+## 5. 문구 변경
+
+- 번호: 5
+- 사용자가 발견한 현상:
+  - `쿠폰 사용 (컴모융 학생 한정 1,000원 할인)` 문구를 `컴모융 학생 1,000원 할인`로 변경해야 함.
+  - `컴모융(****38***) 학생만 쿠폰 사용이 가능해요` 계열 안내 문구를 삭제해야 함.
+  - 어드민 페이지의 `admin1`을 `어드민`으로 보여야 함.
+- 현재 구현에서 문제로 보이는 부분:
+  - **확인됨**: `src/pages/customer/CheckoutPage.jsx`의 쿠폰 체크박스 라벨은 `🎫 쿠폰 사용 (컴모융 학생 한정 1,000원 할인)`임.
+  - **확인됨**: 같은 파일에서 쿠폰 대상이 아닌 9자리 학번일 때 `※ 컴모융(****37***) 학생만 쿠폰 사용이 가능해요.` 문구가 노출됨.
+  - **확인됨**: 현재 패턴은 `38`이 아니라 `37`로 구현되어 있음. 이번 요청은 패턴 변경이 아니라 문구 삭제로 보는 것이 맞음.
+  - **확인됨**: `src/components/layouts/AdminLayout.jsx`에서 우측 사용자 표시가 `admin1`로 하드코딩되어 있음.
+  - **확인됨**: 현재 백엔드 `admins` 테이블에는 사용자명 컬럼이 없고 `pin_hash`만 있음.
+  - **확인됨**: `order_events.actor`에는 `customer`, `admin`, `system` 값이 저장될 수 있으며, `HistoryPage`는 actor를 그대로 표시함.
+  - 구현 상태 구분: 쿠폰 문구와 `admin1`은 프론트 표시 문제임. 내부 계정 ID 변경은 필요하지 않음.
+- design_bundle 기준 의도:
+  - **확인됨**: design-bundle에는 쿠폰 라벨과 학과 코드 힌트가 존재하지만, 사용자 요청이 이를 단순화하도록 변경함.
+  - **확인됨**: design-bundle은 `admin1`을 시연용 actor로 사용함. 실서비스에서는 사용자 요청에 따라 `어드민` 표시가 더 적합함.
+- 관련 프론트 파일:
+  - `src/pages/customer/CheckoutPage.jsx`
+  - `src/components/layouts/AdminLayout.jsx`
+  - `src/pages/admin/HistoryPage.jsx`
+  - `src/pages/admin/CouponsPage.jsx`
+  - `src/pages/admin/DashboardPage.jsx`
+- 관련 백엔드 파일/API/DB 테이블:
+  - `server/routes/admin.js`
+  - `server/repositories/order-events-repo.js`
+  - `admins`
+  - `order_events.actor`
+- 기능 유형: 문구 변경
+- 심각도: P3
+- 수정 방향:
+  - 쿠폰 체크박스 라벨을 `컴모융 학생 1,000원 할인`로 변경하고 이모지 제거 정책과 함께 `🎫`도 제거함.
+  - 쿠폰 대상 패턴 안내 문구는 사용자 화면에서 삭제함. 필요하다면 비활성 상태의 일반 안내는 `학번과 이름 입력 시 할인 선택 가능` 정도로 단순화함.
+  - `admin1`은 내부 계정값을 바꾸지 말고 표시 계층에서 `어드민`으로 변환함.
+  - `actor === 'admin'` 또는 미래의 `actor === 'admin1'` 표시도 `어드민`으로 매핑하는 helper를 두는 방향을 검토함.
+- 구현 전 확인 필요 사항:
+  - 쿠폰 체크박스가 비활성일 때 어떤 대체 힌트를 남길지 확인 필요.
+  - `admin1` 외에 `admin`, `system`, `customer` 표시도 각각 `어드민`, `시스템`, `고객`처럼 한글화할지 확인 필요.
+- 테스트 포인트:
+  - 쿠폰 라벨이 `컴모융 학생 1,000원 할인`으로 보이는지.
+  - `컴모융(****37***)` 또는 `컴모융(****38***)` 패턴 설명 문구가 사용자 화면에 보이지 않는지.
+  - 관리자 nav와 내역 actor 표시에서 `admin1`이 보이지 않고 `어드민`으로 보이는지.
+
+---
+
+## 6. 관리자 UI/UX 디자인 개선
+
+- 번호: 6
+- 사용자가 발견한 현상:
+  - 장사 시작 버튼을 design_bundle처럼 장사 시작 네모 칸 안에 있는 UI/UX로 맞춰야 함.
+  - 장사 시작 전에도 장사 시작 네모 밑의 6개 네모가 보여야 함.
+  - 어드민 페이지 안의 이모지를 제거해야 함. 단, 영업중/open 옆의 초록색 동그라미는 유지함.
+  - 본부 대시보드 6개 네모 박스, 드래그 바/스크롤 UI, 내부 네모창을 design_bundle처럼 꾸며야 함.
+  - 현재 빨간색 취소 버튼이 너무 강해 개선이 필요함.
+- 현재 구현에서 문제로 보이는 부분:
+  - **확인됨**: `src/pages/admin/DashboardPage.jsx`는 `status !== 'OPEN'`일 때 `start-cta`와 `StartBusinessCTA`만 렌더링하고, `admin-board` 6개 컬럼을 렌더링하지 않음.
+  - **확인됨**: 현재 장사 시작 버튼은 `StartBusinessCTA` 컴포넌트로 `start-cta` 카드 밖에 따로 렌더링됨. design-bundle은 버튼이 `start-cta` 카드 안에 있음.
+  - **확인됨**: `DashboardPage`, `StartBusinessCTA`, `AdminLayout`, `HistoryPage`, `MenuAdminPage`, `CouponsPage`, `TransfersPage`, `SettlementPage`, `BusinessStateBadge`, `StatusChip` 등에 관리자 화면 이모지가 남아 있음.
+  - **확인됨**: `AdminLayout`과 `DashboardPage`의 OPEN 상태 옆 초록색 원형 표시는 현재 이모지 `🟢`로 구현되어 있음. 유지 대상은 초록 dot 자체이지 이모지 문자 여부는 확인 필요.
+  - **확인됨**: `src/styles/components.css`에는 design-bundle과 유사한 `.start-cta`, `.admin-board`, `.col`, `.col-head`, `.col-body`, 어드민 scrollbar 스타일이 존재함.
+  - **확인됨**: 실제 `AdminCardColumn.jsx`는 `.col`, `.col-head`, `.col-body` 구조를 쓰지 않고 Tailwind 클래스 중심의 `section`/`ol` 구조를 사용함. 따라서 design-bundle의 컬럼/스크롤 스타일이 충분히 적용되지 않을 가능성이 큼.
+  - **확인됨**: 취소/보류 액션은 `btn-danger` 또는 `Button variant="danger"`로 강한 빨간색 배경을 사용함.
+  - 구현 상태 구분: 일부 디자인 토큰/CSS는 이미 있으나 현재 컴포넌트 구조와 상태 분기가 design_bundle 의도와 다름. 이모지 제거는 프론트 전반 수정이 필요함.
+- design_bundle 기준 의도:
+  - **확인됨**: `docs/design-bundle/screens-admin.jsx`는 CLOSED 상태에서 `start-cta urgent` 카드 내부에 상태 설명과 `장사 시작 →` 버튼을 함께 배치함.
+  - **확인됨**: design-bundle은 CLOSED 상태에서도 `admin-board` 6개 컬럼을 계속 렌더링함.
+  - **확인됨**: design-bundle의 6개 컬럼은 `.col`, `.col-head`, `.col-body`, `.order-card` 구조와 어드민 전용 scrollbar를 사용함.
+  - **확인됨**: design-bundle도 일부 이모지를 포함하지만, 사용자 v3 요구가 어드민 이모지 제거를 우선함.
+- 관련 프론트 파일:
+  - `src/pages/admin/DashboardPage.jsx`
+  - `src/components/organisms/AdminCardColumn.jsx`
+  - `src/components/organisms/StartBusinessCTA.jsx`
+  - `src/components/organisms/BusinessStateBadge.jsx`
+  - `src/components/layouts/AdminLayout.jsx`
+  - `src/components/molecules/StatusChip.jsx`
+  - `src/pages/admin/HistoryPage.jsx`
+  - `src/pages/admin/MenuAdminPage.jsx`
+  - `src/pages/admin/CouponsPage.jsx`
+  - `src/pages/admin/TransfersPage.jsx`
+  - `src/pages/admin/SettlementPage.jsx`
+  - `src/pages/admin/OrderDetailPage.jsx`
+  - `src/styles/components.css`
+- 관련 백엔드 파일/API/DB 테이블:
+  - 직접 백엔드 변경은 없음.
+  - 화면 데이터 유지 대상: `GET /admin/api/orders`, `GET /admin/api/business/state`, `POST /admin/api/business/open`, `orders`, `business_state`
+- 기능 유형:
+  - 관리자 UI/UX 개선
+  - 이모지 제거
+  - 대시보드 디자인 개선
+- 심각도: P2
+- 수정 방향:
+  - `DashboardPage`의 CLOSED 분기에서도 주문 목록을 조회하거나 빈 배열로 `admin-board` 6컬럼을 렌더링함.
+  - 장사 시작 버튼은 `start-cta` 카드 내부로 옮기고, `StartBusinessCTA`를 카드 밖에서 중복 렌더링하지 않음.
+  - `AdminCardColumn`을 `.col`, `.col-head`, `.col-body`, `.order-card` 구조에 맞추거나 기존 Tailwind 구조에 design-bundle CSS와 동등한 스타일을 적용함.
+  - 관리자 페이지의 텍스트 이모지를 제거함. OPEN/영업중 상태 dot은 CSS 원형 dot과 pulse로 대체해 유지함.
+  - `StatusChip`은 고객 화면에서도 쓰이므로 전역 이모지 제거 대신 `showIcon={false}` 또는 관리자용 표시 컴포넌트/prop을 검토함.
+  - 취소/보류 버튼은 배경 전체 빨강 대신 danger outline/ghost 톤으로 조정해 위험 액션임은 유지하되 시각적 부담을 줄임.
+  - 드래그 바는 실제 drag UI인지 scrollbar를 의미하는지 확인 필요. 현재 구현상 가장 가까운 대상은 어드민 scrollbar와 컬럼 내부 스크롤임.
+- 구현 전 확인 필요 사항:
+  - `드래그 바`가 브라우저 scrollbar를 의미하는지, 칸반 드래그 앤 드롭 핸들을 의미하는지 확인 필요.
+  - CLOSED 상태에서도 주문 API를 호출할지, 빈 컬럼만 보여줄지 확인 필요.
+  - 관리자 화면 이모지 제거 범위에 `StatusChip` 내부 아이콘과 정산/쿠폰 페이지 아이콘까지 포함하는지 확인 필요. 사용자 요청상 포함으로 보는 것이 안전함.
+  - OPEN 옆 초록 dot을 이모지 문자로 유지할지 CSS dot으로 대체할지 확인 필요. 사용자 의도는 초록 상태 표시 유지로 해석됨.
+- 테스트 포인트:
+  - CLOSED 상태에서 장사 시작 카드와 6개 상태 컬럼이 함께 보이는지.
+  - 장사 시작 버튼이 카드 내부에 있고 API 호출이 정상 동작하는지.
+  - OPEN 상태에서 초록 dot이 유지되는지.
+  - 관리자 화면에서 불필요한 이모지 문자가 사라졌는지.
+  - 6개 컬럼과 내부 주문 카드가 design-bundle에 가깝게 보이는지.
+  - 컬럼 내부 스크롤바가 어색하지 않은지.
+  - 취소/보류 버튼이 과도하게 빨갛지 않으면서 위험 액션임을 인지할 수 있는지.
+  - 모바일에서 관리자 nav, 장사 시작 카드, 6컬럼 레이아웃이 깨지지 않는지.

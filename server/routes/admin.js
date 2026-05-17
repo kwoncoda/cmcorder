@@ -11,6 +11,7 @@ import { requireAdmin, loginAdmin } from '../middleware/admin-auth.js';
 import { requireCsrf, csrfTokenHandler } from '../middleware/csrf.js';
 import {
   listMenus,
+  getMenu,
   toggleMenu,
 } from '../repositories/menu-repo.js';
 import {
@@ -19,6 +20,7 @@ import {
   updateOrderStatus,
 } from '../repositories/order-repo.js';
 import { listOrderEvents } from '../repositories/order-events-repo.js';
+import { logAdminEvent, listAdminEvents } from '../repositories/admin-events-repo.js';
 import { listCouponUsage } from '../repositories/coupon-repo.js';
 import {
   getBusinessState,
@@ -108,6 +110,75 @@ function serializeAdminOrder(o) {
   return out;
 }
 
+// find_error_v3 — 메뉴 patch 변경 항목별 admin_events row 생성.
+// before/after가 같으면 row X. soldOut/recommended/base_price 각각 별개 row.
+function logMenuPatchEvents(db, before, after, patch, operating_date) {
+  if (patch.soldOut !== undefined) {
+    const beforeBool = !!before.sold_out;
+    const afterBool = !!after.sold_out;
+    if (beforeBool !== afterBool) {
+      logAdminEvent(db, {
+        category: 'menu',
+        event_type: afterBool ? 'SOLDOUT_ON' : 'SOLDOUT_OFF',
+        action_name: afterBool ? '품절 처리' : '판매 재개',
+        actor: 'admin',
+        operating_date,
+        target_id: after.id,
+        target_name: after.name,
+        before_value: String(beforeBool),
+        after_value: String(afterBool),
+      });
+    }
+  }
+  if (patch.recommended !== undefined) {
+    const beforeBool = !!before.recommended;
+    const afterBool = !!after.recommended;
+    if (beforeBool !== afterBool) {
+      logAdminEvent(db, {
+        category: 'menu',
+        event_type: afterBool ? 'RECOMMEND_ON' : 'RECOMMEND_OFF',
+        action_name: afterBool ? '추천 등록' : '추천 해제',
+        actor: 'admin',
+        operating_date,
+        target_id: after.id,
+        target_name: after.name,
+        before_value: String(beforeBool),
+        after_value: String(afterBool),
+      });
+    }
+  }
+  if (patch.base_price !== undefined) {
+    if (before.base_price !== after.base_price) {
+      logAdminEvent(db, {
+        category: 'menu',
+        event_type: 'PRICE_CHANGED',
+        action_name: '가격 변경',
+        actor: 'admin',
+        operating_date,
+        target_id: after.id,
+        target_name: after.name,
+        before_value: String(before.base_price),
+        after_value: String(after.base_price),
+      });
+    }
+  }
+}
+
+// find_error_v3 P2 (Codex 리뷰 2026-05-18) — history type allowlist.
+const HISTORY_TYPE_ALLOWLIST = new Set(['all', 'orders', 'menus', 'system']);
+
+// find_error_v3 — 주문 상태 → 한국어 액션 라벨 (order-repo와 정합).
+const ORDER_ACTION_LABEL = {
+  CREATED: '주문 접수',
+  TRANSFER_REPORTED: '이체 완료 요청',
+  PAID: '이체 확인',
+  COOKING: '조리 시작',
+  READY: '조리 완료',
+  DONE: '전달 완료',
+  HOLD: '보류',
+  CANCELED: '취소',
+};
+
 /**
  * 관리자 라우터.
  * @param {import('better-sqlite3').Database} db
@@ -124,6 +195,17 @@ export function adminRoutes(db) {
         return res.status(401).json({ error: 'INVALID_PIN', message: 'PIN이 일치하지 않습니다.' });
       }
       req.session.adminId = adminId;
+      // find_error_v3 P1-2 (Codex 리뷰 2026-05-18) — 성공 로그인은 system 이벤트 1행.
+      // operating_date를 현재 business_state.operating_date로 채워서 history?type=system
+      // 일자 필터에 노출되게 한다. (이전: NULL이라 listAdminEvents의 operating_date=? 조건에서
+      // 자동 제외되어 시스템 내역 탭에서 보이지 않던 P1 버그를 해소.)
+      logAdminEvent(db, {
+        category: 'system',
+        event_type: 'ADMIN_LOGIN',
+        action_name: '관리자 로그인',
+        actor: 'admin',
+        operating_date: getBusinessState(db).operating_date,
+      });
       return res.json({ ok: true });
     } catch (err) {
       return next(err);
@@ -157,7 +239,18 @@ export function adminRoutes(db) {
     try {
       const { operating_date } = OpenSchema.parse(req.body ?? {});
       const target = operating_date ?? getBusinessState(db).operating_date;
+      // find_error_v3 — 멱등 동작이라 실제 전환 여부를 판별: CLOSED → OPEN인 경우만 이벤트 기록.
+      const before = getBusinessState(db);
       const updated = openBusiness(db, { operating_date: target });
+      if (before.status !== 'OPEN' && updated.status === 'OPEN') {
+        logAdminEvent(db, {
+          category: 'system',
+          event_type: 'BUSINESS_OPEN',
+          action_name: '장사 시작',
+          actor: 'admin',
+          operating_date: updated.operating_date,
+        });
+      }
       res.json(updated);
     } catch (err) {
       next(err);
@@ -170,12 +263,24 @@ export function adminRoutes(db) {
   });
 
   // ── POST /admin/api/menus/:id/toggle ──
+  // find_error_v3 P2 (Codex 리뷰 2026-05-18): 메뉴 변경 + 이벤트 INSERT를 단일 트랜잭션으로
+  // 묶어 로그 실패 시 메뉴 변경도 ROLLBACK. 이전: toggleMenu 성공 후 logMenuPatchEvents가
+  // 실패하면 메뉴 변경은 반영됐는데 응답은 500인 불일치 가능.
   router.post('/admin/api/menus/:id/toggle', (req, res, next) => {
     try {
       const patch = ToggleSchema.parse(req.body ?? {});
       const id = Number(req.params.id);
-      // 존재 가드 — toggleMenu는 없으면 undefined 반환
-      const updated = toggleMenu(db, id, patch);
+      const before = getMenu(db, id);
+      if (!before) {
+        return res.status(404).json({ error: 'MENU_NOT_FOUND', message: '메뉴를 찾을 수 없습니다.' });
+      }
+      const operating_date = getBusinessState(db).operating_date;
+      const updated = db.transaction(() => {
+        const next = toggleMenu(db, id, patch);
+        if (!next) return null;
+        logMenuPatchEvents(db, before, next, patch, operating_date);
+        return next;
+      })();
       if (!updated) {
         return res.status(404).json({ error: 'MENU_NOT_FOUND', message: '메뉴를 찾을 수 없습니다.' });
       }
@@ -273,29 +378,87 @@ export function adminRoutes(db) {
     }
   });
 
-  // ── GET /admin/api/history (find_error_v2 — 주문 상태 변경 감사 로그) ──
-  // 응답: 해당 operating_date의 order_events 행 + order_no JOIN. created_at DESC.
+  // ── GET /admin/api/history (find_error_v2 + find_error_v3 — 통합 감사 로그) ──
+  // type=all (default) → order_events + admin_events 합쳐 created_at DESC
+  // type=orders → order_events만
+  // type=menus  → admin_events category=menu만
+  // type=system → admin_events category=system만
+  // 응답 row 통일 스키마: { id, source, category, event_type, action_name, actor,
+  //   order_id, order_no, from_status, to_status,
+  //   target_id, target_name, before_value, after_value, note, created_at }
+  // id는 source-prefix 문자열(`o-<id>`, `a-<id>`)로 통합 unique.
+  // find_error_v3 P2 (Codex 리뷰 2026-05-18): type allowlist 검증. 잘못된 값은 400.
   router.get('/admin/api/history', (req, res) => {
     const operating_date =
       typeof req.query.date === 'string' && req.query.date.length > 0
         ? req.query.date
         : getBusinessState(db).operating_date;
-    const rows = listOrderEvents(db, { operating_date });
-    res.json(
-      rows.map((r) => ({
-        id: r.id,
-        order_id: r.order_id,
-        order_no: r.order_no,
-        event_type: r.event_type,
-        from_status: r.from_status,
-        to_status: r.to_status,
-        action_name: r.action_name,
-        actor: r.actor,
-        note: r.note,
-        // Bug 7 — created_at은 ISO 8601 Z (브라우저 KST 540분 오차 방어).
-        created_at: toIsoUtc(r.created_at),
-      })),
-    );
+    const rawType =
+      typeof req.query.type === 'string' && req.query.type.length > 0
+        ? req.query.type
+        : 'all';
+    if (!HISTORY_TYPE_ALLOWLIST.has(rawType)) {
+      return res.status(400).json({
+        error: 'INVALID_HISTORY_TYPE',
+        message: 'history type은 all/orders/menus/system 중 하나여야 합니다.',
+      });
+    }
+    const type = rawType;
+
+    const orderRows =
+      type === 'all' || type === 'orders'
+        ? listOrderEvents(db, { operating_date }).map((r) => ({
+            id: `o-${r.id}`,
+            source: 'order',
+            category: 'order',
+            event_type: r.event_type,
+            action_name: r.action_name ?? ORDER_ACTION_LABEL[r.event_type] ?? r.event_type,
+            actor: r.actor,
+            order_id: r.order_id,
+            order_no: r.order_no,
+            from_status: r.from_status,
+            to_status: r.to_status,
+            target_id: null,
+            target_name: null,
+            before_value: null,
+            after_value: null,
+            note: r.note,
+            created_at: toIsoUtc(r.created_at),
+          }))
+        : [];
+
+    let adminCategory;
+    if (type === 'menus') adminCategory = 'menu';
+    else if (type === 'system') adminCategory = 'system';
+
+    const includeAdmin = type === 'all' || type === 'menus' || type === 'system';
+    const adminRows = includeAdmin
+      ? listAdminEvents(db, { operating_date, category: adminCategory }).map((r) => ({
+          id: `a-${r.id}`,
+          source: 'admin',
+          category: r.category,
+          event_type: r.event_type,
+          action_name: r.action_name,
+          actor: r.actor,
+          order_id: null,
+          order_no: null,
+          from_status: null,
+          to_status: null,
+          target_id: r.target_id,
+          target_name: r.target_name,
+          before_value: r.before_value,
+          after_value: r.after_value,
+          note: r.note,
+          created_at: toIsoUtc(r.created_at),
+        }))
+      : [];
+
+    // 통합 정렬 — created_at DESC. 동일 시각은 source 안의 자체 정렬 유지.
+    const merged = [...orderRows, ...adminRows].sort((a, b) => {
+      if (a.created_at === b.created_at) return 0;
+      return a.created_at < b.created_at ? 1 : -1;
+    });
+    res.json(merged);
   });
 
   // ── GET /admin/api/coupons/usage (find_error_v2 — 쿠폰 사용 내역) ──

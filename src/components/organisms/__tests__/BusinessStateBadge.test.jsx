@@ -64,4 +64,18 @@ describe('BusinessStateBadge', () => {
     const r = await axe(container);
     expect(r).toHaveNoViolations();
   });
+
+  // ── find_error_v3 — 어드민 이모지 제거 + CSS dot 대체 ─────────
+  it('★ find_error_v3 — OPEN 시 .biz-dot.is-open 노드 존재 (이모지 미사용)', () => {
+    const { container } = render(<BusinessStateBadge status="OPEN" />);
+    expect(container.querySelector('.biz-dot.is-open')).not.toBeNull();
+    // 이모지 텍스트는 더 이상 노드에 등장하지 않는다.
+    expect(container.textContent).not.toMatch(/🟢|🔴/);
+  });
+
+  it('★ find_error_v3 — CLOSED 시 .biz-dot.is-closed 노드 존재 (이모지 미사용)', () => {
+    const { container } = render(<BusinessStateBadge status="CLOSED" />);
+    expect(container.querySelector('.biz-dot.is-closed')).not.toBeNull();
+    expect(container.textContent).not.toMatch(/🟢|🔴/);
+  });
 });

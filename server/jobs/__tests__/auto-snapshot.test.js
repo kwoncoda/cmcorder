@@ -146,6 +146,27 @@ describe('startAutoSnapshot', () => {
     const files = readdirSync(dir).filter((f) => f.startsWith('auto-'));
     expect(files.length).toBe(0);
   });
+
+  // find_error_v3 — 백업 성공 시 AUTO_BACKUP admin_events 행 기록.
+  it('★ find_error_v3 — 백업 tick 성공 시 admin_events에 AUTO_BACKUP system 행 INSERT', async () => {
+    const db = freshDb();
+    const stop = startAutoSnapshot(db, {
+      dbPath: '/nonexistent.sqlite',
+      intervalMs: 50,
+      dir,
+    });
+    await new Promise((r) => setTimeout(r, 200));
+    stop();
+    await new Promise((r) => setTimeout(r, 50));
+    const row = db
+      .prepare(`SELECT * FROM admin_events WHERE event_type = 'AUTO_BACKUP'`)
+      .get();
+    expect(row).toBeDefined();
+    expect(row.category).toBe('system');
+    expect(row.actor).toBe('system');
+    expect(row.action_name).toBe('자동 백업');
+    expect(row.note).toMatch(/^auto-.*\.zip$/);
+  });
 });
 
 describe('자동 백업 회전 (maxBackups=2)', () => {

@@ -59,7 +59,7 @@ export default function CouponsPage() {
   if (list.length === 0) {
     return (
       <Wrap>
-        <div className="admin-page-head"><h1>🎫 쿠폰</h1></div>
+        <div className="admin-page-head"><h1>쿠폰</h1></div>
         <EmptyState variant="page" title="사용된 쿠폰이 없어요"
           description="쿠폰이 사용되면 자동으로 표시됩니다." mascot="default" />
       </Wrap>
@@ -68,9 +68,9 @@ export default function CouponsPage() {
 
   return (
     <Wrap>
-      <div className="admin-page-head"><h1>🎫 쿠폰 ({list.length}건)</h1></div>
+      <div className="admin-page-head"><h1>쿠폰 ({list.length}건)</h1></div>
       <div className="admin-info-bar">
-        <span>📊 사용 <b>{list.length}건</b> · 총 할인 <b>{totalDiscount.toLocaleString('ko-KR')}원</b></span>
+        <span>사용 <b>{list.length}건</b> · 총 할인 <b>{totalDiscount.toLocaleString('ko-KR')}원</b></span>
       </div>
       <div className="settle-grid">
         <div className="settle-card wide">

@@ -66,10 +66,9 @@ const OrderTimeline = forwardRef(function OrderTimeline(
           {STEPS.map((s, i) => {
             const time = history[s.key];
             const state = i < doneCount ? 'done' : i === doneCount ? 'current' : 'future';
-            const icon = state === 'done' ? '✅' : state === 'current' ? '🔄' : '⏳';
             return (
               <li key={s.key} className="flex items-center gap-xs" style={{ color: 'var(--color-muted)' }}>
-                <span aria-hidden="true">{icon}</span>
+                <span aria-hidden="true" className={`timeline-mini-dot timeline-mini-dot--${state}`} />
                 <span style={{ width: 48 }}>{s.short}</span>
                 <span style={{ color: 'var(--color-ink)' }}>{time ?? '—'}</span>
               </li>

@@ -338,6 +338,44 @@ describe('AdminCardColumn', () => {
     expect(ref.current).toBeInstanceOf(HTMLElement);
   });
 
+  // ── find_error_v3 — design-bundle .col / .col-head / .col-body / .order-card 클래스 정합 ──
+  it('★ find_error_v3 — 컬럼에 .col 클래스 + 헤더에 .col-head + body에 .col-body 적용', () => {
+    const orders = [mkOrder({ id: 17, no: 17 })];
+    render(
+      <AdminCardColumn title="이체" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    const col = screen.getByTestId('admin-column-TRANSFER_REPORTED');
+    expect(col.className).toMatch(/\bcol\b/);
+    expect(col.querySelector('.col-head')).not.toBeNull();
+    expect(col.querySelector('.col-body')).not.toBeNull();
+  });
+
+  it('★ find_error_v3 — 기본 카드에 .order-card 클래스 (5분 미만)', () => {
+    const orders = [mkOrder({ id: 1, no: 1, transferred_at: '2026-05-20T17:28:00' })];
+    render(
+      <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    const card = screen.getByTestId('admin-order-card-1');
+    expect(card.className).toMatch(/\border-card\b/);
+    expect(card.className).not.toMatch(/order-card warn|order-card danger/);
+  });
+
+  it('★ find_error_v3 — 5분 이상 카드에 .order-card.warn 클래스', () => {
+    const orders = [mkOrder({ id: 1, no: 1, transferred_at: '2026-05-20T17:24:00' })];
+    render(
+      <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-1').className).toMatch(/order-card warn/);
+  });
+
+  it('★ find_error_v3 — 10분 이상 카드에 .order-card.danger 클래스', () => {
+    const orders = [mkOrder({ id: 1, no: 1, transferred_at: '2026-05-20T17:19:00' })];
+    render(
+      <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-1').className).toMatch(/order-card danger/);
+  });
+
   it('a11y 위반 없음 (axe-core)', async () => {
     const orders = [mkOrder({ id: 17, no: 17 })];
     const { container } = render(
@@ -449,5 +487,27 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     const card = screen.getByTestId('admin-order-card-17');
     fireEvent.click(within(card).getByRole('button', { name: '이체 확인' }));
     expect(onAction).toHaveBeenCalledWith(17, 'PAID');
+  });
+
+  // ── find_error_v3 — 취소/보류 위험 액션은 btn-danger-outline 톤 다운 ──
+  it('★ find_error_v3 — ORDERED 카드 "취소" 버튼이 btn-danger-outline 클래스 (.btn-danger 미사용)', () => {
+    const orders = [mkOrder({ id: 17, no: 17, status: 'ORDERED' })];
+    render(
+      <AdminCardColumn title="x" status="ORDERED" orders={orders} tick={BASE_TICK} />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    const btn = within(card).getByRole('button', { name: '취소' });
+    expect(btn).toHaveClass('btn-danger-outline');
+    expect(btn).not.toHaveClass('btn-danger');
+  });
+
+  it('★ find_error_v3 — TRANSFER_REPORTED "보류" 버튼이 btn-danger-outline (확인은 btn-primary 유지)', () => {
+    const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
+    render(
+      <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    expect(within(card).getByRole('button', { name: '보류' })).toHaveClass('btn-danger-outline');
+    expect(within(card).getByRole('button', { name: '확인' })).toHaveClass('btn-primary');
   });
 });

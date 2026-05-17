@@ -68,7 +68,7 @@ export default function TransfersPage() {
   return (
     <Wrapper>
       <div className="p-md flex flex-col gap-md">
-        <h1 className="font-display font-black text-2xl">💸 이체 확인 ({list.length}건)</h1>
+        <h1 className="font-display font-black text-2xl">이체 확인 ({list.length}건)</h1>
         <ul className="flex flex-col gap-sm">
           {list.map((t) => (
             <li key={t.id}>
@@ -80,7 +80,7 @@ export default function TransfersPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className="font-display font-bold text-base">#{t.no}</span>
-                  <StatusChip status={t.status} size="sm" />
+                  <StatusChip status={t.status} size="sm" showIcon={false} />
                 </div>
                 <div className="flex justify-between text-sm mt-2xs">
                   <span>{t.depositor_name ?? '(이름 없음)'}</span>

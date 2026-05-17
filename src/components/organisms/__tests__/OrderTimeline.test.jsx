@@ -119,4 +119,17 @@ describe('OrderTimeline', () => {
     const r = await axe(container);
     expect(r).toHaveNoViolations();
   });
+
+  // ── find_error_v3 P2 (Codex 리뷰 2026-05-18) — 미니뷰는 CSS dot, 이모지 미노출 ──
+  it('★ P2: 미니뷰는 .timeline-mini-dot CSS dot으로 표시 (✅/🔄/⏳ 이모지 미노출)', () => {
+    const { container } = render(
+      <OrderTimeline current="COOKING" history={{ ORDERED: '17:30', COOKING: '17:38' }} />,
+    );
+    expect(container.querySelectorAll('.timeline-mini-dot').length).toBe(5);
+    expect(container.querySelectorAll('.timeline-mini-dot--done').length).toBe(3);
+    expect(container.querySelectorAll('.timeline-mini-dot--current').length).toBe(1);
+    expect(container.querySelectorAll('.timeline-mini-dot--future').length).toBe(1);
+    const text = container.textContent;
+    expect(text).not.toMatch(/[✅🔄⏳]/);
+  });
 });

@@ -3,6 +3,9 @@
 // 이모지는 aria-hidden=true (decorative) — 텍스트가 SR 읽음.
 // 알 수 없는 status fallback: ORDERED.
 // size: 'sm' (text-2xs), 'md' (text-xs, 기본).
+// find_error_v3 P2 (Codex 리뷰 2026-05-18) — showIcon prop:
+//   true (default): 이모지 노출 (고객 화면 회귀 보존)
+//   false:           이모지 숨김 (어드민 화면에서 사용)
 import { forwardRef } from 'react';
 
 // 8 상태별 라벨·이모지·색 매핑 (모듈 최상위 — §3.5 6조).
@@ -40,7 +43,7 @@ const BASE_CLASSES = [
 ].join(' ');
 
 const StatusChip = forwardRef(function StatusChip(
-  { status, size = 'md', className = '', ...rest },
+  { status, size = 'md', showIcon = true, className = '', ...rest },
   ref,
 ) {
   // 알 수 없는 status fallback: ORDERED.
@@ -51,7 +54,7 @@ const StatusChip = forwardRef(function StatusChip(
 
   return (
     <span ref={ref} className={cls} {...rest}>
-      <span aria-hidden="true">{config.icon}</span>
+      {showIcon && <span aria-hidden="true">{config.icon}</span>}
       <span>{config.label}</span>
     </span>
   );

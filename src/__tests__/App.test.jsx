@@ -85,20 +85,22 @@ describe('App 라우팅 — 관리자 페이지 (React.lazy 코드 스플릿)', 
 });
 
 // ── P1-4 (Codex v3) 관리자 nav ─────────────────────────────────
+// find_error_v3 (2026-05-18) — '이체확인' nav 제거 (라우트·페이지·API 는 보존).
 describe('App 라우팅 — 관리자 공통 nav (P1-4 F-A-004)', () => {
   it.each(['/admin/dashboard', '/admin/menus', '/admin/settlement', '/admin/transfers'])(
-    '%s 진입 시 관리자 nav가 본부/메뉴/내역/정산/쿠폰/이체확인 링크를 렌더',
+    '%s 진입 시 관리자 nav가 본부/메뉴/내역/정산/쿠폰 5개 링크를 렌더',
     async (path) => {
       renderAt(path);
       const nav = await screen.findByTestId('admin-nav');
       expect(nav).toBeInTheDocument();
-      // 6개 링크 (find_error_v2 — 내역·쿠폰 nav 복원)
+      // 5개 링크 (find_error_v3 — 이체확인 nav 제거)
       expect(screen.getByTestId('admin-nav-dashboard')).toHaveAttribute('href', '/admin/dashboard');
       expect(screen.getByTestId('admin-nav-menus')).toHaveAttribute('href', '/admin/menus');
       expect(screen.getByTestId('admin-nav-history')).toHaveAttribute('href', '/admin/history');
       expect(screen.getByTestId('admin-nav-settlement')).toHaveAttribute('href', '/admin/settlement');
       expect(screen.getByTestId('admin-nav-coupons')).toHaveAttribute('href', '/admin/coupons');
-      expect(screen.getByTestId('admin-nav-transfers')).toHaveAttribute('href', '/admin/transfers');
+      // 이체확인 nav 항목은 제거됨 — 라우트·페이지·API 는 보존되어 직접 접근은 가능.
+      expect(screen.queryByTestId('admin-nav-transfers')).toBeNull();
     },
   );
 

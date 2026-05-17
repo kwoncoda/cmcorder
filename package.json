@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "cross-env NODE_ENV=production vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -40,6 +40,7 @@
     "@vitejs/plugin-react": "^4.3.2",
     "autoprefixer": "^10.5.0",
     "axe-core": "^4.11.4",
+    "cross-env": "^10.1.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^5.2.0",
     "jsdom": "^25.0.1",

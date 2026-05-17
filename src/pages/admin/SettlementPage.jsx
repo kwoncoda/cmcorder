@@ -73,7 +73,7 @@ export default function SettlementPage() {
   return (
     <Wrapper>
       <div className="flex items-center justify-between gap-sm">
-        <h1 className="font-display font-black text-2xl">📊 정산 — {headerLabel}</h1>
+        <h1 className="font-display font-black text-2xl">정산 — {headerLabel}</h1>
         <select aria-label="정산 일자 선택" data-testid="settlement-date-select" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="bg-bg text-ink p-sm rounded-md border border-divider">
           {DATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -83,7 +83,7 @@ export default function SettlementPage() {
         <div className="flex justify-between"><span className="text-muted">총 매출</span><PriceTag value={settlement.total_amount} className="font-bold" /></div>
         <div className="flex justify-between"><span className="text-muted">진행 중 주문</span><span className="font-mono tabular-nums">{settlement.in_progress_count}건</span></div>
         <div className="flex justify-between" data-testid="coupon-summary">
-          <span className="text-muted">🎫 쿠폰</span>
+          <span className="text-muted">쿠폰</span>
           <span className="font-mono tabular-nums">{couponCount}건 · -{couponDiscountTotal.toLocaleString('ko-KR')}원</span>
         </div>
       </div>
@@ -104,15 +104,15 @@ export default function SettlementPage() {
       </div>
 
       {!isAggregate && settlement.in_progress_count > 0 && !settlement.is_closed && (
-        <p role="alert" className="text-warning text-sm" data-testid="close-guard">⚠️ 진행 중 주문 {settlement.in_progress_count}건이 있어 마감할 수 없어요 (ADR-012).</p>
+        <p role="alert" className="text-warning text-sm" data-testid="close-guard">진행 중 주문 {settlement.in_progress_count}건이 있어 마감할 수 없어요 (ADR-012).</p>
       )}
       {closeError && <p role="alert" className="text-danger text-sm" data-testid="close-error">{closeError}</p>}
 
       <div className="flex flex-col gap-sm">
         <Button variant="danger" size="lg" block loading={closing} disabled={!canClose} onClick={handleClose} data-testid="close-settlement-btn">
-          {isAggregate ? '🔒 (합산 보기 — 마감은 일자 선택 후)' : settlement.is_closed ? '✅ 마감 완료' : '🔒 오늘 정산 마감'}
+          {isAggregate ? '(합산 보기 — 마감은 일자 선택 후)' : settlement.is_closed ? '마감 완료' : '오늘 정산 마감'}
         </Button>
-        <Button variant="secondary" size="md" onClick={handleDownloadZip} data-testid="download-zip-btn">📦 ZIP 다운로드</Button>
+        <Button variant="secondary" size="md" onClick={handleDownloadZip} data-testid="download-zip-btn">ZIP 다운로드</Button>
       </div>
     </Wrapper>
   );

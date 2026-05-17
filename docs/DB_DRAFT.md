@@ -1,6 +1,10 @@
 # DB 초안 — 오늘 저녁은 치킨이닭!
 
 > ⚠️ **최신 결정 우선 (2026-05-15 갱신 — `docs/CODEX_REVIEW_v2_FIX_SUMMARY.md`):** §6 PII 보존 정책 → 운영자 수동 폐기 (ADR-027). orders 테이블에 `access_token` 컬럼 신규 (마이그레이션 002, P0-4). 본문에 남아있는 "정산 후 N일 자동 NULL" 표기는 D+7일 수동 절차 (`docs/operations/pii-deletion.md`)로 대체.
+>
+> ⚠️ **find_error_v3 변경 (2026-05-18, ADR-034):**
+> - `used_coupons.UNIQUE(student_id)` — 이전 `(student_id, name)`은 같은 학번/다른 이름으로 쿠폰 재사용 가능했던 P0 결함. 마이그레이션 `004-coupon-student-unique`로 idempotent table-rebuild.
+> - `admin_events` 테이블 신규 (`§2.10`) — 메뉴/시스템 이벤트 통합 로그. `order_events`는 주문 상태 변경 전용 유지. 마이그레이션 `005-admin-events` (CREATE IF NOT EXISTS).
 
 **작성일:** 2026-05-04 (`/plan-eng-review` 1차)
 **관련 문서:** `ARCHITECTURE.md` §3·§5, `API_DRAFT.md`, `DECISIONS.md`
@@ -336,6 +340,49 @@ CREATE TABLE admin_sessions (
   expires_at  INTEGER
 );
 ```
+
+### 2.10 `admin_events` ★ ADR-034 (find_error_v3)
+
+```sql
+CREATE TABLE admin_events (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  category        TEXT NOT NULL CHECK (category IN ('menu','system')),
+  event_type      TEXT NOT NULL,           -- 'SOLDOUT_ON' | 'SOLDOUT_OFF' | 'RECOMMEND_ON' | 'RECOMMEND_OFF' | 'PRICE_CHANGED' | 'BUSINESS_OPEN' | 'ADMIN_LOGIN' | 'AUTO_BACKUP'
+  action_name     TEXT NOT NULL,           -- 한국어 라벨 ('품절 처리', '가격 변경', '장사 시작', '관리자 로그인', '자동 백업' 등)
+  actor           TEXT NOT NULL,           -- 'admin' | 'system'
+  operating_date  TEXT,                    -- 모든 기록 지점에서 채움 (history?type=system 노출에 필수)
+  target_id       INTEGER,                 -- 메뉴 id 등
+  target_name     TEXT,                    -- 메뉴 name 등
+  before_value    TEXT,                    -- '17000' / 'false' 등 (PRICE_CHANGED/SOLDOUT_ON 등)
+  after_value     TEXT,
+  note            TEXT,                    -- AUTO_BACKUP의 zip 파일명 등
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_admin_events_created_at    ON admin_events(created_at);
+CREATE INDEX idx_admin_events_category      ON admin_events(category);
+CREATE INDEX idx_admin_events_operating_date ON admin_events(operating_date);
+```
+
+**기록 지점 (모두 `operating_date` 채움 — Codex P1-2 리뷰 2026-05-18):**
+
+| 지점 | category | event_type | actor | operating_date | 추가 필드 |
+|---|---|---|---|---|---|
+| `POST /admin/login` 성공 | system | ADMIN_LOGIN | admin | `business_state.operating_date` | — |
+| `POST /admin/api/business/open` 실제 전환 | system | BUSINESS_OPEN | admin | updated.operating_date | — |
+| `POST /admin/api/menus/:id/toggle` soldOut 변경 | menu | SOLDOUT_ON/OFF | admin | 현재 op_date | target_id/_name, before/after `'true'/'false'` |
+| 동 recommended | menu | RECOMMEND_ON/OFF | admin | 동 | 동 |
+| 동 base_price | menu | PRICE_CHANGED | admin | 동 | before/after 가격 문자열 |
+| `startAutoSnapshot.tick()` 성공 | system | AUTO_BACKUP | system | 현재 op_date | note=zip 파일명 |
+
+**역행성:**
+- before==after → row 미생성 (멱등 호출).
+- `BUSINESS_OPEN`은 실제 CLOSED→OPEN 전환 시에만 (멱등 OPEN→OPEN skip).
+- `ADMIN_LOGIN`은 PIN 일치 성공 시에만.
+- `AUTO_BACKUP`은 ZIP 생성 성공 시에만.
+- 메뉴 toggle + 로그 INSERT는 **단일 트랜잭션** (P2 보완) — 로그 실패 시 메뉴 변경도 ROLLBACK.
+
+**조회:** `GET /admin/api/history?type=all|orders|menus|system` (API_DRAFT §2.27)는 `order_events`와 `admin_events`를 통합 응답으로 반환. type 별 source/category 필터.
 
 ### 2.10 `settlement_snapshots`
 

@@ -191,6 +191,109 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
     expect(dup.body.error).toBe('ALREADY_USED');
   });
 
+  // ── find_error_v3 (2026-05-18) — 쿠폰 중복 기준 student_id 단일화 ─────
+  it('★ find_error_v3 — 같은 학번 다른 이름으로 쿠폰 재사용 시도 → 400 ALREADY_USED', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const first = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(first.status).toBe(200);
+
+    // 같은 학번에 이름만 다른 두 번째 쿠폰 주문 → 거부.
+    const dup = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '김철수',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(dup.status).toBe(400);
+    expect(dup.body.error).toBe('ALREADY_USED');
+    expect(dup.body.message).toBe('이미 쿠폰을 사용한 학번이에요.');
+  });
+
+  it('★ find_error_v3 — 쿠폰 사용한 학번도 쿠폰 없는 일반 주문은 성공', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    // 1. 쿠폰 사용 주문 (학번 A, 이름 X)
+    const couponOrder = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(couponOrder.status).toBe(200);
+    expect(couponOrder.body.total_price).toBe(17000); // 1,000원 할인
+
+    // 2. 같은 학번 + 다른 이름 + coupon 없음 → 정상 (할인 X)
+    const plain = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '김철수',
+        student_id: '202637001',
+        is_external: false,
+      });
+    expect(plain.status).toBe(200);
+    expect(plain.body.total_price).toBe(18000); // 할인 없음
+
+    // 3. 같은 학번 + 동일 이름 + coupon.used=false → 정상
+    const plainSameName = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: false },
+      });
+    expect(plainSameName.status).toBe(200);
+    expect(plainSameName.body.total_price).toBe(18000);
+  });
+
+  it('★ find_error_v3 — 같은 학번 다른 이름 쿠폰 시도 실패 후 DB는 첫 쿠폰만 보존', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: true },
+      });
+    const dup = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '김철수',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: true },
+      });
+    expect(dup.status).toBe(400);
+
+    // used_coupons는 첫 주문(홍길동) 1행만 유지.
+    const rows = db
+      .prepare('SELECT student_id, name FROM used_coupons WHERE student_id = ?')
+      .all('202637001');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('홍길동');
+  });
+
   // ── P0-3 (Codex 리뷰) 쿠폰 할인 위변조 방어 ───────────────────
   // pricing.js는 coupon.used만 보고 1,000원 할인. 이후 consumeCoupon은 student_id가
   // 있을 때만 실행하므로, 외부인이거나 학번 없이 coupon: { used: true } 보내면

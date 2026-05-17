@@ -36,6 +36,14 @@ const SAMPLE_MENUS = [
   { id: 3, code: 'BHC_HALFNHALF', name: '반반', category: 'chicken', basePrice: 19500, soldOut: true, recommended: false },
 ];
 
+// find_error_v3 — 효과 표시 회귀 데이터 (API 가 sub 를 안 내려도 code 기준 정적 매핑으로 표시).
+const EFFECT_MENUS = [
+  { id: 11, code: 'BANDAGE',    name: '후라이드',     category: 'chicken', basePrice: 18000, soldOut: false, recommended: false },
+  { id: 13, code: 'MED_KIT',    name: '뿌링클',       category: 'chicken', basePrice: 21000, soldOut: false, recommended: true  },
+  { id: 16, code: 'ADRENALINE', name: '칠리스',       category: 'side',    basePrice: 6000,  soldOut: false, recommended: false },
+  { id: 99, code: 'UNKNOWN_NEW', name: '미정',        category: 'side',    basePrice: 1000,  soldOut: false, recommended: false },
+];
+
 function renderPage(initialPath = '/admin/menus') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
@@ -177,6 +185,31 @@ describe('MenuAdminPage', () => {
     expect(screen.getByTestId('price-input-1')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('cancel-price-1'));
     expect(screen.queryByTestId('price-input-1')).toBeNull();
+  });
+
+  // ── find_error_v3 — 메뉴별 효과 표시 (정적 매핑) ──────────────
+  it('★ find_error_v3 — code=BANDAGE 행에 "회복량 +10" 표시', () => {
+    useApi.mockReturnValue({ data: EFFECT_MENUS, isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    expect(screen.getByTestId('menu-row-11')).toHaveTextContent('회복량 +10');
+  });
+
+  it('★ find_error_v3 — code=MED_KIT 행에 "회복량 +100" 표시', () => {
+    useApi.mockReturnValue({ data: EFFECT_MENUS, isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    expect(screen.getByTestId('menu-row-13')).toHaveTextContent('회복량 +100');
+  });
+
+  it('★ find_error_v3 — code=ADRENALINE 행에 "부스트 +100%" 표시', () => {
+    useApi.mockReturnValue({ data: EFFECT_MENUS, isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    expect(screen.getByTestId('menu-row-16')).toHaveTextContent('부스트 +100%');
+  });
+
+  it('★ find_error_v3 — 미매핑 code 는 "—" fallback (UI 깨짐 X)', () => {
+    useApi.mockReturnValue({ data: EFFECT_MENUS, isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    expect(screen.getByTestId('menu-row-99')).toHaveTextContent('—');
   });
 
   it('★ a11y 위반 없음', async () => {

@@ -1236,6 +1236,107 @@ F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 
 
 ---
 
+## ADR-034: find_error_v3 — 쿠폰 student_id UNIQUE / admin_events / 어드민 UX 정합
+
+**상태:** Accepted (2026-05-18)
+
+**컨텍스트:**
+- find_error_v2 머지 후 실사용 테스트에서 6개 결함 발견.
+  1. 같은 학번이라도 이름이 다르면 쿠폰 재사용 가능 (P0 운영 직격탄)
+  2. 관리자 내역이 주문 상태 변경 로그 1종만 보여줘 운영 가시성 부족 (메뉴 변경/장사 시작/관리자 로그인/자동 백업 추적 불가)
+  3. 어드민 메뉴 페이지에 메뉴 효과 컬럼은 있으나 API가 sub 필드를 안 내려줘 `—`만 표시
+  4. 어드민 nav의 이체확인 탭이 본부 대시보드와 기능 중복 (운영자 혼란)
+  5. 쿠폰 라벨/학과 코드 안내가 장황하고, `admin1` 내부 ID가 사용자 화면에 노출
+  6. CLOSED 상태에서 6컬럼 미렌더 + 어드민 페이지 이모지 + 빨간 취소 버튼 등 design-bundle 정합 미달
+- 사용자 결정사항: 기존 운영 DB 없음(초기화 예정) / 자동 백업·관리자 로그인 로그 포함 / 이체확인 라우트·API·페이지는 보존 / 메뉴 효과는 프론트 정적 매핑.
+- Codex 리뷰(2026-05-18)에서 P1 2건 발견: Windows 호스트 `npm run build` 실패(NODE_ENV 환경변수 prefix), `ADMIN_LOGIN`이 system history에 미노출(`operating_date` NULL로 listAdminEvents에서 제외).
+
+**결정:**
+
+1. **쿠폰 중복 기준 = `student_id` 단일.**
+   - `used_coupons`의 UNIQUE 제약을 `(student_id, name)` → `(student_id)` 로 변경.
+   - `validateCoupon`은 `student_id`만으로 중복 검사.
+   - 에러 코드 `ALREADY_USED`, 메시지 `이미 쿠폰을 사용한 학번이에요.` (ADR-019 변경 — 검증 단계 4번 "duplicate"가 학번 기준임을 명시).
+   - 쿠폰을 이미 사용한 학번도 쿠폰 없는 일반 주문은 정상 가능 (`consumeCoupon`은 `coupon.used`일 때만 호출).
+   - 마이그레이션 `004-coupon-student-unique`는 기존 `(student_id, name)` UNIQUE 발견 시 table-rebuild (`INSERT OR IGNORE`로 첫 행만 유지) idempotent 처리. 기존 운영 DB 없는 결정 전제에서 신규 DB는 init.sql 단일 unique로 시작.
+
+2. **`admin_events` 테이블 신설 — 메뉴/시스템 이벤트 통합 로그.**
+   - 기존 `order_events`는 주문 상태 변경 전용(`order_id NOT NULL`)이라 메뉴/시스템 이벤트와 맞지 않음. 신규 테이블로 분리.
+   - 스키마: `(id, category('menu'|'system'), event_type, action_name, actor, operating_date, target_id, target_name, before_value, after_value, note, created_at)` + 3 인덱스 (`created_at`, `category`, `operating_date`).
+   - 기록 지점:
+     - `POST /admin/api/menus/:id/toggle` patch 항목별 (`SOLDOUT_ON/OFF`, `RECOMMEND_ON/OFF`, `PRICE_CHANGED`). 메뉴 변경과 로그 INSERT를 **단일 트랜잭션**으로 묶어 atomicity 보장 (P2 보완).
+     - `POST /admin/api/business/open` 실제 전환 시 `BUSINESS_OPEN` (멱등 호출은 skip).
+     - `POST /admin/login` 성공 시 `ADMIN_LOGIN` — `operating_date`는 현재 `business_state.operating_date`로 채워 history?type=system에 노출.
+     - `startAutoSnapshot.tick()` 성공 시 `AUTO_BACKUP`.
+   - 마이그레이션 `005-admin-events` (idempotent CREATE IF NOT EXISTS).
+
+3. **`GET /admin/api/history?type=all|orders|menus|system` — 통합 감사 로그 API.**
+   - `order_events` + `admin_events`를 합쳐 응답. type 필터별 source 선택. id는 `o-<id>`/`a-<id>` source-prefix로 통합 unique.
+   - `created_at`은 ISO 8601 Z 형식 (Bug 7 정합).
+   - type allowlist 검증 (P2): `{'all','orders','menus','system'}` 외 값은 400 `INVALID_HISTORY_TYPE`.
+
+4. **어드민 UX 정합 (design-bundle 기준).**
+   - 어드민 nav 6 → 5 (이체확인 제거). `/admin/transfers` 라우트·`TransfersPage.jsx`·`GET /admin/api/transfers`·대시보드 `TRANSFER_REPORTED` 컬럼 액션은 모두 보존.
+   - CLOSED 상태에서 `.start-cta` 카드 안에 `<StartBusinessCTA>` 배치 + 6컬럼 동시 렌더 (장사 시작 전에도 영업 흐름 시각화).
+   - 어드민 텍스트 이모지 제거 (`🍽️`, `💡`, `🔥`, `📜`, `🎫`, `🚀`, `📋`, `🔴`, `🟢` 등). OPEN dot은 CSS `.biz-dot.is-open` + `.open-status .open-dot::before`로 유지. `StatusChip`은 `showIcon` prop으로 어드민에서만 이모지 hide (고객 화면 회귀 보존). `OrderTimeline` 미니뷰는 `.timeline-mini-dot` CSS 도트로 영구 교체 (미니뷰는 어드민 OrderDetailPage에서만 노출).
+   - `AdminCardColumn`에 `.col`/`.col-head`/`.col-body` + `.order-card` 클래스 추가 (design-bundle CSS 정합).
+   - 취소/보류 버튼 `btn-danger` → `btn-danger-outline` (투명 배경 + outline). 위험 액션임은 유지하면서 시각 부담 감소.
+   - 쿠폰 라벨 `🎫 쿠폰 사용 (컴모융 학생 한정 1,000원 할인)` → `컴모융 학생 1,000원 할인`. 학과 코드 안내 (`※ 컴모융(****37***) 학생만…`) 삭제 → 통합 안내 `※ 학번 9자리 + 이름 입력 시 활성화됩니다.`.
+   - `admin1` 등 actor 표시는 `displayActor()` helper로 `어드민` 변환. **내부 actor 값(`admin`/`admin1`/`customer`/`system`)은 보존**, 표시 계층에서만 변환.
+
+5. **메뉴 효과 정적 매핑 (DB/API 확장 없음).**
+   - `src/constants/menu-effects.js`가 `MENUS`의 `sub` 필드에서 derive (`MENU_EFFECT_BY_CODE` frozen + `effectForCode(code)`).
+   - `MenuAdminPage.jsx`에서 `{m.sub ?? '—'}` → `{effectForCode(m.code)}`. 없는 code는 `'—'` fallback.
+   - 사용자 메뉴 화면(`MenuPage`)은 미수정.
+
+6. **빌드 cross-platform 정합 (P1-1, Codex 리뷰 2026-05-18).**
+   - `package.json` build 스크립트: `"build": "cross-env NODE_ENV=production vite build"`. dev 컨테이너의 `NODE_ENV=development` env가 vite의 `import.meta.env.DEV`를 오염시켜 axe-core가 prod 번들에 흘러들어가던 잠재 회귀 차단.
+   - `cross-env@^10.1.0`을 devDependency로 추가. Windows / macOS / Linux / Docker 모두 동일 동작.
+   - `bundle.test.js` (production 번들에 axe-core 흔적 없음)으로 회귀 보호.
+
+**결과:**
+
+- DB: `used_coupons.UNIQUE(student_id)`, `admin_events` 테이블 신설. 마이그레이션 004/005.
+- 백엔드: `coupon.js`/`coupon-repo.js`/`admin.js`/`auto-snapshot.js` 변경. 신규 `admin-events-repo.js`.
+- 프론트: `AdminLayout`/`HistoryPage`/`DashboardPage`/`AdminCardColumn`/`StatusChip`/`OrderTimeline`/`MenuAdminPage`/`CheckoutPage` 등 변경. 신규 `menu-effects.js`/`admin-display.js`.
+- 빌드: `package.json` + `package-lock.json` cross-env 도입.
+- 테스트: 1009(main) → 1167 케이스 (+158). 신규 모듈 6개에 단위 테스트 추가.
+- lint 0 errors / build production 단일 entry 303.79kB / Windows·docker 모두 통과.
+
+**대안 검토:**
+
+- ❌ `used_coupons`에 unique를 두지 않고 애플리케이션 레벨만으로 검사 — race condition 차단 불가.
+- ❌ `order_events`를 확장해 `order_id NULLABLE`로 메뉴/시스템 이벤트도 통합 — 기존 데이터/제약/JOIN 회귀 위험. 별도 테이블이 단순.
+- ❌ `vite build`만 그대로 두고 dev 컨테이너 `NODE_ENV`만 production으로 — dev 서버가 production mode로 부팅되어 hot reload 깨짐.
+- ❌ `node scripts/build.mjs` wrapper만 사용 — cross-env가 더 표준이고 의존성 명시가 명확.
+- ✅ 채택: 위 6개 결정 묶음. 일회성 D-day 운영 + 사용자 결정사항(기존 DB 없음, 자동 백업/로그인 로그 포함, 이체확인 라우트 보존, 메뉴 효과 정적) 모두 정합.
+
+**회귀 가드 (★):**
+
+- `server/db/init.sql` `used_coupons.UNIQUE(student_id)` + `admin_events` 테이블 보존. 마이그레이션 004/005도 보존.
+- `server/routes/admin.js` 메뉴 toggle 트랜잭션 + history type allowlist + ADMIN_LOGIN operating_date 채움 보존.
+- `package.json` build 스크립트의 `cross-env NODE_ENV=production` prefix 보존.
+- 어드민 이모지 제거는 `StatusChip.showIcon` / `OrderTimeline timeline-mini-dot` / 기타 텍스트 이모지 0건 유지.
+- 회귀 테스트:
+  - `server/domain/__tests__/coupon.test.js` (find_error_v3 student_id 단일 케이스 5건)
+  - `server/routes/__tests__/customer.test.js` (학번 재사용 차단 + 쿠폰 없는 일반 주문 4건)
+  - `server/repositories/__tests__/admin-events-repo.test.js` (7건)
+  - `server/routes/__tests__/admin.test.js` (history type 필터 / 메뉴 toggle / ADMIN_LOGIN system 노출 / type allowlist / 트랜잭션 ROLLBACK)
+  - `src/components/molecules/__tests__/StatusChip.test.jsx` (showIcon)
+  - `src/components/organisms/__tests__/OrderTimeline.test.jsx` (timeline-mini-dot)
+  - `src/__tests__/bundle.test.js` (production 번들 axe-core 0)
+
+**문서 영향:**
+
+- `docs/DB_DRAFT.md` — `used_coupons.UNIQUE(student_id)` 변경 노트 + 2.10 `admin_events` 신규
+- `docs/API_DRAFT.md` — `GET /admin/api/history?type=` 통합 응답 / type allowlist
+- `CLAUDE.md` — 절대 깨지면 안 되는 것에 ADR-034 추가, 명령 섹션의 build에 cross-env 반영
+- `docs/tasks/2026-05-18-find_error_v3.md` — 본 ADR 적용 작업 로그 (Subagent 1~5 + Codex 후속 수정)
+- `docs/find_error_v3_development_plan.md`/`_qa_plan.md`/`_work_instruction.md` — Codex가 작성한 사용자 선택 반영 기획서/QA/작업지시서
+- `codereview/codex_find_error_v3_review.md` — Codex 코드 리뷰 (P1 2건 → 본 ADR이 반영)
+
+---
+
 ## 변경 로그
 
 | 날짜 | 변경 |
@@ -1273,3 +1374,4 @@ F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 
 | 2026-05-10 | UX_STRATEGY.md §4 UX-8(키보드 단축키 12종)·§5.1(자동 조리 현황 진입)·§7.5(카피 일정)·§8.6(외부인 공유 시나리오) 갱신 |
 | 2026-05-10 | docs/DESIGN_REVIEW.md 신규 작성 |
 | 2026-05-18 | ADR-033 신규 수용 (검증·테스트·dev는 docker 환경에서만 — 호스트 npm 직접 호출 금지). 2026-05-17 CLOSED 가드 정적 자산 회귀 사고가 직접 계기. Dockerfile.dev + docker-compose.dev.yml 신규. |
+| 2026-05-18 | ADR-034 신규 수용 (find_error_v3 — 쿠폰 student_id UNIQUE / admin_events / 어드민 UX 정합 / cross-env build). 실사용 6개 결함 + Codex P1 2건 통합. 1167/1167 통과. |

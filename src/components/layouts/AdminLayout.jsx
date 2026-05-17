@@ -1,7 +1,8 @@
 // AdminLayout — design-bundle .admin-shell + .admin-topnav (screens-admin.jsx:48-76) 정합.
-// nav: 본부 / 메뉴 / 내역 / 정산 / 쿠폰 / 이체확인 + biz-badge + admin1 + 로그아웃.
+// nav: 본부 / 메뉴 / 내역 / 정산 / 쿠폰 + biz-badge + 어드민 + 로그아웃.
 // find_error_v2 (2026-05-18) — 내역(history)·쿠폰(coupons) nav 복원.
 //   Bug 11에서 미구현이라 hide했으나 본 task에서 API/라우트/페이지 모두 구현 완료.
+// find_error_v3 (2026-05-18) — 이체확인 nav 제거 (라우트·페이지·API 보존) + admin1 → 어드민 라벨 변환.
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { apiFetch, ApiError } from '../../api/client.js';
@@ -9,15 +10,15 @@ import { API } from '../../api/routes.js';
 import { useApi } from '../../hooks/useApi.js';
 import { BusinessStateSchema } from '../../api/schemas.js';
 import useBusinessStateStore from '../../store/businessState.js';
+import { displayActor } from '../../utils/admin-display.js';
 
-// 6종 nav — design-bundle screens-admin.jsx:52-57 순서 정합.
+// 5종 nav — find_error_v3: 이체확인 제거 (대시보드 TRANSFER_REPORTED 컬럼이 대체).
 const ITEMS = [
   { to: '/admin/dashboard',  label: '본부',     testid: 'admin-nav-dashboard' },
   { to: '/admin/menus',      label: '메뉴',     testid: 'admin-nav-menus' },
   { to: '/admin/history',    label: '내역',     testid: 'admin-nav-history' },
   { to: '/admin/settlement', label: '정산',     testid: 'admin-nav-settlement' },
   { to: '/admin/coupons',    label: '쿠폰',     testid: 'admin-nav-coupons' },
-  { to: '/admin/transfers',  label: '이체확인', testid: 'admin-nav-transfers' },
 ];
 
 function formatNow() {
@@ -57,10 +58,10 @@ export default function AdminLayout() {
           </div>
           <div className="right">
             <span className={`biz-badge ${status === 'OPEN' ? 'open' : 'closed'}`} aria-live="polite" data-testid="admin-biz-badge">
-              <span aria-hidden="true">{status === 'OPEN' ? '🟢' : '🔴'}</span>{status === 'OPEN' ? 'OPEN' : 'CLOSED'}
+              <span aria-hidden="true" className={`biz-dot ${status === 'OPEN' ? 'is-open' : 'is-closed'}`} />{status === 'OPEN' ? 'OPEN' : 'CLOSED'}
             </span>
             <span>{formatNow()}</span>
-            <span>admin1</span>
+            <span>{displayActor('admin1')}</span>
             <button type="button" className="nav-link" data-testid="admin-logout-btn" onClick={handleLogout}
               style={{ color: 'var(--color-muted)', cursor: 'pointer' }}>로그아웃</button>
           </div>

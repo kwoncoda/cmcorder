@@ -85,3 +85,25 @@ export const ApiErrorSchema = z.union([
     details: z.unknown().optional(),
   }),
 ]);
+
+// ── 관리자 내역 (find_error_v3 — 통합 감사 로그) ────────────────
+// order_events + admin_events 통일 row. id는 source-prefix 문자열.
+export const HistoryRowSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  category: z.string(),
+  event_type: z.string(),
+  action_name: z.string(),
+  actor: z.string(),
+  order_id: z.number().nullable(),
+  order_no: z.number().nullable(),
+  from_status: z.string().nullable(),
+  to_status: z.string().nullable(),
+  target_id: z.number().nullable(),
+  target_name: z.string().nullable(),
+  before_value: z.string().nullable(),
+  after_value: z.string().nullable(),
+  note: z.string().nullable(),
+  created_at: z.string(),
+});
+export const HistoryListSchema = z.array(HistoryRowSchema);
