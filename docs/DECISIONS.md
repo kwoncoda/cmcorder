@@ -1146,6 +1146,79 @@ F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 
 
 ---
 
+## ADR-033: 검증·테스트·dev는 docker 환경에서만 (호스트 npm 직접 호출 금지)
+
+> ADR-027 ~ ADR-032 모두 점유 (2026-05-15 Codex 리뷰 v1/v2/v3) → 본 ADR은 033으로 할당.
+
+**상태:** Accepted (2026-05-18)
+
+**컨텍스트:**
+- 2026-05-17 사고: 사용자가 마스코트(군모) → 웹로고 교체 작업 후 호스트 `npm test` 1005/1005 통과. 커밋 머지 후 prod 컨테이너 재빌드(`docker compose build --no-cache app && up -d`)까지 완료했으나, 브라우저에서 웹로고 broken 표시.
+- 원인 진단 결과: `server/middleware/business-state.js`의 `isGetPassthrough` 화이트리스트가 `/assets/`, `/favicon.ico`, `/robots.txt` 만 통과시키고 `/web-logo.png`, `/mascot/mascot.png`, `/items/*.webp`, `/map/*` 등 public/ root 정적 자산 누락. CLOSED 상태에서 가드가 모든 사용자 정적 자산 GET을 `/closed`로 302 redirect → 브라우저가 HTML 받아 broken.
+- **거대 회귀**가 호스트 vitest로는 안 잡힘 (vitest는 미들웨어 unit test만, 실제 prod HTTP flow는 검증 안 함). 메뉴 이미지 포함 모든 사용자 자산이 CLOSED 시 죽는 D-day 운영 직격탄.
+- 일회성 D-day 운영 서비스라 다음 사고가 결정적이며 회복 시간 없음 (사용자 메모리: "일회성 서비스 — 내년 고려 X").
+
+**결정:**
+
+1. **모든 dev·테스트·검증은 docker 컨테이너 안에서 실행**. 호스트 `npm test`, `npm run dev`, `npm run server:watch`, `npm run build`, `npm run lint`, `npm run test:e2e` 직접 호출 **금지**.
+
+2. **인프라:**
+   - `Dockerfile.dev` — node:20-alpine + `npm ci --include=dev` (vitest/supertest/playwright/eslint 포함)
+   - `docker-compose.dev.yml` — host 코드 volume mount (`.:/app`) + node_modules 익명 volume + ports 5173/3000 + `tail -f /dev/null`로 백그라운드 유지
+   - 운영 compose(`docker-compose.yml`)와 별개 volume·port
+
+3. **표준 명령 패턴:**
+   ```bash
+   # 한 번만
+   docker compose -f docker-compose.dev.yml up -d
+   # 이후 모든 명령은 exec
+   docker compose -f docker-compose.dev.yml exec dev npm test
+   docker compose -f docker-compose.dev.yml exec dev npm run dev
+   docker compose -f docker-compose.dev.yml exec dev npm run server:watch
+   docker compose -f docker-compose.dev.yml exec dev npm run test:e2e
+   ```
+
+4. **운영 경로 사이드체크 (필수)** — 서버 미들웨어·정적 자산·nginx 변경 시 단위 통과만으로 안전 가정 X. 운영 컨테이너 재빌드 후 `curl -sI` 로 응답 코드·헤더 직접 검증.
+   ```bash
+   docker compose up -d --build
+   curl -sI http://localhost/web-logo.png         # 200, Content-Type: image/png 기대
+   curl -sI http://localhost/mascot/mascot.png    # 200, Content-Type: image/png 기대
+   ```
+
+5. **CLAUDE.md 작업 절차 4단계화** — 기존 3단계(작업 → 테스트 → 로그)에 4단계 추가: 정적 자산/미들웨어/nginx 영향 시 운영 경로 사이드체크 강제.
+
+6. **회귀 추가:** `server/middleware/__tests__/business-state.test.js`에 정적 자산 확장자 화이트리스트 회귀 4건 (`.png`, `.webp`, `.svg`, mascot/items/map prefix) 추가 (12 → 16 케이스).
+
+7. **미들웨어 fix:** `isGetPassthrough`에 확장자 기반 화이트리스트 추가:
+   ```js
+   const STATIC_ASSET_EXT = /\.(png|jpe?g|webp|gif|svg|ico|css|js|map|woff2?|ttf|eot|webmanifest)$/i;
+   if (STATIC_ASSET_EXT.test(path)) return true;
+   ```
+   SPA 라우트는 확장자 없으므로 충돌 없음.
+
+**결과:**
+- 사고 직후 1009/1009 통과 + docker dev 환경에서도 동일 통과 검증
+- 사용자가 D-day 직전 1차 사고 발생 후 정책으로 도입 — "다음 사고는 결정적"이라는 인식이 정책 강화의 직접 동기
+
+**대안 검토:**
+- ❌ host npm 유지 + docker 통합 검증만 게이트화 — 사용자 의지 (모든 검증 docker)에 못 미침. 또 잊을 가능성.
+- ❌ host와 docker 양쪽 자동화 — 인프라 복잡도만 늘어남.
+- ✅ docker 단일화 — Windows native 빌드 이슈 회피 + prod와 환경 일치 + 사고 재발 차단. trade-off는 vitest 60초 → 200초 (Windows Docker Desktop volume mount overhead). D-day 임박이라 신뢰성 > 속도.
+
+**회귀 가드 (★):**
+- `Dockerfile.dev`, `docker-compose.dev.yml`은 commit 필수. 누락 시 새 환경에서 정책 실행 불가.
+- CLAUDE.md "★ 호스트 npm 직접 실행 금지" 줄은 보존 필수.
+- 정책 위반 (호스트 npm 사용)이 일회성 실수로 끝나도록 작업 절차 4단계의 docker 명령 예시를 명확히 유지.
+
+**문서 영향:**
+- `CLAUDE.md` — 명령 섹션 + 작업 절차 4단계화 + 절대 깨지면 안 되는 것에 ADR-033 추가
+- `docs/TEST_PLAN.md` — 실행 명령 + CI yml 예시 docker 형태로
+- `docs/operations/admin-card.md` — 운영 명령 동일 명령 패턴 통일
+- `docs/operations/d1-rehearsal.md` — 리허설 체크 명령 docker 형태로
+- `docs/tasks/2026-05-18-docker-only-policy.md` — 본 ADR 적용 작업 로그
+
+---
+
 ## 변경 로그
 
 | 날짜 | 변경 |
@@ -1182,3 +1255,4 @@ F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 
 | 2026-05-10 | DESIGN.md §2.3·§4.1·§4.2(체크박스 강조)·§5.2(WINNER 줄바꿈)·§9.3(sessionStorage) 갱신 |
 | 2026-05-10 | UX_STRATEGY.md §4 UX-8(키보드 단축키 12종)·§5.1(자동 조리 현황 진입)·§7.5(카피 일정)·§8.6(외부인 공유 시나리오) 갱신 |
 | 2026-05-10 | docs/DESIGN_REVIEW.md 신규 작성 |
+| 2026-05-18 | ADR-033 신규 수용 (검증·테스트·dev는 docker 환경에서만 — 호스트 npm 직접 호출 금지). 2026-05-17 CLOSED 가드 정적 자산 회귀 사고가 직접 계기. Dockerfile.dev + docker-compose.dev.yml 신규. |

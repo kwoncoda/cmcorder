@@ -1,0 +1,42 @@
+# 치킨이닭 dev/test 컨테이너 — ADR-033 (2026-05-18).
+#
+# 정책: 검증·테스트·dev 명령은 항상 docker compose 환경에서 실행.
+#   host npm test 통과만으로는 prod 회귀를 못 잡는 사고가 있었음
+#   (CLOSED 가드가 정적 자산을 가로채던 거대 회귀 — 호스트 vitest 1005/1005 통과,
+#    실제 컨테이너 응답은 423/302). 자세한 내용은 docs/DECISIONS.md ADR-033.
+#
+# 운영 이미지(Dockerfile)는 prod-only (npm ci --omit=dev) 라 vitest 부재.
+# 본 이미지에는 devDependencies(vitest, supertest, playwright, eslint 등) 포함.
+#
+# 사용:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml exec dev npm test
+#   docker compose -f docker-compose.dev.yml exec dev npm run dev
+#   docker compose -f docker-compose.dev.yml exec dev npm run server:watch
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# better-sqlite3 네이티브 빌드 + Playwright 의존 — dev/test 환경이라 cleanup 불요.
+RUN apk add --no-cache python3 make g++ bash
+
+# 의존성만 먼저 — 코드 변경 시 npm ci 재실행 회피.
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
+
+# 코드는 volume mount로 주입 (docker-compose.dev.yml: `.:/app`).
+# 이 단계 COPY는 컨테이너 첫 실행 시점에 fallback (volume override됨).
+COPY . .
+
+# 데이터 디렉토리 — host volume 미사용 시 컨테이너 내부에 SQLite 생성.
+RUN mkdir -p /app/data
+
+ENV NODE_ENV=development
+ENV PORT=3000
+
+EXPOSE 3000 5173
+
+# 컨테이너 살아있게 유지 → exec로 임의 명령 실행.
+# (실제 dev/test 명령은 docker compose exec dev <command>로 호출)
+CMD ["tail", "-f", "/dev/null"]

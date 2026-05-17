@@ -13,28 +13,40 @@
 - [ ] 마스코트 이미지 5장 — D-3 수령 (미수령 시 이모지 fallback 자동)
 - [ ] PUBG 일러스트 8장 — D-3 수령 (미수령 시 분류 이모지 fallback)
 
-## 2. SW 가동
+## 2. SW 가동 (★ 운영 compose — ADR-033 dev/test compose 와 별개)
 
 ```bash
 cd C:\ACoding\09_order
 docker compose down       # 기존 컨테이너 정리
 docker compose up -d --build
-docker compose logs -f api | head -50
+docker compose logs -f app | head -50
 ```
 
 - [ ] `[INIT] Generated admin PIN: XXXXXX` 메모
-- [ ] `[server] 치킨이닭 백엔드 가동 — http://localhost:3000` 확인
-- [ ] `curl http://localhost:3000/healthz` → `{"ok":true}`
+- [ ] `[server] 치킨이닭 백엔드 가동 — http://localhost:3000` 확인 (내부망 expose)
+- [ ] `curl http://localhost/healthz` → `{"ok":true}` (nginx :80 경유 → app:3000 프록시)
+
+### 2-A. ★ 정적 자산 사이드체크 (ADR-033 사고 재발 방지)
+
+CLOSED 가드가 정적 자산을 가로채던 회귀(2026-05-17)가 재발하지 않도록 가동 직후 *반드시* 확인:
+
+```bash
+curl -sI http://localhost/web-logo.png       # HTTP/1.1 200 OK + Content-Type: image/png
+curl -sI http://localhost/mascot/mascot.png  # 동일
+curl -sI http://localhost/items/adrenaline.webp  # 동일 (200 + image/webp)
+```
+
+- [ ] 세 응답 모두 `200 OK` + `Content-Type: image/*` 기대. 302/423/text/html 응답 시 → CLOSED 가드 정적 자산 화이트리스트(`server/middleware/business-state.js` `STATIC_ASSET_EXT`) 누락. ADR-033 §6 회귀 테스트(`business-state.test.js`)도 통과인지 같이 확인.
 
 ## 3. 어드민 진입
 
-- [ ] `/admin/login` PIN 입력 → `/admin/dashboard`
+- [ ] `http://localhost/admin/login` PIN 입력 → `/admin/dashboard`
 - [ ] 빨간 CLOSED 배지 확인
 - [ ] "장사 시작" 클릭 → 녹색 OPEN 배지 전환
 
 ## 4. 학생 주문 시나리오 (모바일)
 
-- [ ] `http://<노트북IP>:3000/menu` 진입 (모바일 폰, 같은 Wi-Fi)
+- [ ] `http://<노트북IP>/menu` 진입 (모바일 폰, 같은 Wi-Fi — nginx :80)
 - [ ] 메뉴 카테고리 탭 동작 확인
 - [ ] 메뉴 "줍기" → `/cart` → `/checkout`
 - [ ] 학번 `20263701` + 이름 입력 → `/orders/:id/complete` (도그태그 떨어지는 모션)
@@ -80,6 +92,12 @@ docker compose logs -f api | head -50
 - [ ] axe-core 위반 0 (모든 페이지 진입 후 dev 콘솔)
 - [ ] 단축키 4종 (`Enter`, `Esc`, `Tab`, `?`) 작동
 - [ ] reduced motion 시뮬 (OS 설정 `prefers-reduced-motion: reduce`) — 도그태그·펄스 정적 확인
+- [ ] ★ ADR-033 회귀 게이트 — dev 컨테이너에서 단위·통합 전체 통과:
+  ```bash
+  docker compose -f docker-compose.dev.yml up -d
+  docker compose -f docker-compose.dev.yml exec dev npm test
+  # Tests  1009 passed (1009) 기대
+  ```
 
 ---
 

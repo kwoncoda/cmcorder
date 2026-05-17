@@ -231,7 +231,7 @@ describe('ADR-020: Pattern B 가격 무결성', () => {
 });
 ```
 
-> **원칙:** ADR-020을 어기는 PR이 머지되면 이 테스트가 RED. CI가 없어도 `npm test`만 돌리면 즉시 발견.
+> **원칙:** ADR-020을 어기는 PR이 머지되면 이 테스트가 RED. CI가 없어도 `docker compose -f docker-compose.dev.yml exec dev npm test`만 돌리면 즉시 발견. (ADR-033 — 호스트 npm 직접 호출 금지)
 
 추가 4 통합 케이스 (`tests/integration/order-create-adr020.test.js`):
 - POST /api/orders가 zod 스키마에 `price`/`total` 필드를 *허용하지 않는다* (스키마 ZodError 회귀)
@@ -535,7 +535,28 @@ export function teardownTestDb(db) { db.close(); }
 
 ## 10. CI · 자동 실행 (선택)
 
-**MVP에선 CI 없이 로컬 `npm test` 권장** (boring 원칙).
+**MVP에선 CI 없이 docker dev 컨테이너 안에서 로컬 실행 권장** (ADR-033 / boring 원칙).
+
+### 표준 실행 명령 (★ ADR-033 — 호스트 npm 금지)
+
+```bash
+# 한 번만: dev 컨테이너 띄우기
+docker compose -f docker-compose.dev.yml up -d
+
+# 단위·통합 회귀 (Vitest, 현재 1009 케이스)
+docker compose -f docker-compose.dev.yml exec dev npm test
+
+# 특정 파일/디렉토리만
+docker compose -f docker-compose.dev.yml exec dev npm test -- server/middleware/__tests__/business-state.test.js
+
+# E2E (Playwright smoke)
+docker compose -f docker-compose.dev.yml exec dev npm run test:e2e
+
+# 운영 경로 HTTP 검증 (정적 자산·미들웨어·nginx 회귀 캐치)
+docker compose up -d --build
+curl -sI http://localhost/web-logo.png       # 200, Content-Type: image/png 기대
+curl -sI http://localhost/mascot/mascot.png  # 200, Content-Type: image/png 기대
+```
 
 **Phase 2 후보:** GitHub Actions:
 ```yaml
@@ -546,12 +567,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
-      - run: npm test
-      - run: npx playwright install chromium
-      - run: npm run test:e2e -- --project=mobile
+      # 로컬과 동일 환경 보장 — docker compose 안에서 실행 (ADR-033 정합).
+      - run: docker compose -f docker-compose.dev.yml up -d --build
+      - run: docker compose -f docker-compose.dev.yml exec -T dev npm test
+      - run: docker compose -f docker-compose.dev.yml exec -T dev npx playwright install chromium
+      - run: docker compose -f docker-compose.dev.yml exec -T dev npm run test:e2e -- --project=mobile
 ```
 
 ---
