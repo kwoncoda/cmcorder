@@ -1,18 +1,17 @@
 // ClosedScreen — design-bundle ScreenClosed (.closed-screen) 정합.
 //
 // 4 reason 매핑 + 운영 일정 카드(.schedule).
-// 마스코트는 design-bundle .mascot.mascot-md (mascot.png 배경).
+// 마스코트(MascotState) → 웹로고(<img>) 교체 (2026-05-17 front_closed_design).
 // 자물쇠/새로고침 제거 (2026-05-17 front_closed_design)
 //   — CustomerLayout 30초 폴링이 OPEN 전환을 자동 수행하므로 새로고침 CTA 불요.
 import { forwardRef } from 'react';
-import MascotState from '../molecules/MascotState.jsx';
 
 // Bug 12 / P2-1 — 5/20·5/21 양일 모두 오후 3시(15:00) 오픈으로 통일 (사용자 결정).
 const REASON_CONFIG = {
-  'before-open':     { title: '아직 영업 시작 전이에요',     body: '오늘 부스는 오후 3시에 오픈할 예정입니다. 잠시 후 다시 와 주세요.', mascot: 'default' },
-  'after-close':     { title: '오늘 영업이 끝났어요',         body: '오늘 부스는 종료되었습니다. 내일 오후 3시에 다시 만나요!',     mascot: 'arrive' },
-  'after-settlement':{ title: '오늘 부스 정산 마감!',         body: '오늘 영업이 끝났습니다. 내일 오후 3시에 다시 만나요!',         mascot: 'arrive' },
-  'both-days-done':  { title: '축제 부스가 종료되었습니다',   body: '이용해 주셔서 감사합니다! 또 만나요 🪖',                       mascot: 'canceled' },
+  'before-open':     { title: '아직 영업 시작 전이에요',     body: '오늘 부스는 오후 3시에 오픈할 예정입니다. 잠시 후 다시 와 주세요.' },
+  'after-close':     { title: '오늘 영업이 끝났어요',         body: '오늘 부스는 종료되었습니다. 내일 오후 3시에 다시 만나요!' },
+  'after-settlement':{ title: '오늘 부스 정산 마감!',         body: '오늘 영업이 끝났습니다. 내일 오후 3시에 다시 만나요!' },
+  'both-days-done':  { title: '축제 부스가 종료되었습니다',   body: '이용해 주셔서 감사합니다! 또 만나요 🪖' },
 };
 
 const OPERATING_SCHEDULE = [
@@ -36,7 +35,7 @@ const ClosedScreen = forwardRef(function ClosedScreen(
       {...rest}
     >
       <h1 id="closed-title">{config.title}</h1>
-      <MascotState state={config.mascot} size="md" useFallback />
+      <img src="/web-logo.png" alt="치킨이닭 웹 로고" className="closed-logo" />
       <p style={{ color: 'var(--color-muted)', maxWidth: 280, textAlign: 'center' }}>
         {config.body}
       </p>

@@ -7,7 +7,7 @@
 //   - operatingDate=오늘 일자만 강조 (text-accent 또는 font-semibold)
 //   - 운영 일정 aria-live="polite" — UX §8.8 자동 announce
 //   - 알 수 없는 reason fallback → 'before-open'
-//   - MascotState 재사용 — reason='both-days-done' 시 canceled (😢 이모지 fallback)
+//   - 웹로고 <img> 렌더 (2026-05-17 front_closed_design — 마스코트 → 웹로고 교체)
 //   - a11y (axe)
 // 자물쇠/새로고침 케이스 제거 (2026-05-17 front_closed_design).
 import { describe, it, expect } from 'vitest';
@@ -76,12 +76,11 @@ describe('ClosedScreen', () => {
     expect(screen.getByText(/영업 시작 전/)).toBeInTheDocument();
   });
 
-  it('마스코트 표시 — both-days-done 시 canceled (😢 이모지 fallback)', () => {
-    const { container } = render(
-      <ClosedScreen reason="both-days-done" operatingDate="2026-05-20" />,
-    );
-    // useFallback=true 기본 → canceled 상태의 fallbackEmoji=😢 렌더.
-    expect(container.textContent).toContain('😢');
+  it('★ 웹로고 이미지 렌더 (front_closed_design — 마스코트 → 웹로고 교체)', () => {
+    render(<ClosedScreen reason="before-open" operatingDate="2026-05-20" />);
+    const logo = screen.getByAltText('치킨이닭 웹 로고');
+    expect(logo).toBeInTheDocument();
+    expect(logo).toHaveAttribute('src', '/web-logo.png');
   });
 
   it('a11y 위반 없음 (axe-core)', async () => {

@@ -86,3 +86,51 @@ Test Files  94 passed (94)
 - (선택) 사용자 시각 검증 후 PR `front_closed_design` → `main`
 - (별건) `.login-mark .brand-mark` CSS 룰 cleanup (다음 사이클)
 - (별건) `public/web-logo.png` 2.44MB → 최적화 (WebP 변환 또는 PNG 압축)
+
+---
+
+## 후속 변경 — 2단계 (2026-05-17 사용자 피드백)
+
+사용자 추가 지시:
+1. CLOSED 화면 본문의 마스코트(군모) 제거 + 웹로고로 교체
+2. CLOSED 화면 상단 헤더가 design-bundle ScreenClosed와 너무 달라 정합 — 서브명 "CLOSED" + 우측 액션(🗺️/🎒) 숨김
+3. 관리자 로그인 웹로고가 안 보임 → 진단
+
+### 추가 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `src/components/organisms/ClosedScreen.jsx` | `MascotState` import + 사용 제거, REASON_CONFIG의 `mascot` 필드 제거, `<img src="/web-logo.png" alt="치킨이닭 웹 로고" className="closed-logo" />` 추가 |
+| `src/styles/components.css` | `.closed-screen .closed-logo` 룰 추가 (max-width 160px, max-height 120px, object-fit contain) |
+| `src/components/layouts/CustomerLayout.jsx` | `isClosedView = location.pathname === '/closed'` 분기 도입. 서브명 'CLOSED' vs 'WINNER · ...', 우측 head-actions 조건부 렌더 |
+| `src/components/organisms/__tests__/ClosedScreen.test.jsx` | "마스코트 표시 — both-days-done 시 canceled" 케이스 → "★ 웹로고 이미지 렌더" 케이스로 교체 (alt/src 검증) |
+
+### 진단 — "관리자 로그인 웹로고 안 보임"
+
+| 점검 항목 | 결과 |
+|----------|------|
+| `public/web-logo.png` 파일 헤더 | PNG image data, 1254×1254, 8-bit RGB, 2.44MB 정상 |
+| `dist/web-logo.png` (빌드 산출물) | 존재, 정상 PNG |
+| `dist/assets/index-CpEIQiyC.css` 안 `.login-logo` 룰 | 포함됨 |
+| `dist/assets/LoginPage-CxbQPGVo.js` 안 `web-logo` 참조 | 포함됨 |
+| nginx `default.conf` /web-logo.png 라우팅 | `location /` → Express 프록시 (정상, 별도 처리 불요) |
+| Express SPA 정적 서빙 | `DIST_PATH=/app/dist`로 dist/ 전체 서빙 (Dockerfile L44) |
+
+**결론**: 소스·빌드·nginx 모두 정상. **현재 실행 중인 Docker 컨테이너 안의 `/app/dist`가 옛 빌드**인 게 가장 유력. 컨테이너 재빌드 필요.
+
+```bash
+docker compose build --no-cache app && docker compose up -d
+# 또는
+docker compose up -d --build
+```
+
+dev 모드(`npm run dev`)에서 본 거라면 브라우저 hard refresh(Ctrl+F5) 또는 dev server 재시작.
+
+### 테스트 결과 (2단계 후)
+
+```
+Test Files  94 passed (94)
+     Tests  1005 passed (1005)
+```
+
+ClosedScreen.test.jsx: 13 케이스 유지 (마스코트 -1 / 웹로고 +1).
