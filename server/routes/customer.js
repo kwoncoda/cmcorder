@@ -27,22 +27,39 @@ import { getPopularMenus } from '../domain/popularity.js';
 import { getBusinessState } from '../domain/business-state.js';
 import { transition } from '../domain/order-state.js';
 
-const CreateOrderSchema = z.object({
-  items: z
-    .array(
-      z.object({
-        menu_id: z.number().int().positive(),
-        quantity: z.number().int().positive(),
-      }),
-    )
-    .min(1, 'items가 비어있습니다'),
-  student_id: z.string().nullable().optional(),
-  name: z.string().min(1, '이름이 필요합니다'),
-  is_external: z.boolean().optional(),
-  delivery_type: z.enum(['dineIn', 'takeout']).optional(),
-  table_no: z.number().int().nullable().optional(),
-  coupon: z.object({ used: z.boolean() }).nullable().optional(),
-});
+// find_error_v2 — 주문 자격은 9자리 숫자 (학과 무관), 쿠폰 자격은 도메인(coupon.js)에서 37 검증.
+const ORDER_STUDENT_ID_PATTERN = /^\d{9}$/;
+const CreateOrderSchema = z
+  .object({
+    items: z
+      .array(
+        z.object({
+          menu_id: z.number().int().positive(),
+          quantity: z.number().int().positive(),
+        }),
+      )
+      .min(1, 'items가 비어있습니다'),
+    student_id: z.string().nullable().optional(),
+    name: z.string().min(1, '이름이 필요합니다'),
+    is_external: z.boolean().optional(),
+    delivery_type: z.enum(['dineIn', 'takeout']).optional(),
+    table_no: z.number().int().nullable().optional(),
+    coupon: z.object({ used: z.boolean() }).nullable().optional(),
+  })
+  .superRefine((val, ctx) => {
+    // 학생 주문(non-external)은 student_id 9자리 숫자 필수.
+    // P2-2 (Codex 리뷰): 외부인이 아니면 누락·빈 문자열·형식 오류 모두 거부 — API 직접 호출 보호.
+    if (!val.is_external) {
+      const sid = val.student_id;
+      if (sid == null || sid === '' || !ORDER_STUDENT_ID_PATTERN.test(sid)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['student_id'],
+          message: '학번은 숫자 9자리로 입력해주세요.',
+        });
+      }
+    }
+  });
 
 const TransferReportSchema = z.object({
   bank: z.string().min(1),
@@ -126,18 +143,23 @@ export function customerRoutes(db) {
         // 외부인은 external_token = access_token (동일 값) — QR 공유 호환.
         const accessToken = crypto.randomUUID();
         const externalToken = input.is_external ? accessToken : null;
-        const order = createOrder(db, {
-          items_priced: priced.items_priced,
-          total_price: priced.total_price,
-          name: input.name,
-          student_id: input.student_id ?? null,
-          is_external: input.is_external ?? false,
-          external_token: externalToken,
-          access_token: accessToken,
-          delivery_type: input.delivery_type ?? 'dineIn',
-          table_no: input.table_no ?? null,
-          operating_date,
-        });
+        const order = createOrder(
+          db,
+          {
+            items_priced: priced.items_priced,
+            total_price: priced.total_price,
+            name: input.name,
+            student_id: input.student_id ?? null,
+            is_external: input.is_external ?? false,
+            external_token: externalToken,
+            access_token: accessToken,
+            delivery_type: input.delivery_type ?? 'dineIn',
+            table_no: input.table_no ?? null,
+            operating_date,
+          },
+          // find_error_v2 — 같은 트랜잭션 안에서 CREATED 이벤트 INSERT.
+          { actor: 'customer' },
+        );
         // 쿠폰 소비 — 위 P0-3 가드로 student_id·!is_external가 보장됨.
         // validateCoupon 실패(형식·중복) 시 트랜잭션 ROLLBACK으로 주문도 취소.
         if (input.coupon?.used) {
@@ -184,7 +206,7 @@ export function customerRoutes(db) {
   });
 
   // ── POST /api/orders/:id/transfer-report (P0-B Codex v2 인증 추가) ──
-  // 검증 순서: token 형식(401) → 주문 존재(404) → token 일치(403) → 입력 검증(400)
+  // 검증 순서: token 형식(401) → 주문 존재(404) → token 일치(403) → 입력 검증(400) → 상태 가드(409)
   // 이전: 무인증으로 ID 추측만으로 타인 주문 입금정보 덮어쓰기 + TRANSFER_REPORTED 강제 전이 가능.
   router.post('/api/orders/:id/transfer-report', (req, res, next) => {
     try {
@@ -200,20 +222,45 @@ export function customerRoutes(db) {
       if (!expected || rawToken !== expected) {
         return res.status(403).json({ error: 'FORBIDDEN', message: '주문 접근 권한이 없습니다.' });
       }
+      // find_error_v2 — TRANSFER_REPORTED 중복 제출은 친절한 안내로 응답하고 DB는 변경하지 않는다.
+      // (입력 검증 *전*에 단락 — 사용자가 뒤로가기 후 빈 폼 재전송해도 raw 에러 노출 X)
+      if (existing.status === 'TRANSFER_REPORTED') {
+        return res.status(409).json({
+          error: 'TRANSFER_ALREADY_REPORTED',
+          message: '이미 이체 완료 요청이 접수됐어요. 본부 확인을 기다려주세요.',
+        });
+      }
       const input = TransferReportSchema.parse(req.body);
       // P1-1 (Codex 리뷰) — 상태 가드.
-      // LEGAL_TRANSITIONS상 ORDERED → TRANSFER_REPORTED만 합법. 다른 상태(이미 TRANSFER_REPORTED,
-      // HOLD, PAID, COOKING, READY, DONE, CANCELED)는 자동 409 거부 — errorHandler가
-      // StateTransitionError를 409 ILLEGAL_TRANSITION으로 변환.
-      transition(existing.status, 'TRANSFER_REPORTED');
-      const order = updateTransferInfo(db, Number(req.params.id), {
-        depositor_name: input.depositorName,
-        bank: input.bank,
-        custom_bank: input.customBank,
-        use_other_name: input.useOtherName,
-        other_name: input.otherName,
-        amount: input.amount,
-      });
+      // LEGAL_TRANSITIONS상 ORDERED → TRANSFER_REPORTED만 합법.
+      // find_error_v2 — 다른 불법 상태(PAID/COOKING/READY/DONE/CANCELED/HOLD)는
+      // 내부 문구 "불법 상태 전이" 노출 없이 친절한 메시지로 변환. 도메인 에러는
+      // 라우트가 흡수 — admin 라우트는 여전히 기존 errorHandler 매핑을 사용한다.
+      try {
+        transition(existing.status, 'TRANSFER_REPORTED');
+      } catch (err) {
+        if (err.name === 'StateTransitionError') {
+          return res.status(409).json({
+            error: 'TRANSFER_NOT_ALLOWED',
+            message: '지금은 이체 완료 요청을 보낼 수 없는 상태예요.',
+          });
+        }
+        throw err;
+      }
+      const order = updateTransferInfo(
+        db,
+        Number(req.params.id),
+        {
+          depositor_name: input.depositorName,
+          bank: input.bank,
+          custom_bank: input.customBank,
+          use_other_name: input.useOtherName,
+          other_name: input.otherName,
+          amount: input.amount,
+        },
+        // find_error_v2 — TRANSFER_REPORTED 이벤트 INSERT (트랜잭션 안).
+        { actor: 'customer' },
+      );
       return res.json(serializeOrder(order));
     } catch (err) {
       return next(err);

@@ -3,7 +3,7 @@
 // design-bundle 구조: stage-copy / ready-banner / mascot / dogtag sm / sticky StatusChip + HOLD CTA.
 // 테스트 보호: STATE_LABEL 한글 카피, "실시간 연결이 끊어졌어요", "주문 #N", role=status aria-live.
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
 import { useOrderPolling } from '../../hooks/useOrderPolling.js';
 import { apiFetch } from '../../api/client.js';
@@ -22,7 +22,7 @@ const STATE_LABEL = {
   TRANSFER_REPORTED: '이체 완료 요청 — 본부 확인 중',
   PAID:              '입금 확인 완료 — 조리 대기',
   COOKING:           '조리 중! 잠시만 기다려 주세요.',
-  READY:             '🍗 픽업 준비 완료! 본부로 와 주세요!',
+  READY:             '픽업 준비 완료! 본부로 와 주세요!',
   DONE:              '수령 완료. 맛있게 드세요!',
   HOLD:              '운영진 확인 필요 — 본부로 문의해 주세요.',
   CANCELED:          '취소된 주문입니다.',
@@ -31,8 +31,12 @@ const STATE_LABEL = {
 export default function StatusPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { token, query: tokenQuery, withQuery } = useOrderToken(id);
   const [pulse, setPulse] = useState(false);
+  // P2-1 (Codex 리뷰) — TransferPage가 TRANSFER_ALREADY_REPORTED로 넘기면 1회 flash 노출 후 history state 정리.
+  const [flashMessage, setFlashMessage] = useState(location.state?.flash === 'TRANSFER_ALREADY_REPORTED' ? (location.state.message ?? '이미 이체 완료 요청이 접수됐어요. 본부 확인을 기다려주세요.') : null);
+  useEffect(() => { if (flashMessage) navigate(location.pathname + location.search, { replace: true, state: null }); }, []);
 
   const initialQuery = useApi(({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }), [id, token]);
   const handleStatusChange = (prev, next) => {
@@ -53,7 +57,7 @@ export default function StatusPage() {
   if (!order) return null;
   const currentStatus = order.status;
   const mascotState = currentStatus === 'COOKING' ? 'cooking' : currentStatus === 'READY' || currentStatus === 'DONE' ? 'arrive' : currentStatus === 'CANCELED' ? 'canceled' : 'default';
-  const history = { ORDERED: order.created_at, TRANSFER_REPORTED: order.transferred_at, PAID: order.paid_at, COOKING: order.cooking_at, READY: order.ready_at, DONE: order.done_at };
+  // find_error_v2: 단계별 시각 미니뷰 제거 — history prop 미사용.
 
   return (
     <section data-testid="status-page">
@@ -65,7 +69,12 @@ export default function StatusPage() {
       {!stream.isConnected && (
         <div className="banner-top" role="alert" data-testid="sse-disconnected">⚠️ 실시간 연결이 끊어졌어요. 자동으로 다시 연결됩니다.</div>
       )}
-      <OrderTimeline current={currentStatus} history={history} showMiniview />
+      {flashMessage && (
+        <div className="banner-top" role="status" data-testid="status-flash" onClick={() => setFlashMessage(null)}>
+          ℹ️ {flashMessage}
+        </div>
+      )}
+      <OrderTimeline current={currentStatus} showMiniview={false} />
       <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 16px' }}>
         <MascotState state={mascotState} size="md" useFallback={false} />
       </div>
@@ -74,7 +83,7 @@ export default function StatusPage() {
       </div>
       {currentStatus === 'READY' && (
         <div className="ready-banner" role="alert">
-          <div className="big">✅ #{order.no ?? id}번<br />수령 가능해요!</div>
+          <div className="big">#{order.no ?? id}번<br />수령 가능해요!</div>
           <div className="sub">부스에서 호명을 들어주세요.<br />도그태그를 보여주세요.</div>
         </div>
       )}

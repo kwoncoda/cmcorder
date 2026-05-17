@@ -1861,6 +1861,27 @@ code.ammo {
   align-items: center;
   padding: 6px 0;
 }
+
+/* find_error_v2 P2-3 (Codex 리뷰) — 쿠폰 사용 내역 반응형. */
+/* 데스크톱: 5열 grid. 모바일(<640px): 2열 스택 + 이름·쿠폰 행 전체 폭. */
+.coupon-usage-row {
+  display: grid;
+  grid-template-columns: 100px 120px minmax(0, 1fr) 100px 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 0;
+}
+@media (max-width: 640px) {
+  .coupon-usage-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+    padding: 10px 0;
+    font-size: 12px;
+  }
+  .coupon-usage-row .cu-cell-name-coupon { grid-column: 1 / -1; }
+  .coupon-usage-row .cu-cell-discount { text-align: right; }
+  .coupon-usage-row .cu-cell-order { text-align: right; }
+}
 .bar-name {
   display: flex;
   align-items: center;

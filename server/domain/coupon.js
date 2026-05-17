@@ -45,9 +45,10 @@ export class CouponError extends Error {
  */
 export function validateCoupon({ studentId, name }, db) {
   // 1. format + 2. department (정규식이 둘 다 검증)
+  // find_error_v2: 9자리 통과한 학번이라도 학과(37)가 아니면 쿠폰만 거부.
   if (!STUDENT_ID_PATTERN.test(studentId)) {
     throw new CouponError(
-      '학번 형식이 올바르지 않습니다 (학과 코드 37 필요)',
+      '해당 학번은 쿠폰 대상이 아니에요.',
       'INVALID_FORMAT',
     );
   }

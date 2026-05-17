@@ -235,6 +235,7 @@ describe('GET /admin/api/orders', () => {
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/orders');
@@ -252,6 +253,7 @@ describe('GET /admin/api/orders', () => {
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/orders?status=ORDERED');
@@ -271,6 +273,7 @@ describe('GET /admin/api/orders/:id', () => {
       .send({
         items: [{ menu_id: 1, quantity: 2 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
@@ -293,7 +296,7 @@ describe('GET /admin/api/orders/:id', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     expect(res.status).toBe(200);
@@ -318,7 +321,7 @@ describe('GET /admin/api/orders/:id', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     // 동적 import로 OrderSchema 검증 — server 측 테스트가 client 스키마와 정합 확인.
@@ -331,7 +334,7 @@ describe('GET /admin/api/orders/:id', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     expect(res.status).toBe(200);
@@ -349,6 +352,7 @@ describe('POST /admin/api/orders/:id/transition', () => {
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     const { agent, csrfToken } = await loginAgent(app);
     const res = await withCsrf(
@@ -367,6 +371,7 @@ describe('POST /admin/api/orders/:id/transition', () => {
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     const { agent, csrfToken } = await loginAgent(app);
     const res = await withCsrf(
@@ -398,6 +403,7 @@ describe('GET /admin/api/transfers', () => {
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     // P0-B (Codex v2): transfer-report에 token 필수.
     await request(app)
@@ -450,6 +456,7 @@ describe('POST /admin/api/settlement/close (ADR-012 + G13)', () => {
       .send({
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
+        student_id: '202637001',
       });
     const { agent, csrfToken } = await loginAgent(app);
     const res = await withCsrf(agent.post('/admin/api/settlement/close'), csrfToken).send({});
@@ -484,5 +491,138 @@ describe('GET /admin/api/settlement/zip', () => {
     // ZIP magic bytes (PK)
     expect(res.body[0]).toBe(0x50);
     expect(res.body[1]).toBe(0x4b);
+  });
+});
+
+// ── find_error_v2 — GET /admin/api/history (주문 상태 변경 감사 로그) ──────────
+describe('GET /admin/api/history', () => {
+  it('★ 인증 없으면 401', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/admin/api/history');
+    expect(res.status).toBe(401);
+  });
+
+  it('빈 결과 — 200 + 빈 배열', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/history');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(0);
+  });
+
+  it('★ 주문 생성 → CREATED 이벤트가 노출 (order_no JOIN, created_at ISO)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/history');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    const row = res.body[0];
+    expect(row.event_type).toBe('CREATED');
+    expect(row.from_status).toBeNull();
+    expect(row.to_status).toBe('ORDERED');
+    expect(row.action_name).toBe('주문 접수');
+    expect(row.actor).toBe('customer');
+    expect(typeof row.order_no).toBe('number');
+    expect(row.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
+
+  it('★ admin transition → 이벤트 created_at DESC 정렬, actor=admin', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+    const { agent, csrfToken } = await loginAgent(app);
+    await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
+      .send({ to: 'CANCELED' });
+    const res = await agent.get('/admin/api/history');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    // 최신(CANCELED) 먼저.
+    expect(res.body[0].event_type).toBe('CANCELED');
+    expect(res.body[0].actor).toBe('admin');
+    expect(res.body[0].from_status).toBe('ORDERED');
+    expect(res.body[0].to_status).toBe('CANCELED');
+    expect(res.body[0].action_name).toBe('취소');
+    expect(res.body[1].event_type).toBe('CREATED');
+  });
+
+  it('★ date 쿼리 필터 — 다른 날 이벤트는 제외', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    // 기본 operating_date 2026-05-20에 주문.
+    await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+    const { agent } = await loginAgent(app);
+    const wrongDate = await agent.get('/admin/api/history?date=2026-01-01');
+    expect(wrongDate.body).toHaveLength(0);
+    const rightDate = await agent.get('/admin/api/history?date=2026-05-20');
+    expect(rightDate.body).toHaveLength(1);
+  });
+});
+
+// ── find_error_v2 — GET /admin/api/coupons/usage (쿠폰 사용 내역) ────────────
+describe('GET /admin/api/coupons/usage', () => {
+  it('★ 인증 없으면 401', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/admin/api/coupons/usage');
+    expect(res.status).toBe(401);
+  });
+
+  it('빈 결과 — 200 + 빈 배열', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/coupons/usage');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('★ 쿠폰 사용 주문 → order_no JOIN + 상수 coupon_name/discount_amount 노출', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        coupon: { used: true },
+      });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/coupons/usage');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    const row = res.body[0];
+    expect(row.name).toBe('홍길동');
+    expect(row.student_id).toBe('202637001');
+    expect(row.coupon_name).toBe('컴모융 1,000원 할인');
+    expect(row.discount_amount).toBe(1000);
+    expect(typeof row.order_no).toBe('number');
+    expect(row.used_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
+
+  it('★ date 쿼리 — 다른 날짜 쿠폰은 제외 (orders.operating_date JOIN 필터)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        coupon: { used: true },
+      });
+    const { agent } = await loginAgent(app);
+    const wrongDate = await agent.get('/admin/api/coupons/usage?date=2026-01-01');
+    expect(wrongDate.body).toHaveLength(0);
+    const rightDate = await agent.get('/admin/api/coupons/usage?date=2026-05-20');
+    expect(rightDate.body).toHaveLength(1);
   });
 });

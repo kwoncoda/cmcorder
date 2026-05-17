@@ -58,6 +58,9 @@ export function bootstrapDatabase(db) {
  * init.sql 이후 증분 마이그레이션 — 항상 idempotent.
  * - 002-access-token (P0-4 Codex 리뷰 2026-05-15): orders.access_token 추가.
  *   기존 행에 token 발급 (외부인은 external_token 재사용, 그 외 신규 UUID).
+ * - 003-order-events (find_error_v2 2026-05-18): 주문 상태 변경 감사 로그
+ *   테이블 + 인덱스. CREATE IF NOT EXISTS — 신규 DB에서는 init.sql이
+ *   먼저 만들어 둔다(중복 무해). 기존 DB에서는 본 마이그레이션이 만든다.
  *
  * @param {import('better-sqlite3').Database} db
  */
@@ -83,6 +86,29 @@ function applyPostInitMigrations(db) {
     });
     tx();
     logger.info('[bootstrap] 마이그레이션 002-access-token 적용');
+  }
+
+  if (!applied('003-order-events')) {
+    const tx = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS order_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL REFERENCES orders(id),
+          event_type TEXT NOT NULL,
+          from_status TEXT,
+          to_status TEXT,
+          action_name TEXT NOT NULL,
+          actor TEXT NOT NULL,
+          note TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_order_events_order_id ON order_events(order_id);
+        CREATE INDEX IF NOT EXISTS idx_order_events_created_at ON order_events(created_at);
+      `);
+      db.prepare('INSERT INTO _migrations (name) VALUES (?)').run('003-order-events');
+    });
+    tx();
+    logger.info('[bootstrap] 마이그레이션 003-order-events 적용');
   }
 }
 

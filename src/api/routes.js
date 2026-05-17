@@ -28,4 +28,7 @@ export const API = {
   ADMIN_SETTLEMENT_BASE: '/admin/api/settlement',
   ADMIN_SETTLEMENT_CLOSE: '/admin/api/settlement/close',
   ADMIN_SETTLEMENT_ZIP: '/admin/api/settlement/zip',
+  // find_error_v2 — 관리자 내역(history) + 쿠폰(coupons) 탭 복원.
+  ADMIN_HISTORY: '/admin/api/history',
+  ADMIN_COUPONS_USAGE: '/admin/api/coupons/usage',
 };

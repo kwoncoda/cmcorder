@@ -3,12 +3,12 @@
 //
 // 회귀 보호 항목:
 //   - title + 카운트 표시
-//   - orders 빈 배열 시 "비어 있음" 표시
+//   - orders 빈 배열 시 "해당 상태 주문 없음" 표시 (find_error_v2)
 //   - orders 목록 → OrderCard 렌더 (key=order.id, data-testid=admin-order-card-<id>)
 //   - 5분 이상 경과 시 noteworthy 색 (border-warning)
 //   - 10분 이상 경과 시 danger 색 (border-danger)
 //   - 5분 미만은 기본 (border-divider)
-//   - 카드 클릭 시 onSelectOrder(order.id) 호출
+//   - 카드 클릭 시 네비게이션 X (find_error_v2: onSelectOrder 무시)
 //   - ★ React.memo 회귀 — OrderCard는 React.memo로 감싸졌다 ($$typeof=react.memo)
 //   - forwardRef 로 section 참조 전달
 //   - a11y (axe)
@@ -46,7 +46,7 @@ describe('AdminCardColumn', () => {
     expect(screen.getByText('0')).toBeInTheDocument();
   });
 
-  it('orders 비어있을 때 "비어 있음" 표시', () => {
+  it('orders 비어있을 때 "해당 상태 주문 없음" 표시', () => {
     render(
       <AdminCardColumn
         title="이체 확인"
@@ -55,7 +55,7 @@ describe('AdminCardColumn', () => {
         tick={BASE_TICK}
       />,
     );
-    expect(screen.getByText('비어 있음')).toBeInTheDocument();
+    expect(screen.getByText('해당 상태 주문 없음')).toBeInTheDocument();
   });
 
   it('orders 목록 카드 렌더 (key=order.id, data-testid)', () => {
@@ -148,7 +148,7 @@ describe('AdminCardColumn', () => {
     expect(screen.getByText('6분 경과')).toBeInTheDocument();
   });
 
-  it('카드 클릭 시 onSelectOrder(order.id) 호출', () => {
+  it('★ 카드 본문 클릭은 onSelectOrder 를 호출하지 않는다 (네비게이션 제거)', () => {
     const onSelectOrder = vi.fn();
     const orders = [mkOrder({ id: 17, no: 17 })];
     render(
@@ -160,8 +160,97 @@ describe('AdminCardColumn', () => {
         onSelectOrder={onSelectOrder}
       />,
     );
+    // 카드 article 자체 클릭 → onSelectOrder 호출 X.
     fireEvent.click(screen.getByTestId('admin-order-card-17'));
-    expect(onSelectOrder).toHaveBeenCalledWith(17);
+    expect(onSelectOrder).not.toHaveBeenCalled();
+  });
+
+  it('★ 카드는 cursor-pointer 클래스를 가지지 않는다 (네비게이션 제거)', () => {
+    const orders = [mkOrder({ id: 17, no: 17 })];
+    render(
+      <AdminCardColumn
+        title="x"
+        status="TRANSFER_REPORTED"
+        orders={orders}
+        tick={BASE_TICK}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    expect(card.className).not.toMatch(/cursor-pointer/);
+    expect(card.className).not.toMatch(/hover:opacity-90/);
+  });
+
+  it('★ items 배열이 있으면 "이름 ×수량" 으로 최대 3개 표시', () => {
+    const orders = [
+      mkOrder({
+        id: 17,
+        no: 17,
+        items: [
+          { menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 2, name: '콜라', base_price: 2000, quantity: 2, category: 'DRINK' },
+        ],
+      }),
+    ];
+    render(
+      <AdminCardColumn
+        title="x"
+        status="TRANSFER_REPORTED"
+        orders={orders}
+        tick={BASE_TICK}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    expect(within(card).getByText(/후라이드 ×1/)).toBeInTheDocument();
+    expect(within(card).getByText(/콜라 ×2/)).toBeInTheDocument();
+  });
+
+  it('★ items 가 3개 초과면 처음 3개 + "외 N개" 표시', () => {
+    const orders = [
+      mkOrder({
+        id: 17,
+        no: 17,
+        items: [
+          { menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 2, name: '양념', base_price: 18000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 3, name: '간장', base_price: 18000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 4, name: '콜라', base_price: 2000, quantity: 2, category: 'DRINK' },
+          { menu_id: 5, name: '사이다', base_price: 2000, quantity: 1, category: 'DRINK' },
+        ],
+      }),
+    ];
+    render(
+      <AdminCardColumn
+        title="x"
+        status="TRANSFER_REPORTED"
+        orders={orders}
+        tick={BASE_TICK}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    expect(within(card).getByText(/후라이드 ×1/)).toBeInTheDocument();
+    expect(within(card).getByText(/양념 ×1/)).toBeInTheDocument();
+    expect(within(card).getByText(/간장 ×1/)).toBeInTheDocument();
+    expect(within(card).getByText(/외 2개/)).toBeInTheDocument();
+    // 3번째 이후 항목은 직접 노출되지 않음.
+    expect(within(card).queryByText(/콜라 ×2/)).not.toBeInTheDocument();
+  });
+
+  it('★ items 가 빈 배열이거나 누락 시 깨지지 않고 항목 라인 미렌더', () => {
+    const orders = [
+      mkOrder({ id: 17, no: 17, items: [] }),
+      mkOrder({ id: 18, no: 18 }), // items 누락
+    ];
+    render(
+      <AdminCardColumn
+        title="x"
+        status="TRANSFER_REPORTED"
+        orders={orders}
+        tick={BASE_TICK}
+      />,
+    );
+    // 양쪽 모두 정상 렌더되어야 한다.
+    expect(screen.getByTestId('admin-order-card-17')).toBeInTheDocument();
+    expect(screen.getByTestId('admin-order-card-18')).toBeInTheDocument();
   });
 
   it('depositorName 없을 때 "(이름 없음)" 표시', () => {
@@ -275,7 +364,7 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     { status: 'PAID',              labels: ['조리 시작'] },
     { status: 'COOKING',           labels: ['조리 완료'] },
     { status: 'READY',             labels: ['전달 완료'] },
-    { status: 'HOLD',              labels: ['재확인', '취소'] },
+    { status: 'HOLD',              labels: ['이체 확인', '취소'] },
   ];
 
   it.each(ACTION_MATRIX)('status=$status 카드에 inline 액션 버튼 노출 — $labels', ({ status, labels }) => {
@@ -334,7 +423,7 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     expect(onSelectOrder).not.toHaveBeenCalled();
   });
 
-  it('★ 카드 본문 클릭은 여전히 onSelectOrder(id) 호출 (회귀)', () => {
+  it('★ 카드 본문 클릭은 onSelectOrder 를 호출하지 않는다 (네비게이션 제거 회귀)', () => {
     const onSelectOrder = vi.fn();
     const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
     render(
@@ -343,8 +432,22 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
         tick={BASE_TICK} onSelectOrder={onSelectOrder}
       />,
     );
-    // 본문(article testid 자체) 클릭 — inline 액션 영역이 아닌 곳.
+    // 본문 article 자체 클릭 → onSelectOrder 호출되지 않음.
     fireEvent.click(screen.getByTestId('admin-order-card-17'));
-    expect(onSelectOrder).toHaveBeenCalledWith(17);
+    expect(onSelectOrder).not.toHaveBeenCalled();
+  });
+
+  it('★ HOLD 카드 "이체 확인" 클릭 시 onAction(17, "PAID") 호출 (라벨 변경: 재확인 → 이체 확인)', () => {
+    const onAction = vi.fn();
+    const orders = [mkOrder({ id: 17, no: 17, status: 'HOLD' })];
+    render(
+      <AdminCardColumn
+        title="x" status="HOLD" orders={orders}
+        tick={BASE_TICK} onAction={onAction}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    fireEvent.click(within(card).getByRole('button', { name: '이체 확인' }));
+    expect(onAction).toHaveBeenCalledWith(17, 'PAID');
   });
 });

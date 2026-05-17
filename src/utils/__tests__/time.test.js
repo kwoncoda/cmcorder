@@ -70,4 +70,17 @@ describe('elapsedMinutes (Bug 7)', () => {
     expect(a).toBe(b);
     expect(a).toBe(5);
   });
+
+  // 미래 시각 클램프 — 시계 어긋남(서버/클라이언트 NTP 미스매치) 또는
+  // transferred_at 이 약간 미래로 기록된 경우에도 "-1분 경과" 같은 음수 노출 차단.
+  it('★ 미래 timestamp → 0 (음수 방지 클램프)', () => {
+    const now = new Date('2026-05-17T12:00:00Z');
+    // start가 now보다 1분 미래 — 정상이라면 -1, 클램프 시 0.
+    expect(elapsedMinutes('2026-05-17T12:01:00Z', now)).toBe(0);
+  });
+
+  it('★ 과거 timestamp → 양수 그대로 (회귀 보장)', () => {
+    const now = new Date('2026-05-17T12:05:00Z');
+    expect(elapsedMinutes('2026-05-17T12:00:00Z', now)).toBe(5);
+  });
 });

@@ -474,6 +474,23 @@
 **상태:** Accepted (2026-05-03) — supersedes ADR-004
 **변경:** 2026-05-14 — 정규식을 `^\d{6}` (2026년 학번 고정)에서 **`^\d{2}\d{2}37\d{3}$`** (학과 코드 37만 강제, 입학년도 자유)로 완화. 사유: 컴퓨터모바일융합과 1학년 외 *학과 동기 다른 학년*(2학년·복학생 등)도 쿠폰 발행 대상에 포함 — 학과 코드 37만 일치하면 통과. CLAUDE.md "절대 깨지면 안 되는 것" 표기는 `prefix 202637` 그대로지만 *실 구현·테스트는 학과 코드 37*. 향후 CLAUDE.md 갱신 시 표기 통일 필요.
 
+**변경:** 2026-05-18 (find_error_v2) — **주문 자격과 쿠폰 자격 분리**. 이전에는 학과 코드 37 정규식이 학생 주문 자체의 게이트로 사용되어 `202111123` 같은 9자리 비-37 학번은 일반 주문조차 거부됐다. 실사용 테스트에서 컴모융이 아닌 학생도 주문 가능해야 한다는 요구가 확인됨.
+
+- **주문 자격:** `^\d{9}$` (학과 무관, 숫자 9자리만 검증). 학생 주문(`is_external=false`)은 `student_id` 누락·빈 문자열·non-9자리 모두 400 VALIDATION_ERROR로 거부 — 프론트와 백엔드 동일.
+- **쿠폰 자격:** `^\d{4}37\d{3}$` (= `^\d{2}\d{2}37\d{3}$`, ASCII 가독 표기). 9자리 학번이 5–6번째 자리에 `37`을 포함할 때만 쿠폰 사용 가능. 비-37 9자리 학번은 쿠폰 비활성이지만 **일반 주문은 가능**.
+- **에러 문구 분리:**
+  - 학번이 9자리 숫자가 아님: `"학번은 숫자 9자리로 입력해주세요."` (`VALIDATION_ERROR`)
+  - 쿠폰 미대상 학번이 쿠폰 사용 시도: `"해당 학번은 쿠폰 대상이 아니에요."` (`INVALID_FORMAT`, 주문은 ROLLBACK)
+- **위치:**
+  - 프론트: `src/pages/customer/CheckoutPage.jsx`의 `ORDER_SID`/`COUPON_SID`.
+  - 백엔드 주문 게이트: `server/routes/customer.js`의 `CreateOrderSchema.superRefine` (P2-2 보강 — 빈 student_id도 거부).
+  - 백엔드 쿠폰 게이트: `server/domain/coupon.js`의 `STUDENT_ID_PATTERN` + `validateCoupon`.
+- **외부인(`is_external=true`)은 변경 없음** — `student_id=null` 허용 + 쿠폰 사용 불가 (P0-3 게이트 유지).
+
+회귀: `server/routes/__tests__/customer.test.js`의 ★ P2-2 / ★ find_error_v2 케이스, `src/pages/customer/__tests__/CheckoutPage.test.jsx` ★ 비-37 학번 주문/쿠폰 분기 케이스, `server/domain/__tests__/coupon.test.js` 12 케이스(메시지만 갱신, 패턴 무변경).
+
+> 문서 표기 정비 — 본 ADR 본문 하단의 "검증 로직 (2026-05-14 변경)"은 *쿠폰 검증* 단계를 설명하며, 주문 자격 검증은 별도이다. 다른 문서(`docs/API_DRAFT.md`, `docs/ARCHITECTURE.md`, 과거 task 로그)의 `prefix 202637` 표기는 *역사적 기록*으로 남겨두고, 현행 정책은 본 항목과 위 코드를 정답으로 본다.
+
 **컨텍스트:**
 - ADR-004는 사전 등록 명부와의 매칭을 전제로 했으나, 사용자가 명부를 확보할 수 없는 상황 발생
 - 컴퓨터모바일융합과 1학년 학번은 **앞 6자리가 `202637`로 고정**되어 있고, 마지막 3자리만 학생별로 다름 (`202637XXX`)

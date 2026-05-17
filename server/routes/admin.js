@@ -18,6 +18,8 @@ import {
   getOrder,
   updateOrderStatus,
 } from '../repositories/order-repo.js';
+import { listOrderEvents } from '../repositories/order-events-repo.js';
+import { listCouponUsage } from '../repositories/coupon-repo.js';
 import {
   getBusinessState,
   openBusiness,
@@ -218,7 +220,8 @@ export function adminRoutes(db) {
       }
       // 불법 전이면 StateTransitionError throw → errorHandler 409
       transition(order.status, to);
-      const updated = updateOrderStatus(db, order.id, to);
+      // find_error_v2 — admin 전이 이벤트 INSERT (트랜잭션 안).
+      const updated = updateOrderStatus(db, order.id, to, {}, { actor: 'admin' });
       // Bug 8 — transition 응답도 동일 shape 유지.
       return res.json(serializeAdminOrder(updated));
     } catch (err) {
@@ -268,6 +271,54 @@ export function adminRoutes(db) {
     } catch (err) {
       next(err);
     }
+  });
+
+  // ── GET /admin/api/history (find_error_v2 — 주문 상태 변경 감사 로그) ──
+  // 응답: 해당 operating_date의 order_events 행 + order_no JOIN. created_at DESC.
+  router.get('/admin/api/history', (req, res) => {
+    const operating_date =
+      typeof req.query.date === 'string' && req.query.date.length > 0
+        ? req.query.date
+        : getBusinessState(db).operating_date;
+    const rows = listOrderEvents(db, { operating_date });
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        order_id: r.order_id,
+        order_no: r.order_no,
+        event_type: r.event_type,
+        from_status: r.from_status,
+        to_status: r.to_status,
+        action_name: r.action_name,
+        actor: r.actor,
+        note: r.note,
+        // Bug 7 — created_at은 ISO 8601 Z (브라우저 KST 540분 오차 방어).
+        created_at: toIsoUtc(r.created_at),
+      })),
+    );
+  });
+
+  // ── GET /admin/api/coupons/usage (find_error_v2 — 쿠폰 사용 내역) ──
+  // 응답: used_coupons JOIN orders (operating_date 필터). coupon_name·discount_amount는
+  // ADR-019 상수 ('컴모융 1,000원 할인' / 1000) — DB 스키마 변경 없음.
+  router.get('/admin/api/coupons/usage', (req, res) => {
+    const operating_date =
+      typeof req.query.date === 'string' && req.query.date.length > 0
+        ? req.query.date
+        : getBusinessState(db).operating_date;
+    const rows = listCouponUsage(db, { operating_date });
+    res.json(
+      rows.map((r) => ({
+        id: r.id,
+        order_id: r.order_id,
+        order_no: r.order_no,
+        name: r.name,
+        student_id: r.student_id,
+        coupon_name: '컴모융 1,000원 할인',
+        discount_amount: 1000,
+        used_at: toIsoUtc(r.used_at),
+      })),
+    );
   });
 
   // ── GET /admin/api/settlement/zip ──

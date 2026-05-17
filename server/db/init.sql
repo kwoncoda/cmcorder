@@ -145,6 +145,27 @@ CREATE TABLE IF NOT EXISTS backups (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- ─── 주문 이벤트 감사 로그 (find_error_v2 — 관리자 내역 탭) ──
+-- 주문 상태 변경만 추적. 메뉴/로그인/시스템 이벤트는 범위 외.
+-- - event_type: 'CREATED' 또는 전이된 상태 이름
+-- - from_status: CREATED일 때 null, 그 외 이전 상태
+-- - to_status: 새 상태 (CREATED는 'ORDERED')
+-- - action_name: 한국어 친화 라벨 (예: '주문 접수', '이체 확인')
+-- - actor: 'customer' | 'admin' | 'system'
+CREATE TABLE IF NOT EXISTS order_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL REFERENCES orders(id),
+  event_type TEXT NOT NULL,
+  from_status TEXT,
+  to_status TEXT,
+  action_name TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_order_events_order_id ON order_events(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_events_created_at ON order_events(created_at);
+
 -- ============================================================
 -- 시드 데이터
 -- ============================================================

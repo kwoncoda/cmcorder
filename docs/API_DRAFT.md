@@ -52,8 +52,10 @@
 | `INVALID_INPUT` | 모든 입력 검증 | 400 | "입력값을 확인해주세요" |
 | `MENU_NOT_FOUND` | POST /api/orders | 404 | "메뉴를 찾을 수 없습니다" |
 | `MENU_SOLD_OUT` | POST /api/orders | 409 | "{메뉴명}은(는) 품절입니다" |
-| `COUPON_FORMAT` | POST /api/orders | 400 | "학번은 9자리 숫자입니다" |
-| `COUPON_DEPARTMENT` | POST /api/orders | 400 | "이번 쿠폰은 컴퓨터모바일융합과 학생 전용입니다" *(2026-05-13 ADR-019 변경: prefix 202637 → 학과 코드 37)* |
+| `VALIDATION_ERROR` (student_id) | POST /api/orders | 400 | "학번은 숫자 9자리로 입력해주세요." *(2026-05-18 find_error_v2 — 주문 자격 검증)* |
+| `INVALID_FORMAT` (coupon) | POST /api/orders | 400 | "해당 학번은 쿠폰 대상이 아니에요." *(2026-05-18 find_error_v2 — 쿠폰 대상 학번이 아닐 때. 주문 자체는 9자리면 가능)* |
+| ~~`COUPON_FORMAT`~~ | ~~POST /api/orders~~ | ~~400~~ | ~~"학번은 9자리 숫자입니다"~~ *(2026-05-18 find_error_v2: VALIDATION_ERROR / INVALID_FORMAT 둘로 분리)* |
+| ~~`COUPON_DEPARTMENT`~~ | ~~POST /api/orders~~ | ~~400~~ | ~~"이번 쿠폰은 컴퓨터모바일융합과 학생 전용입니다"~~ *(2026-05-18 find_error_v2: INVALID_FORMAT으로 통합)* |
 | `COUPON_NAME` | POST /api/orders | 400 | "이름을 입력해 주세요" |
 | `COUPON_DUPLICATE` | POST /api/orders | 409 | "이 학번은 이미 쿠폰을 사용했어요" |
 | `COUPON_RATE_LIMIT` | POST /api/orders | 429 | "잠시 후 다시 시도해 주세요" |

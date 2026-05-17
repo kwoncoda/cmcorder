@@ -89,6 +89,17 @@ describe('OrderTimeline', () => {
     expect(screen.queryByText('17:30')).not.toBeInTheDocument();
   });
 
+  it('★ showMiniview=false 시 aria-label="단계별 진입 시각" <ul> 미렌더', () => {
+    render(
+      <OrderTimeline
+        current="COOKING"
+        showMiniview={false}
+        history={{ ORDERED: '17:30', COOKING: '17:38' }}
+      />,
+    );
+    expect(screen.queryByLabelText('단계별 진입 시각')).not.toBeInTheDocument();
+  });
+
   it('history 빈 객체 시 미니뷰 전부 "—"', () => {
     render(<OrderTimeline current="ORDERED" history={{}} />);
     const dashes = screen.getAllByText('—');

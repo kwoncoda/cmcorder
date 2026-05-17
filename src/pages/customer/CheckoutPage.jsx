@@ -12,8 +12,8 @@ import Checkbox from '../../components/atoms/Checkbox.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
 import DeliveryTypeSelector from '../../components/organisms/DeliveryTypeSelector.jsx';
 
-const SID_PATTERN = /^\d{2}\d{2}37\d{3}$/;
-const SID_9 = /^\d{9}$/;
+// find_error_v2 — 주문 자격(9자리)과 쿠폰 자격(컴모융 37) 분리.
+const ORDER_SID = /^\d{9}$/; const COUPON_SID = /^\d{2}\d{2}37\d{3}$/;
 const fmt = (n) => n.toLocaleString('ko-KR');
 const TABLES = [1,2,3,4,5,6,7,8,9,10,11,12];
 
@@ -28,13 +28,13 @@ export default function CheckoutPage() {
   const [touched, setTouched] = useState({}); const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
-  const sidIs9 = SID_9.test(sid); const sidDeptOK = SID_PATTERN.test(sid); const nameValid = name.trim().length >= 1;
-  const couponEligible = !external && sidIs9 && sidDeptOK && nameValid;
+  const sidOrderOK = ORDER_SID.test(sid); const sidCouponOK = COUPON_SID.test(sid); const nameValid = name.trim().length >= 1;
+  const couponEligible = !external && sidOrderOK && sidCouponOK && nameValid;
   const useCoupon = coupon && couponEligible;
   const discount = useCoupon ? 1000 : 0;
   const total = Math.max(0, subtotal - discount);
 
-  const errors = { sid: !external && !sidDeptOK ? '학번 형식이 올바르지 않습니다 (예: 20263701)' : '',
+  const errors = { sid: !external && !sidOrderOK ? '학번은 숫자 9자리로 입력해주세요.' : '',
     name: !nameValid ? '이름을 입력하세요' : '', tableNo: delivery === 'dineIn' && !tableNo ? '테이블 번호를 선택해 주세요' : '' };
   const valid = !errors.sid && !errors.name && !errors.tableNo && items.length > 0;
 
@@ -100,7 +100,7 @@ export default function CheckoutPage() {
           <Checkbox id="useCoupon" checked={coupon} onChange={(e) => setCoupon(e.target.checked)} label="🎫 쿠폰 사용 (컴모융 학생 한정 1,000원 할인)" disabled={!couponEligible} />
         </div>
         <p className="hint" style={{ fontSize: 11, color: 'var(--color-muted)', fontFamily: 'var(--font-mono)', margin: '4px 0 0' }}>
-          {couponEligible ? '✓ 학번 확인 완료 — 1,000원 할인 적용 가능' : '※ 학번 9자리 + 이름 입력 시 활성화됩니다.'}
+          {couponEligible ? '✓ 학번 확인 완료 — 1,000원 할인 적용 가능' : (sidOrderOK && !sidCouponOK ? '※ 컴모융(****37***) 학생만 쿠폰 사용이 가능해요.' : '※ 학번 9자리 + 이름 입력 시 활성화됩니다.')}
         </p>
       </div>)}
       <div className="receipt">

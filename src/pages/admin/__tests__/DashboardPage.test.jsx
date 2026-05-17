@@ -146,12 +146,31 @@ describe('DashboardPage', () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('★ Empty 분기 — orders=[] 시 EmptyState ("오늘 첫 주문 대기 중")', () => {
+  it('★ orders=[] 일 때도 6 컬럼 모두 렌더 (EmptyState 단독 banner 제거)', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
     renderPage();
-    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
-    expect(screen.getByText(/오늘 첫 주문 대기 중/)).toBeInTheDocument();
+    // 단독 EmptyState 가 컬럼을 가리지 않아야 한다.
+    expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
+    for (const col of ADMIN_COLUMNS) {
+      expect(screen.getByTestId(`admin-column-${col.status}`)).toBeInTheDocument();
+    }
+  });
+
+  it('★ orders=1 일 때 매칭 컬럼만 카드 1개 + 나머지 5 컬럼은 "해당 상태 주문 없음"', () => {
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({
+      data: [SAMPLE_ORDERS[0]], // ORDERED 1건
+      isLoading: false,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByTestId('admin-order-card-1')).toBeInTheDocument();
+    // 나머지 5개 컬럼은 "해당 상태 주문 없음".
+    const emptyTextNodes = screen.getAllByText('해당 상태 주문 없음');
+    expect(emptyTextNodes.length).toBe(5);
   });
 
   it('401 시 /admin/login 으로 redirect', async () => {
@@ -233,7 +252,7 @@ describe('DashboardPage', () => {
     expect(refetch).not.toHaveBeenCalled();
   });
 
-  it('★ 카드 클릭 시 /admin/orders/:id navigate', async () => {
+  it('★ 카드 클릭은 더 이상 상세 페이지로 이동하지 않는다 (네비게이션 제거)', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({
       data: SAMPLE_ORDERS,
@@ -243,12 +262,13 @@ describe('DashboardPage', () => {
     });
     renderPage();
     fireEvent.click(screen.getByTestId('admin-order-card-1'));
-    await waitFor(() => {
-      expect(screen.getByTestId('order-detail-stub')).toBeInTheDocument();
-    });
+    // 상세 stub 이 렌더되지 않아야 한다.
+    expect(screen.queryByTestId('order-detail-stub')).not.toBeInTheDocument();
+    // 대시보드는 그대로.
+    expect(screen.getByTestId('admin-dashboard-page')).toBeInTheDocument();
   });
 
-  it('★ 키보드 Enter — OrderCard 본문 <button> 으로 키보드 활성화 가능 (Bug 9/10 분리 구조)', () => {
+  it('★ OrderCard 는 article + 액션 button row 구조 (네비게이션 제거 후)', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({
       data: SAMPLE_ORDERS,
@@ -258,11 +278,11 @@ describe('DashboardPage', () => {
     });
     renderPage();
     const card = screen.getByTestId('admin-order-card-1');
-    // Bug 9/10: article 컨테이너 + 본문 button + 액션 button row 분리 구조.
-    // 카드 안에 type=button 본문 버튼이 있어 키보드 Enter/Space 활성화 가능.
+    // article 컨테이너 + 액션 button row. 본문은 더 이상 button 이 아님 (네비 제거).
     expect(card.tagName).toBe('ARTICLE');
-    const bodyBtn = card.querySelector('button[type="button"]');
-    expect(bodyBtn).not.toBeNull();
+    // 액션 button 은 여전히 존재 (예: ORDERED → 취소).
+    const actionBtns = card.querySelectorAll('button[type="button"]');
+    expect(actionBtns.length).toBeGreaterThan(0);
   });
 
   it('★ memo 회귀 — 동일 order reference 재전달 시 OrderCard 리렌더 X (Task 2.7 통합)', () => {
@@ -384,7 +404,8 @@ describe('DashboardPage', () => {
     renderPage();
     // TRANSFER_REPORTED 카드 #2의 "확인" 액션 클릭.
     const card = screen.getByTestId('admin-order-card-2');
-    fireEvent.click(card.querySelector('button:nth-of-type(2)')); // 본문 button 다음의 첫 action button (확인)
+    const confirmBtn = Array.from(card.querySelectorAll('button')).find((b) => b.textContent === '확인');
+    fireEvent.click(confirmBtn);
     await waitFor(() => {
       expect(screen.getByTestId('admin-action-error')).toBeInTheDocument();
     });
@@ -401,12 +422,12 @@ describe('DashboardPage', () => {
     apiFetch.mockRejectedValueOnce(new ApiError('일시 오류', { status: 500 }));
     renderPage();
     const card = screen.getByTestId('admin-order-card-2');
-    const confirmBtn = card.querySelector('button:nth-of-type(2)');
+    const confirmBtn = Array.from(card.querySelectorAll('button')).find((b) => b.textContent === '확인');
     fireEvent.click(confirmBtn);
     await waitFor(() => expect(screen.getByTestId('admin-action-error')).toBeInTheDocument());
     // 2차 호출: 성공 → banner 사라짐 + refetch 호출.
     apiFetch.mockResolvedValueOnce({ ok: true });
-    fireEvent.click(card.querySelector('button:nth-of-type(2)'));
+    fireEvent.click(confirmBtn);
     await waitFor(() => expect(refetch).toHaveBeenCalled());
     expect(screen.queryByTestId('admin-action-error')).not.toBeInTheDocument();
   });
@@ -419,7 +440,7 @@ describe('DashboardPage', () => {
     apiFetch.mockImplementation(() => new Promise((resolve) => { resolveFn = resolve; }));
     renderPage();
     const card = screen.getByTestId('admin-order-card-2');
-    const confirmBtn = card.querySelector('button:nth-of-type(2)');
+    const confirmBtn = Array.from(card.querySelectorAll('button')).find((b) => b.textContent === '확인');
     fireEvent.click(confirmBtn);
     // pending 동안 같은 버튼은 disabled.
     await waitFor(() => expect(confirmBtn).toBeDisabled());

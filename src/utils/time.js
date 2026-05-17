@@ -25,5 +25,7 @@ export function parseTimestamp(input) {
 export function elapsedMinutes(start, now = new Date()) {
   const startDate = parseTimestamp(start);
   if (!startDate) return 0;
-  return Math.floor((now.getTime() - startDate.getTime()) / 60000);
+  // 음수 클램프 — 시계 어긋남(NTP) 또는 transferred_at 이 약간 미래로 기록된 경우에도
+  // 운영자에게 "-1분 경과" 같은 음수가 노출되지 않도록 0 으로 고정.
+  return Math.max(0, Math.floor((now.getTime() - startDate.getTime()) / 60000));
 }

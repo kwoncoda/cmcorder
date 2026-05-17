@@ -46,7 +46,7 @@ export default function MenuPage() {
     <section data-testid="menu-page" style={{ paddingBottom: 96 }}>
       <RecentOrdersSection />
       <CategoryTabs categories={CATEGORIES} value={category} onChange={setCategory} />
-      {category === 'all' && <RecommendedBanner menus={popular} onAdd={(menu) => addItem(menu)} />}
+      {category === 'all' && <RecommendedBanner menus={popular} />}
       {filteredMenus.length === 0 ? (
         <EmptyState
           title={category === 'all' ? '메뉴가 없어요' : '이 분류의 메뉴가 없어요'}
