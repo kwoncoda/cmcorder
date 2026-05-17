@@ -8,8 +8,12 @@
 //       /closed                 — 자기 자신 무한 루프 방지
 //       /healthz                — 모니터링
 //       /api/business-state     — 사용자가 영업 상태 알아야 함 (SPA sync 진입점)
-//       /assets/*               — 정적 자산 (closed 페이지 로드 필요)
-//       /favicon.ico            — 정적 자산
+//       /assets/*               — Vite 해시 자산
+//       /favicon.ico, /robots.txt — 단일 정적 자산
+//       *.{png,jpg,webp,gif,svg,ico,css,js,map,woff,woff2,ttf,eot,webmanifest}
+//                               — 일반 정적 자산 확장자 (2026-05-17 front_closed_design)
+//                                 — /closed 페이지가 마스코트/웹로고/Tailwind CSS 등 로드 필요.
+//                                   SPA 라우트는 확장자가 없으므로 충돌 위험 없음.
 //
 // SPA layout(P0-5)는 *이중 가드*로 유지 — 서버 redirect + SPA store sync.
 import { getBusinessState } from '../domain/business-state.js';
@@ -17,11 +21,14 @@ import { getBusinessState } from '../domain/business-state.js';
 const GET_PASSTHROUGH_PATHS = new Set(['/closed', '/healthz', '/api/business-state']);
 const GET_PASSTHROUGH_PREFIXES = ['/assets/'];
 const GET_PASSTHROUGH_EXACTS = new Set(['/favicon.ico', '/robots.txt']);
+const STATIC_ASSET_EXT = /\.(png|jpe?g|webp|gif|svg|ico|css|js|map|woff2?|ttf|eot|webmanifest)$/i;
 
 function isGetPassthrough(path) {
   if (GET_PASSTHROUGH_PATHS.has(path)) return true;
   if (GET_PASSTHROUGH_EXACTS.has(path)) return true;
-  return GET_PASSTHROUGH_PREFIXES.some((p) => path.startsWith(p));
+  if (GET_PASSTHROUGH_PREFIXES.some((p) => path.startsWith(p))) return true;
+  if (STATIC_ASSET_EXT.test(path)) return true;
+  return false;
 }
 
 /**

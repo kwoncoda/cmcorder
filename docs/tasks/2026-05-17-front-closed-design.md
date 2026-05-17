@@ -134,3 +134,51 @@ Test Files  94 passed (94)
 ```
 
 ClosedScreen.test.jsx: 13 케이스 유지 (마스코트 -1 / 웹로고 +1).
+
+---
+
+## 후속 변경 — 3단계 (2026-05-17 사용자 docker rebuild 후 재현)
+
+사용자가 `docker compose build --no-cache app && docker compose up -d` 후에도 웹로고가 broken으로 표시. 헤더의 "CLOSED" 서브명 + alt 텍스트는 새 코드 반영됨 → JS/CSS는 새 빌드, 이미지만 404 의심.
+
+### 진단 결과 — 진짜 원인
+
+`curl -sI http://localhost/web-logo.png` 응답:
+```
+HTTP/1.1 423 Locked
+Content-Type: application/json
+Content-Length: 100
+```
+
+`/mascot/mascot.png`도 동일하게 423. (curl -I는 HEAD 요청이라 423 분기로 떨어진 것이고, 실제 브라우저 GET은 가드에서 `302 redirect → /closed` → HTML 응답 → `<img>`가 HTML 받아 broken)
+
+`server/middleware/business-state.js` 분석:
+- `isGetPassthrough` 화이트리스트가 `/assets/` prefix와 `/favicon.ico`, `/robots.txt`만 통과
+- **`/web-logo.png`, `/mascot/mascot.png`, `/items/*.webp`, `/map/*` 등 public/ root 정적 자산은 화이트리스트에 없음**
+- → CLOSED 상태에서 모든 일반 정적 자산이 302 redirect로 가로채짐 (거대 회귀 — 본인이 마스코트 → 웹로고 교체하면서 처음 드러남)
+
+### 추가 변경 파일
+
+| 파일 | 변경 |
+|------|------|
+| `server/middleware/business-state.js` | `STATIC_ASSET_EXT = /\.(png\|jpe?g\|webp\|gif\|svg\|ico\|css\|js\|map\|woff2?\|ttf\|eot\|webmanifest)$/i` 추가, `isGetPassthrough`에서 확장자 매칭 시 통과. SPA 라우트는 확장자 X — 충돌 없음. |
+| `server/middleware/__tests__/business-state.test.js` | 회귀 4건 추가 — `/web-logo.png`, `/mascot/mascot.png`, `/items/foo.webp`, `/map/booth.svg` 모두 CLOSED 시 200 통과 검증 |
+
+### 테스트 결과 (3단계 후)
+
+```
+Test Files  94 passed (94)
+     Tests  1009 passed (1009)
+```
+
+- business-state.test.js: 12 → 16 (+4 회귀)
+
+### 사용자 다음 단계
+
+```bash
+docker compose build app && docker compose up -d
+```
+
+(서버 코드 변경이라 frontend cache는 그대로 재활용. `--no-cache` 불필요)
+
+재배포 후 CLOSED 페이지에서 웹로고 + 헤더 마스코트가 정상 표시되어야 함.

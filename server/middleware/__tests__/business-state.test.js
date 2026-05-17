@@ -30,6 +30,11 @@ function makeApp(db) {
   app.get('/healthz', (_req, res) => res.json({ ok: true }));
   app.get('/assets/foo.js', (_req, res) => res.send('asset'));
   app.get('/favicon.ico', (_req, res) => res.send(''));
+  // 2026-05-17 front_closed_design — public/ root 정적 자산 (확장자 기반 화이트리스트).
+  app.get('/web-logo.png', (_req, res) => res.send(''));
+  app.get('/mascot/mascot.png', (_req, res) => res.send(''));
+  app.get('/items/foo.webp', (_req, res) => res.send(''));
+  app.get('/map/booth.svg', (_req, res) => res.send(''));
   app.post('/api/orders', (_req, res) => res.json({ ok: true }));
   app.post('/admin/anything', (_req, res) => res.json({ ok: true }));
   app.get('/admin/dashboard', (_req, res) => res.json({ ok: true }));
@@ -99,6 +104,33 @@ describe('businessStateGuard', () => {
   it('★ CLOSED — GET /favicon.ico → 200 (정적 자산)', async () => {
     const app = makeApp(db);
     const res = await request(app).get('/favicon.ico');
+    expect(res.status).toBe(200);
+  });
+
+  // ── 2026-05-17 front_closed_design 회귀 ─────────────────────
+  //   가드가 public/ root 정적 자산을 redirect로 막아 CLOSED 페이지에서
+  //   웹로고·마스코트·메뉴 이미지가 broken 표시되던 사고 재발 방지.
+  it('★ CLOSED — GET /web-logo.png → 200 (확장자 기반 화이트리스트)', async () => {
+    const app = makeApp(db);
+    const res = await request(app).get('/web-logo.png');
+    expect(res.status).toBe(200);
+  });
+
+  it('★ CLOSED — GET /mascot/mascot.png → 200 (정적 자산)', async () => {
+    const app = makeApp(db);
+    const res = await request(app).get('/mascot/mascot.png');
+    expect(res.status).toBe(200);
+  });
+
+  it('★ CLOSED — GET /items/foo.webp → 200 (메뉴 이미지)', async () => {
+    const app = makeApp(db);
+    const res = await request(app).get('/items/foo.webp');
+    expect(res.status).toBe(200);
+  });
+
+  it('★ CLOSED — GET /map/booth.svg → 200 (부스 미니맵 SVG)', async () => {
+    const app = makeApp(db);
+    const res = await request(app).get('/map/booth.svg');
     expect(res.status).toBe(200);
   });
 
