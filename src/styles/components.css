@@ -1329,6 +1329,25 @@
   font-family: var(--font-mono);
   color: var(--color-muted);
 }
+
+/* Codex final-gate P3 — 관리자 6탭 nav 모바일 보정.
+   nav를 4→6 탭으로 확장하면서 좁은 화면에서 가로 overflow 발생 가능. 본 topnav를
+   가로 스크롤 가능하게 풀고 padding/gap/폰트를 축소해 데스크톱 UI는 보존한다. */
+@media (max-width: 768px) {
+  .admin-topnav {
+    gap: 8px;
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .admin-topnav::-webkit-scrollbar { display: none; }
+  .admin-topnav > * { flex-shrink: 0; }
+  .admin-topnav .logo { font-size: 12px; }
+  .admin-topnav .nav { gap: 2px; }
+  .admin-topnav .nav-link { padding: 6px 8px; font-size: 12px; }
+  .admin-topnav .right { gap: 6px; font-size: 11px; }
+}
 .biz-badge {
   display: inline-flex;
   align-items: center;
@@ -1860,6 +1879,27 @@ code.ammo {
   gap: 12px;
   align-items: center;
   padding: 6px 0;
+}
+
+/* find_error_v2 P2-3 (Codex 리뷰) — 쿠폰 사용 내역 반응형. */
+/* 데스크톱: 5열 grid. 모바일(<640px): 2열 스택 + 이름·쿠폰 행 전체 폭. */
+.coupon-usage-row {
+  display: grid;
+  grid-template-columns: 100px 120px minmax(0, 1fr) 100px 100px;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 0;
+}
+@media (max-width: 640px) {
+  .coupon-usage-row {
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+    padding: 10px 0;
+    font-size: 12px;
+  }
+  .coupon-usage-row .cu-cell-name-coupon { grid-column: 1 / -1; }
+  .coupon-usage-row .cu-cell-discount { text-align: right; }
+  .coupon-usage-row .cu-cell-order { text-align: right; }
 }
 .bar-name {
   display: flex;

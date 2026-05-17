@@ -11,9 +11,13 @@
 // - 5분/10분 경과 시 노란/빨간 border 강조 — 운영자 시각 신호.
 // - key={order.id} — index 금지 (§3.5 7조).
 // - **Bug 9, 10 (2026-05-17): inline 액션 버튼**. design-bundle screens-admin.jsx
-//   295~322 라인 정합. 카드 자체는 키보드 접근 가능한 article(role=button), 본문
-//   클릭 → onSelect, 액션 row의 button은 stopPropagation 으로 onSelect 차단.
-//   nested <button> 회피를 위해 본문은 div 로 구성.
+//   295~322 라인 정합. 액션 row 의 button 은 onAction 으로 전이 호출.
+// - **find_error_v2 (2026-05-18): 카드 클릭 네비게이션 제거.** 본문은 단순 div
+//   섹션으로 표시만 — onSelect 콜백 미사용. /admin/orders/:id 라우트는 유지
+//   (직접 URL 진입 가능) 하지만 칸반 카드에서 진입 경로는 제거. 액션 버튼만
+//   상호작용 가능. cursor-pointer / hover:opacity-90 제거.
+// - **find_error_v2 (2026-05-18): items 미리보기.** 카드에 order.items 최대 3개를
+//   "이름 ×수량" 으로 노출. 초과 시 "외 N개".
 import { forwardRef, useMemo } from 'react';
 import StatusChip from '../molecules/StatusChip.jsx';
 import { elapsedMinutes as elapsedMinutesUtil } from '../../utils/time.js';
@@ -54,7 +58,7 @@ function formatPrice(n) {
 //   PAID              → 조리 시작
 //   COOKING           → 조리 완료
 //   READY             → 전달 완료
-//   HOLD              → 재확인 / 취소
+//   HOLD              → 이체 확인 / 취소  (find_error_v2: 재확인 → 이체 확인 으로 라벨 변경)
 const ACTION_BY_STATUS = {
   ORDERED: [{ label: '취소', to: 'CANCELED', variant: 'danger' }],
   TRANSFER_REPORTED: [
@@ -65,14 +69,27 @@ const ACTION_BY_STATUS = {
   COOKING: [{ label: '조리 완료', to: 'READY', variant: 'primary' }],
   READY: [{ label: '전달 완료', to: 'DONE', variant: 'primary' }],
   HOLD: [
-    { label: '재확인', to: 'PAID', variant: 'primary' },
+    { label: '이체 확인', to: 'PAID', variant: 'primary' },
     { label: '취소', to: 'CANCELED', variant: 'danger' },
   ],
 };
 
+// items 미리보기 — 최대 3개를 "이름 ×수량" 으로 반환, 초과 시 surplus 카운트.
+function previewItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  const head = items.slice(0, 3);
+  const surplus = items.length - head.length;
+  return { head, surplus };
+}
+
 // OrderCard — 단순 함수 컴포넌트 (P2-3 Codex v3 — memo 제거, A 방향).
 // 폴링 5초마다 order reference 새로 생성되므로 memo 효과 0이라 단순화.
-function OrderCard({ order, tick, onSelect, onAction, isPending = false }) {
+//
+// find_error_v2 (2026-05-18): 카드 클릭 네비게이션 제거.
+//   - 본문은 <div> 정적 표시 — onSelect prop 미사용.
+//   - cursor-pointer / hover:opacity-90 클래스 제거.
+//   - 액션 버튼만 인터랙션 (이체 확인/조리 시작 등).
+function OrderCard({ order, tick, onAction, isPending = false }) {
   const elapsedMin = useMemo(
     () => calcElapsedMinutes(order.transferred_at, new Date(tick)),
     [order.transferred_at, tick],
@@ -81,6 +98,7 @@ function OrderCard({ order, tick, onSelect, onAction, isPending = false }) {
   const displayName = pickName(order);
   const priceText = formatPrice(order.total_price);
   const actions = ACTION_BY_STATUS[order.status] ?? [];
+  const itemsPreview = previewItems(order.items);
 
   const cls = [
     'text-left w-full',
@@ -88,64 +106,47 @@ function OrderCard({ order, tick, onSelect, onAction, isPending = false }) {
     'rounded-md p-md shadow-card',
     'border-2',
     tone,
-    'hover:opacity-90',
     'transition-all duration-tap',
-    'cursor-pointer',
-    'focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-2',
   ].join(' ');
 
-  // 본문 클릭은 내부 <button>(본문)이 잡고, article 자체에도 onClick 부여 —
-  // 회귀: `fireEvent.click(screen.getByTestId('admin-order-card-17'))`는 article
-  // 직접 클릭이라 본문 button 핸들러로 버블링 X. 따라서 article에 fallback 핸들러.
-  // a11y: article 에는 role 미부여 (axe `aria-allowed-role` 회피) —
-  // 키보드 진입은 내부 본문 <button> 이 담당. nested-interactive 회피를 위해
-  // 본문 button과 액션 button 은 형제 관계로 분리.
-  const handleSelect = () => onSelect?.(order.id);
-
   return (
-    <article
-      data-testid={`admin-order-card-${order.id}`}
-      className={cls}
-      onClick={(e) => {
-        // article 직접 클릭만 처리 — 내부 button 이벤트는 자체 처리.
-        if (e.target === e.currentTarget) handleSelect();
-      }}
-    >
-      <button
-        type="button"
-        onClick={handleSelect}
-        aria-label={`주문 #${order.no} 상세 보기`}
-        className="block w-full text-left bg-transparent border-0 p-0"
-      >
-        <div className="flex items-baseline justify-between gap-sm">
-          <div className="font-display font-bold text-base">#{order.no}</div>
-          {priceText && (
-            <span className="font-mono tabular-nums text-sm text-card-ink">
-              {priceText}
-            </span>
-          )}
-        </div>
-        <div className="text-xs text-card-muted truncate">
-          {displayName ?? '(이름 없음)'}
-        </div>
-        <div className="mt-2xs flex items-center justify-between gap-sm">
-          <StatusChip status={order.status} size="sm" />
-          <span className="font-mono tabular-nums text-xs text-card-ink">
-            {elapsedMin}분 경과
+    <article data-testid={`admin-order-card-${order.id}`} className={cls}>
+      <div className="flex items-baseline justify-between gap-sm">
+        <div className="font-display font-bold text-base">#{order.no}</div>
+        {priceText && (
+          <span className="font-mono tabular-nums text-sm text-card-ink">
+            {priceText}
           </span>
-        </div>
-      </button>
+        )}
+      </div>
+      <div className="text-xs text-card-muted truncate">
+        {displayName ?? '(이름 없음)'}
+      </div>
+      {itemsPreview && (
+        <ul className="mt-2xs flex flex-col gap-3xs text-xs text-card-muted">
+          {itemsPreview.head.map((it, idx) => (
+            <li key={`${it.menu_id ?? it.name}-${idx}`} className="truncate">
+              {it.name} ×{it.quantity}
+            </li>
+          ))}
+          {itemsPreview.surplus > 0 && (
+            <li className="text-card-muted">외 {itemsPreview.surplus}개</li>
+          )}
+        </ul>
+      )}
+      <div className="mt-2xs flex items-center justify-between gap-sm">
+        <StatusChip status={order.status} size="sm" />
+        <span className="font-mono tabular-nums text-xs text-card-ink">
+          {elapsedMin}분 경과
+        </span>
+      </div>
       {actions.length > 0 && (
-        <div
-          className="mt-sm flex gap-xs"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <div className="mt-sm flex gap-xs">
           {actions.map((a) => (
             <button
               key={a.to}
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
+              onClick={() => {
                 if (isPending) return;
                 onAction?.(order.id, a.to);
               }}
@@ -168,7 +169,9 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
     status,
     orders = [],
     tick = Date.now(),
-    onSelectOrder,
+    // onSelectOrder 는 deprecated (find_error_v2): 카드 클릭 네비게이션 제거.
+    // prop 자체는 받지만 무시 — 기존 호출자의 회귀 차단용 fallthrough.
+    onSelectOrder: _onSelectOrder,
     onAction,
     pendingOrderId = null,
     className = '',
@@ -201,7 +204,7 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
 
       <ol className="flex flex-col gap-sm">
         {orders.length === 0 ? (
-          <li className="text-muted text-xs">비어 있음</li>
+          <li className="text-muted text-xs">해당 상태 주문 없음</li>
         ) : (
           orders.map((o) => (
             // key={o.id} — index 금지 (§3.5 7조).
@@ -209,7 +212,6 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
               <OrderCard
                 order={o}
                 tick={tick}
-                onSelect={onSelectOrder}
                 onAction={onAction}
                 isPending={o.id === pendingOrderId}
               />

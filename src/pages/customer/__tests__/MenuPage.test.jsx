@@ -82,6 +82,27 @@ describe('MenuPage', () => {
     expect(screen.getByText('🔥 학생회 추천 BEST')).toBeInTheDocument();
   });
 
+  it('★ RecommendedBanner subtitle — 메뉴 이름 · 구분자', () => {
+    useMenuData.mockReturnValue({
+      menus: SAMPLE_MENUS, popular: SAMPLE_MENUS.slice(0, 3),
+      isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByText('후라이드 · 양념 · 뿌링클')).toBeInTheDocument();
+  });
+
+  it('★ RecommendedBanner 안에 줍기 카드 미렌더 — find_error_v2', () => {
+    useMenuData.mockReturnValue({
+      menus: SAMPLE_MENUS, popular: SAMPLE_MENUS.slice(0, 3),
+      isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderPage();
+    const banner = screen.getByTestId('recommended-banner');
+    // banner 영역 안에는 menu-card-{id} 가 없어야 함 (MenuList 는 banner 바깥).
+    expect(banner.querySelector('[data-testid^="menu-card-"]')).toBeNull();
+    expect(banner.querySelector('button')).toBeNull();
+  });
+
   it('CategoryTabs 4개 표시', () => {
     useMenuData.mockReturnValue({
       menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),

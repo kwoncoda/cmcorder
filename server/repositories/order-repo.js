@@ -8,6 +8,23 @@
 //   - updateTransferInfo: 이체 신고 → TRANSFER_REPORTED 전이
 //
 // 상태 전이 검증은 호출자(라우트)에서 — Repository는 단순 UPDATE.
+//
+// find_error_v2 (2026-05-18) — 모든 mutation에 optional `actor` 옵션 추가.
+// 라우트가 actor를 전달하면 같은 트랜잭션 안에서 order_events 한 행도 INSERT.
+// actor 생략 시 이벤트 로깅 X — 기존 호출자(예: 정산 jobs)와 후방 호환.
+import { logOrderEvent } from './order-events-repo.js';
+
+// 상태 → 한국어 라벨 (관리자 내역 표시용). 라우트에서도 같은 매핑 사용.
+const ACTION_LABEL = {
+  CREATED: '주문 접수',
+  TRANSFER_REPORTED: '이체 완료 요청',
+  PAID: '이체 확인',
+  COOKING: '조리 시작',
+  READY: '조리 완료',
+  DONE: '전달 완료',
+  HOLD: '보류',
+  CANCELED: '취소',
+};
 
 /**
  * 일자별 시퀀스 — 다음 no.
@@ -28,8 +45,9 @@ export function nextOrderNo(db, operating_date) {
  *
  * @param {import('better-sqlite3').Database} db
  * @param {object} meta — { items_priced, total_price, name, student_id, is_external, external_token, delivery_type, table_no, operating_date }
+ * @param {{ actor?: string }} [opts] — actor 제공 시 order_events에 CREATED 행 INSERT (트랜잭션 안).
  */
-export function createOrder(db, meta) {
+export function createOrder(db, meta, opts = {}) {
   const tx = db.transaction(() => {
     const no = nextOrderNo(db, meta.operating_date);
     // P0-4 (Codex 리뷰): 모든 주문에 access_token 발급. 외부인은 external_token과
@@ -68,6 +86,17 @@ export function createOrder(db, meta) {
         item.quantity,
         item.category,
       );
+    }
+    // find_error_v2 — actor 제공 시 CREATED 이벤트 INSERT (같은 트랜잭션).
+    if (opts.actor) {
+      logOrderEvent(db, {
+        order_id: orderId,
+        event_type: 'CREATED',
+        from_status: null,
+        to_status: 'ORDERED',
+        action_name: ACTION_LABEL.CREATED,
+        actor: opts.actor,
+      });
     }
     return getOrder(db, orderId);
   });
@@ -141,9 +170,11 @@ const STATUS_TIME_FIELD = {
  * @param {number} id
  * @param {string} newStatus
  * @param {object} [extraFields] — hold_reason · canceled_reason 등 보조 컬럼
+ * @param {{ actor?: string, note?: string }} [opts] — actor 제공 시 order_events에 한 행 INSERT.
  */
-export function updateOrderStatus(db, id, newStatus, extraFields = {}) {
+export function updateOrderStatus(db, id, newStatus, extraFields = {}, opts = {}) {
   const tx = db.transaction(() => {
+    const before = getOrder(db, id);
     const setClauses = ['status = ?', "updated_at = datetime('now')"];
     const values = [newStatus];
     const timeField = STATUS_TIME_FIELD[newStatus];
@@ -158,6 +189,18 @@ export function updateOrderStatus(db, id, newStatus, extraFields = {}) {
     db.prepare(`UPDATE orders SET ${setClauses.join(', ')} WHERE id = ?`).run(
       ...values,
     );
+    // find_error_v2 — actor 제공 시 상태 전이 이벤트 INSERT.
+    if (opts.actor && before) {
+      logOrderEvent(db, {
+        order_id: id,
+        event_type: newStatus,
+        from_status: before.status,
+        to_status: newStatus,
+        action_name: ACTION_LABEL[newStatus] ?? newStatus,
+        actor: opts.actor,
+        note: opts.note ?? null,
+      });
+    }
     return getOrder(db, id);
   });
   return tx();
@@ -169,23 +212,38 @@ export function updateOrderStatus(db, id, newStatus, extraFields = {}) {
  * @param {import('better-sqlite3').Database} db
  * @param {number} id
  * @param {object} info — depositor_name · bank · custom_bank? · use_other_name? · other_name? · amount
+ * @param {{ actor?: string }} [opts] — actor 제공 시 order_events에 TRANSFER_REPORTED 이벤트 INSERT.
  */
-export function updateTransferInfo(db, id, info) {
-  db.prepare(
-    `UPDATE orders SET
-       depositor_name = ?, bank = ?, custom_bank = ?,
-       use_other_name = ?, other_name = ?, amount = ?,
-       status = 'TRANSFER_REPORTED', transferred_at = datetime('now'),
-       updated_at = datetime('now')
-     WHERE id = ?`,
-  ).run(
-    info.depositor_name,
-    info.bank,
-    info.custom_bank ?? null,
-    info.use_other_name ? 1 : 0,
-    info.other_name ?? null,
-    info.amount,
-    id,
-  );
-  return getOrder(db, id);
+export function updateTransferInfo(db, id, info, opts = {}) {
+  const tx = db.transaction(() => {
+    const before = getOrder(db, id);
+    db.prepare(
+      `UPDATE orders SET
+         depositor_name = ?, bank = ?, custom_bank = ?,
+         use_other_name = ?, other_name = ?, amount = ?,
+         status = 'TRANSFER_REPORTED', transferred_at = datetime('now'),
+         updated_at = datetime('now')
+       WHERE id = ?`,
+    ).run(
+      info.depositor_name,
+      info.bank,
+      info.custom_bank ?? null,
+      info.use_other_name ? 1 : 0,
+      info.other_name ?? null,
+      info.amount,
+      id,
+    );
+    if (opts.actor && before) {
+      logOrderEvent(db, {
+        order_id: id,
+        event_type: 'TRANSFER_REPORTED',
+        from_status: before.status,
+        to_status: 'TRANSFER_REPORTED',
+        action_name: ACTION_LABEL.TRANSFER_REPORTED,
+        actor: opts.actor,
+      });
+    }
+    return getOrder(db, id);
+  });
+  return tx();
 }

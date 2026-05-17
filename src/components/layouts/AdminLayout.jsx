@@ -1,7 +1,7 @@
 // AdminLayout — design-bundle .admin-shell + .admin-topnav (screens-admin.jsx:48-76) 정합.
-// nav: 본부 / 메뉴 / 정산 / 이체확인 + biz-badge + admin1 + 로그아웃.
-// Bug 11 (2026-05-17) — 일회성 서비스이므로 내역(history)·쿠폰(coupons) nav 제거.
-// 두 화면 모두 라우트/API 미구현이고 D-day(2026-05-20) 후 운영 종료 → 운영자 혼란 방지 위해 hide.
+// nav: 본부 / 메뉴 / 내역 / 정산 / 쿠폰 / 이체확인 + biz-badge + admin1 + 로그아웃.
+// find_error_v2 (2026-05-18) — 내역(history)·쿠폰(coupons) nav 복원.
+//   Bug 11에서 미구현이라 hide했으나 본 task에서 API/라우트/페이지 모두 구현 완료.
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { apiFetch, ApiError } from '../../api/client.js';
@@ -10,11 +10,13 @@ import { useApi } from '../../hooks/useApi.js';
 import { BusinessStateSchema } from '../../api/schemas.js';
 import useBusinessStateStore from '../../store/businessState.js';
 
-// 4종 nav — Bug 11 hide policy 적용 (내역·쿠폰 미구현 nav 항목 제거).
+// 6종 nav — design-bundle screens-admin.jsx:52-57 순서 정합.
 const ITEMS = [
   { to: '/admin/dashboard',  label: '본부',     testid: 'admin-nav-dashboard' },
   { to: '/admin/menus',      label: '메뉴',     testid: 'admin-nav-menus' },
+  { to: '/admin/history',    label: '내역',     testid: 'admin-nav-history' },
   { to: '/admin/settlement', label: '정산',     testid: 'admin-nav-settlement' },
+  { to: '/admin/coupons',    label: '쿠폰',     testid: 'admin-nav-coupons' },
   { to: '/admin/transfers',  label: '이체확인', testid: 'admin-nav-transfers' },
 ];
 

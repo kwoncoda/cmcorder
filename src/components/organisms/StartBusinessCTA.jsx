@@ -49,16 +49,22 @@ const StartBusinessCTA = forwardRef(function StartBusinessCTA(
     ? '🚀 장사 시작 (지금 영업 시작)'
     : '장사 시작 (영업 시간 전)';
 
+  // find_error_v2 (2026-05-18): secondary 변형(시간 전)은 full-width 가 아니라
+  // 컨텐츠 크기로 표시되고 가운데 정렬된다. primary(긴급) 는 기존대로 full-width.
+  const buttonWrapperCls = isPrimary
+    ? 'flex flex-col gap-sm'
+    : 'flex flex-col items-center justify-center gap-sm';
+
   return (
     <div
       ref={ref}
-      className={['flex flex-col gap-sm', className].filter(Boolean).join(' ')}
+      className={[buttonWrapperCls, className].filter(Boolean).join(' ')}
       {...rest}
     >
       <Button
         variant={isPrimary ? 'primary' : 'secondary'}
         size="lg"
-        block
+        block={isPrimary}
         loading={loading}
         onClick={handleClick}
         data-testid="start-business-cta"

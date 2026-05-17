@@ -43,6 +43,14 @@ export default function TransferPage() {
       navigate(`/orders/${id}/status${tokenQuery}`);
     } catch (err) {
       if (err instanceof BusinessClosedError) throw err;
+      // find_error_v2 — 이미 신고된 주문이면 status 페이지로 이동 (서버에 이미 접수된 상태).
+      // P2-1 (Codex 리뷰): status 페이지에 1회성 flash 안내를 location.state로 전달해 사용자에게 명확히 노출.
+      if (err instanceof ApiError && err.code === 'TRANSFER_ALREADY_REPORTED') {
+        navigate(`/orders/${id}/status${tokenQuery}`, {
+          state: { flash: 'TRANSFER_ALREADY_REPORTED', message: err.message },
+        });
+        return;
+      }
       setServerError(err instanceof ApiError ? err.message : '이체 완료 요청에 실패했어요.');
     } finally { setSubmitting(false); }
   };
@@ -86,10 +94,6 @@ export default function TransferPage() {
           formId="transfer-report-form"
           hideSubmit
         />
-      </div>
-
-      <div className="warn-banner info" role="note">
-        ℹ️ <span>본부가 통장 입금을 확인하면 자동으로 조리가 시작돼요. <b>이름·은행·금액·시각</b> 4가지가 일치해야 해요.</span>
       </div>
 
       <div style={{ height: 96 }} />

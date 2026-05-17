@@ -1,12 +1,15 @@
-// RecommendedBanner — design-bundle .best-banner(보급품 박스) + MenuCard 3개 그리드.
+// RecommendedBanner — design-bundle .best-banner(보급품 박스) 영역.
 //
-// 마크업: <section class="best-banner"> (메타 정보) + 별도 <div class="best-grid"> (3개 카드).
-// 테스트 회귀 보호: "🔥 학생회 추천 BEST" 텍스트, MenuCard 3개 heading (후라이드/양념/뿌링클).
+// find_error_v2 정비 (2026-05-18): 내부 MenuCard 3-card 그리드(줍기 UI) 제거.
+// banner 본체(airdrop-icon · body · stencil)만 유지하고, subtitle 에 popular 메뉴 이름을 · 구분자로 나열.
+//
+// 마크업: <section> > <div class="best-banner">  (3-grid 제거)
+// 테스트 회귀 보호: "🔥 학생회 추천 BEST" 텍스트, subtitle 의 메뉴 이름 · 결합.
 import { forwardRef } from 'react';
-import MenuCard from './MenuCard.jsx';
 
 const RecommendedBanner = forwardRef(function RecommendedBanner(
-  { menus = [], onAdd, className = '', ...rest },
+  // onAdd 는 과거 카드 그리드에서 사용. find_error_v2 이후 시그니처 호환을 위해 흡수 후 무시.
+  { menus = [], className = '', onAdd: _onAdd, ...rest },
   ref,
 ) {
   if (menus.length === 0) return null;
@@ -30,17 +33,6 @@ const RecommendedBanner = forwardRef(function RecommendedBanner(
         <div className="airdrop-stencil" aria-hidden="true">
           WINNER WINNER<br />CHICKEN DINNER
         </div>
-      </div>
-      <div className="grid grid-cols-3 gap-sm" style={{ padding: '0 16px' }}>
-        {menus.slice(0, 3).map((m) => (
-          <MenuCard
-            key={m.id}
-            menu={m}
-            recommended
-            useFallback={!m.image}
-            onAdd={onAdd}
-          />
-        ))}
       </div>
     </section>
   );

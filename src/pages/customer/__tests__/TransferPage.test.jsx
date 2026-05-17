@@ -11,7 +11,7 @@
 //  - 페이지 ≤120줄 — §3.5 1조
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 // apiFetch mock — 서버 호출 격리.
 vi.mock('../../../api/client.js', async () => {
@@ -35,15 +35,23 @@ const SAMPLE_ORDER = {
   total_price: 18000,
 };
 
+// P2-1: stub이 location.state.flash·message를 노출하도록 확장 — 라우팅 전달 검증.
+function StatusStub() {
+  const loc = useLocation();
+  return (
+    <div data-testid="status-page-stub" data-flash={loc.state?.flash ?? ''}>
+      현황
+      {loc.state?.message && <span data-testid="status-stub-flash-message">{loc.state.message}</span>}
+    </div>
+  );
+}
+
 function renderPage(initialPath = '/orders/17/transfer') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/orders/:id/transfer" element={<TransferPage />} />
-        <Route
-          path="/orders/:id/status"
-          element={<div data-testid="status-page-stub">현황</div>}
-        />
+        <Route path="/orders/:id/status" element={<StatusStub />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -199,6 +207,68 @@ describe('TransferPage', () => {
     if (typeof process !== 'undefined' && process.off) {
       process.off('unhandledRejection', nodeHandler);
     }
+  });
+
+  // ── find_error_v2 — 중복 제출 UX 회귀 ────────────────────
+  // 사고: 사용자가 이체 신고 후 뒤로가기 → 재제출 시 raw "불법 상태 전이"가 UI에 노출.
+  // 처치: 라우트가 TRANSFER_ALREADY_REPORTED로 응답, 페이지는 status로 이동
+  //       (첫 신고가 이미 서버에 접수됐으므로 사용자 입장에서는 성공).
+  it('★ find_error_v2 — TRANSFER_ALREADY_REPORTED 응답 시 status로 이동 (raw 문구 미노출)', async () => {
+    apiFetch.mockResolvedValueOnce(SAMPLE_ORDER); // 첫 fetch
+    apiFetch.mockRejectedValueOnce(
+      new ApiError('이미 이체 완료 요청이 접수됐어요. 본부 확인을 기다려주세요.', {
+        status: 409,
+        code: 'TRANSFER_ALREADY_REPORTED',
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/은행/)).toBeInTheDocument();
+    });
+    fillValidForm();
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
+    await waitFor(() => {
+      expect(screen.getByTestId('status-page-stub')).toBeInTheDocument();
+    });
+    // raw 내부 문구는 노출되지 않는다.
+    expect(screen.queryByText(/불법 상태 전이/)).not.toBeInTheDocument();
+  });
+
+  // P2-1 (Codex 리뷰) — 친절 문구를 status로 1회 flash 전달.
+  it('★ P2-1 — TRANSFER_ALREADY_REPORTED 응답 시 location.state.flash·message로 전달', async () => {
+    apiFetch.mockResolvedValueOnce(SAMPLE_ORDER);
+    apiFetch.mockRejectedValueOnce(
+      new ApiError('이미 이체 완료 요청이 접수됐어요. 본부 확인을 기다려주세요.', {
+        status: 409,
+        code: 'TRANSFER_ALREADY_REPORTED',
+      }),
+    );
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/은행/)).toBeInTheDocument();
+    });
+    fillValidForm();
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
+    await waitFor(() => {
+      expect(screen.getByTestId('status-page-stub')).toHaveAttribute(
+        'data-flash',
+        'TRANSFER_ALREADY_REPORTED',
+      );
+    });
+    expect(screen.getByTestId('status-stub-flash-message')).toHaveTextContent(
+      /이미 이체 완료 요청이 접수됐어요/,
+    );
+  });
+
+  // ADR-033 UX 정리: "본부가 통장 입금을 확인하면…" info 배너는 제거 (혼란 야기).
+  it('★ find_error_v2 — info 배너("본부가 통장 입금을 확인하면…")는 DOM에 없다', async () => {
+    apiFetch.mockResolvedValue(SAMPLE_ORDER);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/은행/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/본부가 통장 입금을 확인하면/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/4가지가 일치해야/)).not.toBeInTheDocument();
   });
 
   // ── 회귀 — 페이지 줄수 ────────────────────────────────────

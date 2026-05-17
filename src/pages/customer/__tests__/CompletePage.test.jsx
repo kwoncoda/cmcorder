@@ -278,6 +278,43 @@ describe('CompletePage', () => {
     expect(results).toHaveNoViolations();
   });
 
+  // ── Codex final-gate P2 — unmount 후 copy timer cleanup ────────
+  // 사고: 복사 성공 후 2초 idle 복귀 setTimeout이 테스트 teardown 이후 실행되면
+  // ReferenceError(window is not defined) 또는 unmounted component setState 경고 발생.
+  // 처치: useRef + useEffect cleanup으로 unmount 시 clearTimeout.
+  it('★ Codex final-gate P2 — 복사 후 즉시 unmount해도 pending timer가 fire되지 않음', async () => {
+    apiFetch.mockResolvedValue(SAMPLE_ORDER);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn(async () => {}) },
+    });
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const { unmount } = renderPage();
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: '계좌번호 복사' })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: '계좌번호 복사' }));
+      await waitFor(() => {
+        expect(screen.getByText(/복사됨/)).toBeInTheDocument();
+      });
+      // 클릭 후 idle 복귀 setTimeout이 등록됐어야 함
+      const countBeforeUnmount = vi.getTimerCount();
+      expect(countBeforeUnmount).toBeGreaterThanOrEqual(1);
+      unmount();
+      // cleanup useEffect가 clearTimeout을 호출해 timer count가 감소했어야 함
+      expect(vi.getTimerCount()).toBeLessThan(countBeforeUnmount);
+      // 추가로 시간을 흘려도 unmounted component setState 경고 없어야 함
+      vi.advanceTimersByTime(3000);
+      const calls = errSpy.mock.calls.flat().map((v) => String(v)).join(' ');
+      expect(calls).not.toMatch(/unmounted/i);
+    } finally {
+      vi.useRealTimers();
+      errSpy.mockRestore();
+    }
+  });
+
   // ── 회귀 — 페이지 줄수 ────────────────────────────────────
   it('★ 페이지 ≤120줄 (§3.5 1조)', async () => {
     const fs = await import('node:fs');

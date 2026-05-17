@@ -50,6 +50,45 @@ describe('StartBusinessCTA', () => {
     ).toBeInTheDocument();
   });
 
+  it('★ shouldBeOpen=false 시 버튼은 full-width 가 아님 (block prop 미적용)', () => {
+    render(<StartBusinessCTA status="CLOSED" shouldBeOpen={false} />);
+    const btn = screen.getByTestId('start-business-cta');
+    // Button atom 은 block=true 시 'w-full' 클래스를 추가한다.
+    // shouldBeOpen=false 인 secondary 변형에서는 block 미적용 → w-full 없음.
+    expect(btn.className).not.toMatch(/(^|\s)w-full(\s|$)/);
+  });
+
+  it('★ shouldBeOpen=false 시 버튼이 centered wrapper 안에 배치', () => {
+    render(<StartBusinessCTA status="CLOSED" shouldBeOpen={false} />);
+    const btn = screen.getByTestId('start-business-cta');
+    // 버튼의 부모 또는 조상 중에 justify-center / items-center 가 있어야 한다.
+    const wrapper = btn.parentElement;
+    expect(wrapper?.className ?? '').toMatch(/justify-center|items-center/);
+  });
+
+  it('★ shouldBeOpen=true 시 버튼은 full-width (block 적용 유지)', () => {
+    render(<StartBusinessCTA status="CLOSED" shouldBeOpen={true} />);
+    const btn = screen.getByTestId('start-business-cta');
+    // primary 변형은 긴급 CTA — w-full 유지.
+    expect(btn.className).toMatch(/(^|\s)w-full(\s|$)/);
+  });
+
+  it('★ 두 변형 모두 onStart 콜백 정상 작동', () => {
+    const onStartPrimary = vi.fn();
+    const { rerender } = render(
+      <StartBusinessCTA status="CLOSED" shouldBeOpen={true} onStart={onStartPrimary} />,
+    );
+    fireEvent.click(screen.getByTestId('start-business-cta'));
+    expect(onStartPrimary).toHaveBeenCalledTimes(1);
+
+    const onStartSecondary = vi.fn();
+    rerender(
+      <StartBusinessCTA status="CLOSED" shouldBeOpen={false} onStart={onStartSecondary} />,
+    );
+    fireEvent.click(screen.getByTestId('start-business-cta'));
+    expect(onStartSecondary).toHaveBeenCalledTimes(1);
+  });
+
   it('클릭 시 onStart 호출 + 즉시 pressed 클래스 (200ms 모션)', () => {
     const onStart = vi.fn();
     vi.useFakeTimers();

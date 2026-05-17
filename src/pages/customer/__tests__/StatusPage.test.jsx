@@ -252,12 +252,9 @@ describe('StatusPage', () => {
     expect(progressbar).toHaveAttribute('aria-valuemax', '5');
   });
 
-  it('★ OrderTimeline history 미니뷰 — created_at/paid_at 시각 표시', () => {
+  it('★ OrderTimeline 미니뷰 미렌더 (find_error_v2) — aria-label 단계별 진입 시각 없음', () => {
     renderPage();
-    // 단계별 진입 시각 (PAID 까지 진입 → ORDERED·TRANSFER·PAID 시각).
-    expect(screen.getByText('17:30')).toBeInTheDocument(); // ORDERED
-    expect(screen.getByText('17:31')).toBeInTheDocument(); // TRANSFER_REPORTED
-    expect(screen.getByText('17:33')).toBeInTheDocument(); // PAID
+    expect(screen.queryByLabelText('단계별 진입 시각')).not.toBeInTheDocument();
   });
 
   // ── SSE snapshot 우선 ───────────────────────────────────────
@@ -361,6 +358,68 @@ describe('StatusPage', () => {
     });
     renderPage();
     expect(screen.getByText(/부스 운영진에게 문의/)).toBeInTheDocument();
+  });
+
+  // ── find_error_v2 — 이모지 제거 ────────────────────────────
+  it('★ STATE_LABEL.READY 에 🍗 이모지 없음', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'READY' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    const live = screen.getByRole('status');
+    expect(live.textContent).not.toContain('🍗');
+    expect(within(live).getByText(/픽업 준비 완료/)).toBeInTheDocument();
+  });
+
+  it('★ ready-banner body 에 ✅ 이모지 없음', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'READY' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    // ready-banner — alert role 으로 식별. "수령 가능해요!" 가 식별자.
+    const banner = screen.getByText(/수령 가능해요/).closest('.ready-banner');
+    expect(banner).not.toBeNull();
+    expect(banner.textContent).not.toContain('✅');
+    // 주문 번호는 그대로 #17번 으로 표기 유지.
+    expect(banner.textContent).toMatch(/#17번/);
+  });
+
+  // ── P2-1 (Codex 리뷰) — TRANSFER_ALREADY_REPORTED flash 안내 ─────────
+  it('★ P2-1 — location.state.flash=TRANSFER_ALREADY_REPORTED 시 안내 배너 노출', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'TRANSFER_REPORTED' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    render(
+      <MemoryRouter
+        initialEntries={[{
+          pathname: '/orders/17/status',
+          state: { flash: 'TRANSFER_ALREADY_REPORTED', message: '이미 이체 완료 요청이 접수됐어요. 본부 확인을 기다려주세요.' },
+        }]}
+      >
+        <Routes>
+          <Route path="/orders/:id/status" element={<StatusPage />} />
+          <Route path="*" element={<div data-testid="catchall-404">404</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const flash = screen.getByTestId('status-flash');
+    expect(flash).toHaveTextContent(/이미 이체 완료 요청이 접수됐어요/);
+    // raw 내부 문구는 노출되지 않는다.
+    expect(screen.queryByText(/불법 상태 전이/)).not.toBeInTheDocument();
+  });
+
+  it('★ P2-1 — location.state.flash 없으면 안내 배너 미렌더', () => {
+    renderPage();
+    expect(screen.queryByTestId('status-flash')).not.toBeInTheDocument();
   });
 
   // ── 회귀 — 페이지 줄수 ────────────────────────────────────

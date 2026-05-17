@@ -1,5 +1,6 @@
 // A-2 본부 대시보드 — design-bundle .admin-board 6-col Kanban + .start-cta.urgent 정합.
 // 기능 로직 유지: useApi sync + 5초 폴링 + 1분 tick + ? help + 401 navigate.
+// find_error_v2 (2026-05-18): 카드 클릭 네비게이션 제거 + orders=[] 일 때도 6 컬럼 유지.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
@@ -13,7 +14,6 @@ import StartBusinessCTA from '../../components/organisms/StartBusinessCTA.jsx';
 import KeyboardHelpModal from '../../components/organisms/KeyboardHelpModal.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
-import EmptyState from '../../components/state/EmptyState.jsx';
 import { ADMIN_COLUMNS, groupOrdersByStatus } from '../../constants/admin-columns.js';
 
 const POLL_INTERVAL_MS = 5_000;
@@ -104,15 +104,13 @@ export default function DashboardPage() {
         <div style={{ marginLeft: 'auto' }}><BusinessStateBadge status={status} shouldBeOpen /></div>
       </header>
       {actionError && (<div role="alert" data-testid="admin-action-error" className="warn-banner danger" style={{ margin: '8px 0' }}>⚠️ {actionError}</div>)}
-      {orders.length === 0 ? (
-        <EmptyState variant="card" title="오늘 첫 주문 대기 중" description="주문이 들어오면 여기에 표시됩니다." />
-      ) : (<div className="admin-board" data-testid="kanban-board">
+      <div className="admin-board" data-testid="kanban-board">
         {ADMIN_COLUMNS.map((col) => (
           <AdminCardColumn key={col.status} title={col.title} status={col.status}
             orders={byColumn[col.status]} tick={tick} pendingOrderId={actionPending}
-            onSelectOrder={(id) => navigate(`/admin/orders/${id}`)} onAction={handleAction} />
+            onAction={handleAction} />
         ))}
-      </div>)}
+      </div>
       <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
     </section>
   );
