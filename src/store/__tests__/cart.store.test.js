@@ -89,4 +89,30 @@ describe('CartStore', () => {
     act(() => result.current.addItem(undefined));
     expect(result.current.items).toHaveLength(0);
   });
+
+  it('★ Bug 2 — addItem이 image/code/sub 메타데이터 보존', () => {
+    const menu = {
+      id: 1,
+      name: '후라이드',
+      basePrice: 18000,
+      category: 'chicken',
+      image: '/items/bandage.webp',
+      code: 'BANDAGE',
+      sub: '치킨',
+    };
+    const { addItem } = useCartStore.getState();
+    useCartStore.setState({ items: [] });
+    addItem(menu);
+    const item = useCartStore.getState().items[0];
+    expect(item).toMatchObject({
+      menuId: 1,
+      name: '후라이드',
+      basePrice: 18000,
+      category: 'chicken',
+      image: '/items/bandage.webp',
+      code: 'BANDAGE',
+      sub: '치킨',
+      quantity: 1,
+    });
+  });
 });

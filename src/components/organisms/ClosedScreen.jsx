@@ -5,16 +5,17 @@
 import { forwardRef } from 'react';
 import MascotState from '../molecules/MascotState.jsx';
 
+// Bug 12 / P2-1 — 5/20·5/21 양일 모두 오후 3시(15:00) 오픈으로 통일 (사용자 결정).
 const REASON_CONFIG = {
-  'before-open':     { title: '아직 영업 시작 전이에요',     body: '오늘 부스는 16:30부터 시작합니다. 잠시 후 다시 와 주세요.', mascot: 'default' },
-  'after-close':     { title: '오늘 영업이 끝났어요',         body: '오늘 부스는 종료되었습니다. 내일 11:00에 다시 만나요!',     mascot: 'arrive' },
-  'after-settlement':{ title: '오늘 부스 정산 마감!',         body: '오늘 영업이 끝났습니다. 내일 11:00에 다시 만나요!',         mascot: 'arrive' },
+  'before-open':     { title: '아직 영업 시작 전이에요',     body: '오늘 부스는 오후 3시에 오픈할 예정입니다. 잠시 후 다시 와 주세요.', mascot: 'default' },
+  'after-close':     { title: '오늘 영업이 끝났어요',         body: '오늘 부스는 종료되었습니다. 내일 오후 3시에 다시 만나요!',     mascot: 'arrive' },
+  'after-settlement':{ title: '오늘 부스 정산 마감!',         body: '오늘 영업이 끝났습니다. 내일 오후 3시에 다시 만나요!',         mascot: 'arrive' },
   'both-days-done':  { title: '축제 부스가 종료되었습니다',   body: '이용해 주셔서 감사합니다! 또 만나요 🪖',                       mascot: 'canceled' },
 };
 
 const OPERATING_SCHEDULE = [
-  { date: '2026-05-20', label: '5월 20일 (수)', hours: '16:30 ~ 21:00' },
-  { date: '2026-05-21', label: '5월 21일 (목)', hours: '11:00 ~ 21:00' },
+  { date: '2026-05-20', label: '5월 20일 (수)', hours: '15:00 ~ 21:00' },
+  { date: '2026-05-21', label: '5월 21일 (목)', hours: '15:00 ~ 21:00' },
 ];
 
 const ClosedScreen = forwardRef(function ClosedScreen(

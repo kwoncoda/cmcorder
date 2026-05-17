@@ -80,7 +80,7 @@ describe('TransferReportForm', () => {
   it('필수 필드 누락 시 onSubmit 호출 X + 에러 메시지 표시', () => {
     const onSubmit = vi.fn();
     render(<TransferReportForm orderId={17} expectedAmount={18000} onSubmit={onSubmit} />);
-    fireEvent.submit(screen.getByLabelText('이체 신고 폼'));
+    fireEvent.submit(screen.getByLabelText('이체 완료 요청 폼'));
     expect(onSubmit).not.toHaveBeenCalled();
     // placeholder option(<option>) + error alert(<p>) 둘 다 "은행을 선택하세요" 텍스트.
     // role="alert" P 태그 (Input atom의 errorMessage 패턴) 로 특정.
@@ -96,7 +96,7 @@ describe('TransferReportForm', () => {
     fireEvent.change(screen.getByLabelText(/입금자 이름/), {
       target: { value: '홍길동' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -119,7 +119,7 @@ describe('TransferReportForm', () => {
     fireEvent.change(screen.getByLabelText(/이체한 사람 이름/), {
       target: { value: '김철수' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         useOtherName: true,
@@ -138,7 +138,7 @@ describe('TransferReportForm', () => {
     fireEvent.change(screen.getByLabelText(/입금자 이름/), {
       target: { value: '홍길동' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({
         bank: '기타',
@@ -182,7 +182,7 @@ describe('TransferReportForm', () => {
     fireEvent.change(screen.getByLabelText(/입금자 이름/), {
       target: { value: '홍길동' },
     });
-    fireEvent.submit(screen.getByLabelText('이체 신고 폼'));
+    fireEvent.submit(screen.getByLabelText('이체 완료 요청 폼'));
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText('금액은 양수여야 합니다')).toBeInTheDocument();
   });

@@ -26,12 +26,29 @@ describe('ClosedScreen', () => {
     expect(screen.getByText(regex)).toBeInTheDocument();
   });
 
-  it('운영 일정 2일 모두 표시 (5/20·5/21)', () => {
+  it('운영 일정 2일 모두 표시 (5/20·5/21) — P2-1: 양일 모두 15:00 오픈', () => {
     render(<ClosedScreen reason="before-open" operatingDate="2026-05-20" />);
     expect(screen.getByText('5월 20일 (수)')).toBeInTheDocument();
     expect(screen.getByText('5월 21일 (목)')).toBeInTheDocument();
-    expect(screen.getByText('16:30 ~ 21:00')).toBeInTheDocument();
-    expect(screen.getByText('11:00 ~ 21:00')).toBeInTheDocument();
+    // 두 항목 모두 '15:00 ~ 21:00'이므로 getAllByText로 2개 확인.
+    expect(screen.getAllByText('15:00 ~ 21:00')).toHaveLength(2);
+  });
+
+  it('★ P2-1 — after-close/after-settlement 문구는 "내일 오후 3시"로 통일', () => {
+    const { rerender } = render(<ClosedScreen reason="after-close" />);
+    expect(screen.getByText(/내일 오후 3시에 다시 만나요/)).toBeInTheDocument();
+    rerender(<ClosedScreen reason="after-settlement" />);
+    expect(screen.getByText(/내일 오후 3시에 다시 만나요/)).toBeInTheDocument();
+  });
+
+  it('★ Bug 12 / P2-1 — 5/20·5/21 양일 오픈 시간 15:00 ~ 21:00', () => {
+    render(<ClosedScreen reason="before-open" operatingDate="2026-05-20" />);
+    expect(screen.getAllByText(/15:00 ~ 21:00/)).toHaveLength(2);
+  });
+
+  it('★ Bug 12 — before-open 문구는 "오후 3시에 오픈할 예정" 포함', () => {
+    render(<ClosedScreen reason="before-open" />);
+    expect(screen.getByText(/오후 3시에 오픈할 예정/)).toBeInTheDocument();
   });
 
   it('operatingDate=오늘 일자만 강조 (text-accent 또는 font-semibold)', () => {

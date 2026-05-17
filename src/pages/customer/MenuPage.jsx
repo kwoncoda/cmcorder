@@ -11,6 +11,7 @@ import RecommendedBanner from '../../components/organisms/RecommendedBanner.jsx'
 import CategoryTabs from '../../components/organisms/CategoryTabs.jsx';
 import MenuList from '../../components/organisms/MenuList.jsx';
 import StickyCartBar from '../../components/organisms/StickyCartBar.jsx';
+import RecentOrdersSection from '../../components/organisms/RecentOrdersSection.jsx';
 
 const CATEGORIES = [
   { value: 'all',         label: '전체' },
@@ -43,6 +44,7 @@ export default function MenuPage() {
 
   return (
     <section data-testid="menu-page" style={{ paddingBottom: 96 }}>
+      <RecentOrdersSection />
       <CategoryTabs categories={CATEGORIES} value={category} onChange={setCategory} />
       {category === 'all' && <RecommendedBanner menus={popular} onAdd={(menu) => addItem(menu)} />}
       {filteredMenus.length === 0 ? (

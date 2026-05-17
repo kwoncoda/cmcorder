@@ -107,7 +107,7 @@ const TransferReportForm = forwardRef(function TransferReportForm(
       onSubmit={handleSubmit}
       className={wrapperCls}
       noValidate
-      aria-label="이체 신고 폼"
+      aria-label="이체 완료 요청 폼"
       data-order-id={orderId}
       {...rest}
     >
@@ -201,7 +201,7 @@ const TransferReportForm = forwardRef(function TransferReportForm(
       {!hideSubmit && (
         <div className="flex gap-sm">
           <Button type="submit" variant="primary" block loading={loading}>
-            이체 신고 제출
+            이체 완료 요청
           </Button>
           {onCancel && (
             <Button type="button" variant="ghost" onClick={onCancel} disabled={loading}>

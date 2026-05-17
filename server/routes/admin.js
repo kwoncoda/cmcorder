@@ -67,6 +67,45 @@ function serializeMenu(m) {
   };
 }
 
+// Bug 7 — SQLite 'YYYY-MM-DD HH:MM:SS' (UTC, marker 없음) → 'YYYY-MM-DDTHH:MM:SSZ' ISO 8601.
+// 브라우저(KST)가 marker 없는 문자열을 local time으로 잘못 해석해 540분 오차가 생기는 문제 방어.
+// 이미 'T'와 'Z' 또는 오프셋이 포함된 형식은 그대로 유지.
+function toIsoUtc(str) {
+  if (str == null) return str;
+  if (typeof str !== 'string') return str;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) {
+    return str.replace(' ', 'T') + 'Z';
+  }
+  return str;
+}
+
+const TS_FIELDS = [
+  'created_at',
+  'updated_at',
+  'transferred_at',
+  'paid_at',
+  'cooking_at',
+  'ready_at',
+  'done_at',
+];
+
+// Bug 8 — admin 응답 SQLite shape → JSON normalized shape.
+// is_external/use_other_name는 SQLite 0|1을 boolean으로, 그 외는 그대로 전달.
+// Bug 7 — timestamp 필드는 ISO 8601 Z 형식으로 변환.
+// customer 측 serializeOrder와 같은 패턴을 유지해 클라 OrderSchema(zod)가 통과하도록 한다.
+function serializeAdminOrder(o) {
+  if (!o) return o;
+  const out = {
+    ...o,
+    is_external: !!o.is_external,
+    use_other_name: o.use_other_name == null ? null : !!o.use_other_name,
+  };
+  for (const f of TS_FIELDS) {
+    if (out[f] != null) out[f] = toIsoUtc(out[f]);
+  }
+  return out;
+}
+
 /**
  * 관리자 라우터.
  * @param {import('better-sqlite3').Database} db
@@ -155,7 +194,8 @@ export function adminRoutes(db) {
       const parts = req.query.status.split(',').filter(Boolean);
       status = parts.length > 1 ? parts : parts[0];
     }
-    res.json(listOrders(db, { operating_date, status }));
+    // Bug 8 — 목록/대시보드도 동일 shape 일관성 보장 (is_external boolean).
+    res.json(listOrders(db, { operating_date, status }).map(serializeAdminOrder));
   });
 
   // ── GET /admin/api/orders/:id ──
@@ -164,7 +204,8 @@ export function adminRoutes(db) {
     if (!order) {
       return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: '주문을 찾을 수 없습니다.' });
     }
-    return res.json(order);
+    // Bug 8 — SQLite 0|1을 boolean으로 정규화 (클라 OrderSchema 통과).
+    return res.json(serializeAdminOrder(order));
   });
 
   // ── POST /admin/api/orders/:id/transition (ADR-025) ──
@@ -178,7 +219,8 @@ export function adminRoutes(db) {
       // 불법 전이면 StateTransitionError throw → errorHandler 409
       transition(order.status, to);
       const updated = updateOrderStatus(db, order.id, to);
-      return res.json(updated);
+      // Bug 8 — transition 응답도 동일 shape 유지.
+      return res.json(serializeAdminOrder(updated));
     } catch (err) {
       return next(err);
     }
@@ -199,7 +241,8 @@ export function adminRoutes(db) {
         bank: o.bank,
         custom_bank: o.custom_bank,
         amount: o.amount,
-        transferred_at: o.transferred_at,
+        // Bug 7 — transferred_at은 ISO 8601 Z 형식으로 변환.
+        transferred_at: toIsoUtc(o.transferred_at),
         status: o.status,
       })),
     );

@@ -1,8 +1,10 @@
 // 카트 store (zustand v5) — Task 3.1.
 //
 // 핵심 규약:
-// - 카트 항목 모양: { menuId, name, basePrice, category, quantity }
+// - 카트 항목 모양: { menuId, name, basePrice, category, image, code, sub, quantity }
 // - items는 배열로 유지 (사용자 추가 순서 보존). 동일 menuId는 quantity 누적 병합.
+// - image/code/sub은 카트·완료 화면 표시용 메타데이터(스냅샷). 메뉴 변경 후에도
+//   주문 시점 시각자산이 유지되도록 함께 저장 (Bug 2 — 인벤토리에 이미지/코드 사라짐 수정).
 // - totalQty / totalPrice는 *store에 저장 X*. 외부 셀렉터(`cartSelectors.*`)로 계산.
 //   호출자는 useCartStore(cartSelectors.totalQty) 패턴으로 사용 — §3.5 2조.
 // - devtools middleware는 dev 빌드에서만 부착 — production 번들에서 제외 (§3.5 8조).
@@ -16,7 +18,8 @@ import { devtools } from 'zustand/middleware';
 const cartImpl = (set) => ({
   items: [],
 
-  // menu = { id, name, basePrice, category }. menu.id 없으면 무시 (방어).
+  // menu = { id, name, basePrice, category, image?, code?, sub? }. menu.id 없으면 무시 (방어).
+  // image/code/sub은 카트·완료 화면 표시용 스냅샷. 누락 시 undefined (방어).
   addItem: (menu, qty = 1) => set((state) => {
     if (!menu || !menu.id) return state;
     const existing = state.items.find((i) => i.menuId === menu.id);
@@ -35,6 +38,9 @@ const cartImpl = (set) => ({
           name: menu.name,
           basePrice: menu.basePrice,
           category: menu.category,
+          image: menu.image,
+          code: menu.code,
+          sub: menu.sub,
           quantity: qty,
         },
       ],

@@ -13,7 +13,7 @@
 //  - a11y (axe)
 //  - ★ 페이지 ≤120줄 (§3.5 1조)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, within, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { axe } from 'vitest-axe';
 
@@ -115,7 +115,7 @@ describe('StatusPage', () => {
   // ── 8 상태별 한글 카피 ───────────────────────────────────────
   it.each([
     ['ORDERED', '주문 접수됨'],
-    ['TRANSFER_REPORTED', '이체 신고 완료'],
+    ['TRANSFER_REPORTED', '이체 완료 요청'],
     ['PAID', '입금 확인 완료'],
     ['COOKING', '조리 중'],
     ['READY', '픽업 준비 완료'],
@@ -297,6 +297,70 @@ describe('StatusPage', () => {
     const { container } = renderPage();
     const results = await axe(container);
     expect(results).toHaveNoViolations();
+  });
+
+  // ── Bug 5 — ORDERED 상태 시 sticky-bar 에 이체 완료 요청 CTA ──
+  it('★ status=ORDERED 시 sticky-bar 에 "이체 완료 요청" CTA 노출', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'ORDERED' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(
+      screen.getByRole('button', { name: /이체 완료 요청/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('★ status=ORDERED CTA 클릭 시 /orders/:id/transfer 로 navigate', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'ORDERED' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    // transfer 라우트 stub 을 단독 렌더링 — renderPage 와 별개로 단일 트리.
+    render(
+      <MemoryRouter initialEntries={['/orders/17/status']}>
+        <Routes>
+          <Route path="/orders/:id/status" element={<StatusPage />} />
+          <Route
+            path="/orders/:id/transfer"
+            element={<div data-testid="transfer-page-stub">이체</div>}
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('status-page-ordered-cta'));
+    expect(screen.getByTestId('transfer-page-stub')).toBeInTheDocument();
+  });
+
+  // ── P2-1 (Codex 최종 리뷰) — HOLD UX 정책 ────────────────────────
+  // 서버가 HOLD → TRANSFER_REPORTED 사용자 재요청을 409로 막으므로, status 화면에서도
+  // 재제출 CTA를 노출하면 안 된다. 대신 "부스 운영진 문의" 안내로 통일.
+  it('★ P2-1 — status=HOLD 시 "이체 정보 다시 보내기" CTA 미노출', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'HOLD' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.queryByRole('button', { name: /이체 정보 다시 보내기/ })).not.toBeInTheDocument();
+    // ORDERED CTA도 노출되지 않아야 함 (다른 상태 CTA 침투 회귀).
+    expect(screen.queryByTestId('status-page-ordered-cta')).not.toBeInTheDocument();
+  });
+
+  it('★ P2-1 — status=HOLD 시 "부스 운영진에게 문의" 안내 노출', () => {
+    useApi.mockReturnValue({
+      data: { ...SAMPLE_ORDER, status: 'HOLD' },
+      error: null,
+      isLoading: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.getByText(/부스 운영진에게 문의/)).toBeInTheDocument();
   });
 
   // ── 회귀 — 페이지 줄수 ────────────────────────────────────
