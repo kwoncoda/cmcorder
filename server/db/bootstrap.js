@@ -61,6 +61,13 @@ export function bootstrapDatabase(db) {
  * - 003-order-events (find_error_v2 2026-05-18): 주문 상태 변경 감사 로그
  *   테이블 + 인덱스. CREATE IF NOT EXISTS — 신규 DB에서는 init.sql이
  *   먼저 만들어 둔다(중복 무해). 기존 DB에서는 본 마이그레이션이 만든다.
+ * - 004-coupon-student-unique (find_error_v3 2026-05-18): used_coupons UNIQUE
+ *   기준을 (student_id, name) → (student_id)로 좁힘. 같은 학번이 이름을 바꿔
+ *   쿠폰을 재사용하던 실사용 버그 차단. 기존 (student_id, name) 인덱스가 있으면
+ *   table-rebuild로 마이그레이션. 잠재적 중복은 INSERT OR IGNORE로 안전 처리.
+ * - 005-admin-events (find_error_v3 2026-05-18): admin_events 테이블 + 인덱스.
+ *   메뉴/시스템 이벤트 통합 로그. order_events와 분리 (order_id 없음, category 컬럼).
+ *   IF NOT EXISTS — 신규 DB는 init.sql이 만들어 두므로 noop, 기존 DB는 본 마이그레이션이 생성.
  *
  * @param {import('better-sqlite3').Database} db
  */
@@ -109,6 +116,87 @@ function applyPostInitMigrations(db) {
     });
     tx();
     logger.info('[bootstrap] 마이그레이션 003-order-events 적용');
+  }
+
+  if (!applied('004-coupon-student-unique')) {
+    const tx = db.transaction(() => {
+      // 기존 used_coupons unique index 목록 검사. 신규 DB는 init.sql이 이미
+      // UNIQUE(student_id) 단일로 만들어 두므로 rebuild 불필요.
+      const indexes = db
+        .prepare('PRAGMA index_list(used_coupons)')
+        .all();
+      let needsRebuild = false;
+      for (const idx of indexes) {
+        if (idx.unique !== 1 || idx.origin !== 'u') continue;
+        const cols = db
+          .prepare(`PRAGMA index_info(${JSON.stringify(idx.name)})`)
+          .all()
+          .map((c) => c.name)
+          .sort();
+        // 이미 student_id 단일 UNIQUE면 신규 DB (init.sql 적용된 상태) — skip.
+        if (cols.length === 1 && cols[0] === 'student_id') {
+          needsRebuild = false;
+          break;
+        }
+        // (student_id, name) 등 다른 조합 UNIQUE면 rebuild 필요.
+        if (cols.includes('student_id')) {
+          needsRebuild = true;
+        }
+      }
+
+      if (needsRebuild) {
+        // SQLite는 ALTER TABLE DROP CONSTRAINT 미지원 → table rebuild 패턴.
+        // 같은 student_id에 여러 name이 남아있을 수 있으므로 INSERT OR IGNORE로
+        // 학번 단위 1행만 살리고 나머지는 버린다 (운영 DB는 없으나 안전 가드).
+        db.exec(`
+          CREATE TABLE used_coupons_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            order_id INTEGER NOT NULL REFERENCES orders(id),
+            used_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(student_id)
+          );
+          INSERT OR IGNORE INTO used_coupons_new (id, student_id, name, order_id, used_at)
+            SELECT id, student_id, name, order_id, used_at
+              FROM used_coupons
+              ORDER BY id;
+          DROP TABLE used_coupons;
+          ALTER TABLE used_coupons_new RENAME TO used_coupons;
+        `);
+      }
+
+      db.prepare('INSERT INTO _migrations (name) VALUES (?)').run('004-coupon-student-unique');
+    });
+    tx();
+    logger.info('[bootstrap] 마이그레이션 004-coupon-student-unique 적용');
+  }
+
+  if (!applied('005-admin-events')) {
+    const tx = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS admin_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          category TEXT NOT NULL CHECK(category IN ('menu','system')),
+          event_type TEXT NOT NULL,
+          action_name TEXT NOT NULL,
+          actor TEXT NOT NULL,
+          operating_date TEXT,
+          target_id INTEGER,
+          target_name TEXT,
+          before_value TEXT,
+          after_value TEXT,
+          note TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_admin_events_created_at ON admin_events(created_at);
+        CREATE INDEX IF NOT EXISTS idx_admin_events_category ON admin_events(category);
+        CREATE INDEX IF NOT EXISTS idx_admin_events_operating_date ON admin_events(operating_date);
+      `);
+      db.prepare('INSERT INTO _migrations (name) VALUES (?)').run('005-admin-events');
+    });
+    tx();
+    logger.info('[bootstrap] 마이그레이션 005-admin-events 적용');
   }
 }
 

@@ -1,7 +1,10 @@
-// Task 6.3 — 쿠폰 검증 (ADR-019 변경).
+// Task 6.3 — 쿠폰 검증 (ADR-019 변경) + find_error_v3 (student_id 단일 UNIQUE).
 //
 // 학번 정규식 `^\d{2}\d{2}37\d{3}$` — 학과 코드 37 (입학년·일련번호는 자유).
 // 4단계 검증: format · department(37, 정규식 포함) · name · duplicate.
+//
+// find_error_v3 (2026-05-18): used_coupons UNIQUE 기준이 (student_id, name) → (student_id).
+// 같은 학번은 이름을 바꿔도 쿠폰 재사용 불가. 에러 문구도 학번 단위로 변경.
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { bootstrapDatabase } from '../../db/bootstrap.js';
@@ -21,6 +24,11 @@ beforeEach(() => {
   db.prepare(
     `INSERT INTO orders (no, operating_date, name, total_price)
      VALUES (1, '2026-05-20', '테스트', 18000)`,
+  ).run();
+  // 두 번째 더미 주문 — 동일 학번 다른 주문 재사용 시도 시 FK 충족용
+  db.prepare(
+    `INSERT INTO orders (no, operating_date, name, total_price)
+     VALUES (2, '2026-05-20', '테스트2', 18000)`,
   ).run();
 });
 
@@ -93,7 +101,7 @@ describe('validateCoupon — 4단계', () => {
     ).toThrow(CouponError);
   });
 
-  it('★ 중복 사용 거부 (ALREADY_USED)', () => {
+  it('★ 중복 사용 거부 (ALREADY_USED) — 같은 학번/같은 이름', () => {
     db.prepare(
       `INSERT INTO used_coupons (student_id, name, order_id)
        VALUES (?, ?, ?)`,
@@ -108,13 +116,56 @@ describe('validateCoupon — 4단계', () => {
     }
   });
 
-  it('★ 같은 학번이라도 이름 다르면 trim 후 비교 — 동일 (학번+이름 UNIQUE)', () => {
+  // ── find_error_v3 (2026-05-18) — student_id 단일 UNIQUE ───────────────
+  it('★ find_error_v3 — 같은 학번/다른 이름이라도 거부 (ALREADY_USED)', () => {
     db.prepare(
       `INSERT INTO used_coupons (student_id, name, order_id)
        VALUES (?, ?, ?)`,
     ).run('202637001', '홍길동', 1);
 
-    // 같은 학번+이름 (앞뒤 공백) → 거부 (trim 후 동일)
+    try {
+      validateCoupon({ studentId: '202637001', name: '김철수' }, db);
+      expect.fail('같은 학번이면 이름 달라도 거부해야 함');
+    } catch (err) {
+      expect(err).toBeInstanceOf(CouponError);
+      expect(err.code).toBe('ALREADY_USED');
+    }
+  });
+
+  it('★ find_error_v3 — ALREADY_USED 에러 메시지가 학번 기준 안내', () => {
+    db.prepare(
+      `INSERT INTO used_coupons (student_id, name, order_id)
+       VALUES (?, ?, ?)`,
+    ).run('202637001', '홍길동', 1);
+
+    try {
+      validateCoupon({ studentId: '202637001', name: '홍길동' }, db);
+      expect.fail('throw 해야 함');
+    } catch (err) {
+      expect(err.message).toBe('이미 쿠폰을 사용한 학번이에요.');
+    }
+  });
+
+  it('★ find_error_v3 — 다른 학번은 영향 없이 통과', () => {
+    db.prepare(
+      `INSERT INTO used_coupons (student_id, name, order_id)
+       VALUES (?, ?, ?)`,
+    ).run('202637001', '홍길동', 1);
+
+    const r = validateCoupon(
+      { studentId: '202637002', name: '홍길동' },
+      db,
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  it('★ 같은 학번이라도 이름 다르면 trim 후 비교 — 동일 거부 (student_id UNIQUE)', () => {
+    db.prepare(
+      `INSERT INTO used_coupons (student_id, name, order_id)
+       VALUES (?, ?, ?)`,
+    ).run('202637001', '홍길동', 1);
+
+    // 같은 학번 + 앞뒤 공백 이름 → 거부 (student_id UNIQUE)
     expect(() =>
       validateCoupon({ studentId: '202637001', name: '  홍길동  ' }, db),
     ).toThrow(CouponError);
@@ -141,12 +192,50 @@ describe('consumeCoupon — used_coupons INSERT', () => {
       db,
     );
 
-    // 동일 학번+이름 재시도 — validateCoupon이 먼저 막거나 INSERT가 막거나
+    // 동일 학번 재시도 — validateCoupon이 먼저 막거나 INSERT가 막거나
     expect(() =>
       consumeCoupon(
-        { studentId: '202637001', name: '홍길동', orderId: 1 },
+        { studentId: '202637001', name: '홍길동', orderId: 2 },
         db,
       ),
     ).toThrow(CouponError);
+  });
+
+  // ── find_error_v3 — DB UNIQUE 위반 race 시뮬레이션 ───────────────
+  it('★ find_error_v3 — validateCoupon 우회 후 직접 INSERT 두 번 → SQLITE_CONSTRAINT_UNIQUE', () => {
+    db.prepare(
+      `INSERT INTO used_coupons (student_id, name, order_id) VALUES (?, ?, ?)`,
+    ).run('202637001', '홍길동', 1);
+
+    // 같은 student_id, 다른 이름으로 직접 INSERT → DB UNIQUE 제약이 잡아야.
+    let err;
+    try {
+      db.prepare(
+        `INSERT INTO used_coupons (student_id, name, order_id) VALUES (?, ?, ?)`,
+      ).run('202637001', '김철수', 2);
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeDefined();
+    expect(err.code).toBe('SQLITE_CONSTRAINT_UNIQUE');
+  });
+
+  it('★ find_error_v3 — 같은 학번 다른 이름으로 consumeCoupon 시도 → ALREADY_USED', () => {
+    consumeCoupon(
+      { studentId: '202637001', name: '홍길동', orderId: 1 },
+      db,
+    );
+
+    try {
+      consumeCoupon(
+        { studentId: '202637001', name: '김철수', orderId: 2 },
+        db,
+      );
+      expect.fail('throw 해야 함');
+    } catch (err) {
+      expect(err).toBeInstanceOf(CouponError);
+      expect(err.code).toBe('ALREADY_USED');
+      expect(err.message).toBe('이미 쿠폰을 사용한 학번이에요.');
+    }
   });
 });

@@ -4,12 +4,16 @@
 // 본 모듈은 단순 조회 helper만 제공 (관리자 통계 화면 등).
 
 /**
- * 학번+이름 조합이 이미 쿠폰을 사용했는지 확인.
+ * 학번이 이미 쿠폰을 사용했는지 확인.
+ *
+ * find_error_v3 (2026-05-18): UNIQUE 기준이 (student_id, name) → (student_id).
+ * 두 번째 인자 name은 호출자 호환을 위해 시그니처는 보존하되, 쿼리에서는 사용 X.
  */
+// eslint-disable-next-line no-unused-vars
 export function hasCouponBeenUsed(db, studentId, name) {
   const row = db
-    .prepare('SELECT id FROM used_coupons WHERE student_id = ? AND name = ?')
-    .get(studentId, name);
+    .prepare('SELECT id FROM used_coupons WHERE student_id = ?')
+    .get(studentId);
   return !!row;
 }
 

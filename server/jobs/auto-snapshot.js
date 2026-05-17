@@ -21,6 +21,8 @@ import {
 import path from 'node:path';
 import { ZipArchive } from 'archiver';
 import { logger } from '../lib/logger.js';
+import { logAdminEvent } from '../repositories/admin-events-repo.js';
+import { getBusinessState } from '../domain/business-state.js';
 
 const DEFAULT_INTERVAL_MS =
   (Number(process.env.AUTO_SNAPSHOT_INTERVAL_MIN) || 120) * 60 * 1000;
@@ -237,6 +239,21 @@ export function startAutoSnapshot(
       await createSnapshotZip(db, dbPath, outputPath);
       logger.info({ outputPath }, '[auto-snapshot] 백업 생성');
       rotateBackups(dir, maxBackups);
+      // find_error_v3 — 백업 성공 시 system 이벤트 1행. 실패 시 기록 X.
+      try {
+        const state = getBusinessState(db);
+        logAdminEvent(db, {
+          category: 'system',
+          event_type: 'AUTO_BACKUP',
+          action_name: '자동 백업',
+          actor: 'system',
+          operating_date: state.operating_date,
+          note: path.basename(outputPath),
+        });
+      } catch (err) {
+        // business_state 미시드 (테스트 DB) 등 환경에서는 silent skip.
+        logger.debug({ err: err.message }, '[auto-snapshot] AUTO_BACKUP event skip');
+      }
     } catch (err) {
       logger.error({ err }, '[auto-snapshot] 백업 실패');
     }

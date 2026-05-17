@@ -46,7 +46,7 @@ const StartBusinessCTA = forwardRef(function StartBusinessCTA(
   };
 
   const ariaLabel = isPrimary
-    ? '🚀 장사 시작 (지금 영업 시작)'
+    ? '장사 시작 (지금 영업 시작)'
     : '장사 시작 (영업 시간 전)';
 
   // find_error_v2 (2026-05-18): secondary 변형(시간 전)은 full-width 가 아니라
@@ -71,7 +71,7 @@ const StartBusinessCTA = forwardRef(function StartBusinessCTA(
         className={pressed ? 'start-business-cta-press' : ''}
         aria-label={ariaLabel}
       >
-        🚀 {isPrimary ? '장사 시작' : '장사 시작 (시간 전)'}
+        {isPrimary ? '장사 시작' : '장사 시작 (시간 전)'}
       </Button>
       {!isPrimary && (
         <p className="text-xs text-muted text-center">

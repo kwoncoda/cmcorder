@@ -1,6 +1,6 @@
 // A-2 본부 대시보드 — design-bundle .admin-board 6-col Kanban + .start-cta.urgent 정합.
-// 기능 로직 유지: useApi sync + 5초 폴링 + 1분 tick + ? help + 401 navigate.
-// find_error_v2 (2026-05-18): 카드 클릭 네비게이션 제거 + orders=[] 일 때도 6 컬럼 유지.
+// 기능: useApi sync + 5초 폴링 + 1분 tick + ? help + 401 navigate.
+// find_error_v3 (2026-05-18): 어드민 이모지 제거 + CLOSED 시 카드 내부 inline 장사 시작 + 6컬럼 동시 표시.
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
@@ -70,18 +70,24 @@ export default function DashboardPage() {
     finally { setActionPending(null); }
   };
 
+  const orders = Array.isArray(ordersQuery.data) ? ordersQuery.data : []; const byColumn = groupOrdersByStatus(orders);
+  const board = (<div className="admin-board" data-testid="kanban-board">{ADMIN_COLUMNS.map((col) => (
+    <AdminCardColumn key={col.status} title={col.title} status={col.status} orders={byColumn[col.status]}
+      tick={tick} pendingOrderId={actionPending} onAction={handleAction} />))}</div>);
+
   if (status !== 'OPEN') {
     return (
       <section data-testid="admin-dashboard-page" className="admin-page">
         <div className={`start-cta ${shouldBeOpen ? 'urgent' : ''}`}>
           <div className="cta-mascot"><div className="mascot mascot-sm" /></div>
           <div className="left">
-            <div className="cta-eyebrow">🔴 CLOSED · 사용자 주문 차단 중</div>
-            <h2>🚀 장사 시작</h2><p>버튼을 누르면 사용자 주문이 즉시 활성화됩니다.</p>
+            <div className="cta-eyebrow">CLOSED · 사용자 주문 차단 중</div>
+            <h2>장사 시작</h2><p>버튼을 누르면 사용자 주문이 즉시 활성화됩니다.</p>
           </div>
+          <StartBusinessCTA status={status} shouldBeOpen={shouldBeOpen} loading={starting} error={startError} onStart={handleStartBusiness} />
           <BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} />
         </div>
-        <StartBusinessCTA status={status} shouldBeOpen={shouldBeOpen} loading={starting} error={startError} onStart={handleStartBusiness} />
+        {board}
         <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
       </section>
     );
@@ -90,27 +96,20 @@ export default function DashboardPage() {
   if (ordersQuery.isLoading) return <LoadingState variant="page" label="주문 목록 로딩 중…" minimumDelay={0} />;
   if (ordersQuery.error) { if (ordersQuery.error.status === 401) return null;
     return <ErrorState variant="page" title="주문을 불러올 수 없어요" actionLabel="다시 시도" onAction={refetch} />; }
-  const orders = Array.isArray(ordersQuery.data) ? ordersQuery.data : []; const byColumn = groupOrdersByStatus(orders);
 
   return (
     <section data-testid="admin-dashboard-page" className="admin-page">
       <div className="open-status">
-        <div className="open-dot"><span className="pulse" />🟢</div>
+        <div className="open-dot"><span className="pulse" /></div>
         <div className="open-text"><b>영업 중</b> · 사용자 주문 가능</div>
         <span className="open-hint">영업 종료는 <b>정산 탭 → 오늘 정산 마감</b></span>
       </div>
       <header className="admin-page-head">
-        <h1>📋 본부 대시보드</h1>
+        <h1>본부 대시보드</h1>
         <div style={{ marginLeft: 'auto' }}><BusinessStateBadge status={status} shouldBeOpen /></div>
       </header>
-      {actionError && (<div role="alert" data-testid="admin-action-error" className="warn-banner danger" style={{ margin: '8px 0' }}>⚠️ {actionError}</div>)}
-      <div className="admin-board" data-testid="kanban-board">
-        {ADMIN_COLUMNS.map((col) => (
-          <AdminCardColumn key={col.status} title={col.title} status={col.status}
-            orders={byColumn[col.status]} tick={tick} pendingOrderId={actionPending}
-            onAction={handleAction} />
-        ))}
-      </div>
+      {actionError && (<div role="alert" data-testid="admin-action-error" className="warn-banner danger" style={{ margin: '8px 0' }}>{actionError}</div>)}
+      {board}
       <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />
     </section>
   );

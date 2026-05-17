@@ -590,6 +590,70 @@ WHERE id = 1 AND status = 'CLOSED';
 - `current_time >= 운영일자 16:30` AND `current_time <= 운영일자 23:59` AND `current_time이 operating_dates 중 하나`
 - 본부 대시보드는 `should_be_open=true` AND `status='CLOSED'` 시 빨간 깜박 알림 (장사 시작 누락 위험, §11.1)
 
+### 2.27 GET `/admin/api/history?type=all|orders|menus|system&date=YYYY-MM-DD` ★ ADR-034 (find_error_v3)
+
+> `order_events` + `admin_events` 통합 감사 로그. 관리자 내역 탭 (전체/주문/메뉴/시스템 필터)에서 호출.
+
+**인증:** 관리자 세션 + CSRF (GET은 CSRF 통과지만 `/admin/api/*` 공통 미들웨어 적용).
+
+**Query:**
+- `type`: `all` | `orders` | `menus` | `system` (default `all`, 미허용 값 → 400 `INVALID_HISTORY_TYPE`)
+- `date`: 운영일자 (`YYYY-MM-DD`, default 현재 `business_state.operating_date`)
+
+**응답 200 (통일 스키마, id는 source-prefix `o-<id>` / `a-<id>`로 unique):**
+```json
+[
+  {
+    "id": "a-12",
+    "source": "admin",
+    "category": "menu",
+    "event_type": "PRICE_CHANGED",
+    "action_name": "가격 변경",
+    "actor": "admin",
+    "order_id": null,
+    "order_no": null,
+    "from_status": null,
+    "to_status": null,
+    "target_id": 3,
+    "target_name": "뿌링클",
+    "before_value": "21000",
+    "after_value": "20000",
+    "note": null,
+    "created_at": "2026-05-20T07:15:00Z"
+  },
+  {
+    "id": "o-7",
+    "source": "order",
+    "category": "order",
+    "event_type": "PAID",
+    "action_name": "이체 확인",
+    "actor": "admin",
+    "order_id": 42,
+    "order_no": 12,
+    "from_status": "TRANSFER_REPORTED",
+    "to_status": "PAID",
+    "target_id": null,
+    "target_name": null,
+    "before_value": null,
+    "after_value": null,
+    "note": null,
+    "created_at": "2026-05-20T07:12:18Z"
+  }
+]
+```
+
+**type 필터별 source 분기:**
+- `all`: `order_events` + `admin_events` 합집합, `created_at` DESC.
+- `orders`: `order_events`만 (`source='order'`).
+- `menus`: `admin_events` 중 `category='menu'`만.
+- `system`: `admin_events` 중 `category='system'`만 (BUSINESS_OPEN, ADMIN_LOGIN, AUTO_BACKUP 포함).
+
+**가능 에러:**
+- `400 INVALID_HISTORY_TYPE` — type이 허용 목록 외.
+- `401 UNAUTHORIZED` — 관리자 세션 없음.
+
+**프론트:** `src/pages/admin/HistoryPage.jsx`가 4탭 (전체/주문/메뉴/시스템) UI로 본 API의 type별 응답을 렌더링. `displayActor()` helper로 `actor='admin'|'admin1'` → `어드민` 표시.
+
 ---
 
 ## 3. 헬스체크

@@ -28,7 +28,8 @@ const BusinessStateBadge = forwardRef(function BusinessStateBadge(
     ? 'bg-danger text-card-ink business-badge-blink'
     : 'bg-danger text-card-ink';
 
-  const icon = isOpen ? '🟢' : '🔴';
+  // find_error_v3 — 어드민 이모지 제거. CSS dot 으로 대체. .biz-dot 클래스 재사용.
+  const dotCls = `biz-dot ${isOpen ? 'is-open' : 'is-closed'}`;
   const label = isOpen ? '영업 중 (OPEN)' : '영업 외 (CLOSED)';
 
   // 공통 베이스 — pill 모양 + 굵은 폰트 + 외곽선.
@@ -48,7 +49,7 @@ const BusinessStateBadge = forwardRef(function BusinessStateBadge(
       className={[baseCls, colorCls, className].filter(Boolean).join(' ')}
       {...rest}
     >
-      <span aria-hidden="true">{icon}</span>
+      <span aria-hidden="true" className={dotCls} />
       <span>{label}</span>
     </span>
   );

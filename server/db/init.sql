@@ -90,15 +90,17 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 
--- ─── 쿠폰 사용 (ADR-019 / ADR-021) ───────────────────────
+-- ─── 쿠폰 사용 (ADR-019 / ADR-021 + find_error_v3) ────────
 -- 학번 prefix 검증은 애플리케이션 레이어 (정규식). DB는 UNIQUE 만 보장.
+-- find_error_v3 (2026-05-18): UNIQUE 기준을 (student_id, name) → (student_id)로 변경.
+-- 같은 학번은 이름을 바꿔도 쿠폰을 재사용할 수 없다. name은 감사/표시용으로만 보존.
 CREATE TABLE IF NOT EXISTS used_coupons (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id TEXT NOT NULL,
   name TEXT NOT NULL,
   order_id INTEGER NOT NULL REFERENCES orders(id),
   used_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE(student_id, name)
+  UNIQUE(student_id)
 );
 
 -- ─── 관리자 ──────────────────────────────────────────────
@@ -165,6 +167,33 @@ CREATE TABLE IF NOT EXISTS order_events (
 );
 CREATE INDEX IF NOT EXISTS idx_order_events_order_id ON order_events(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_events_created_at ON order_events(created_at);
+
+-- ─── 관리자 이벤트 감사 로그 (find_error_v3 — 메뉴·시스템 이벤트) ──
+-- order_events와 분리: order_id 없음. category('menu'|'system')로 구분.
+-- - category: 'menu' (메뉴 토글/가격 변경) | 'system' (장사 시작/로그인/자동 백업)
+-- - event_type: SOLDOUT_ON/OFF · RECOMMEND_ON/OFF · PRICE_CHANGED · BUSINESS_OPEN · ADMIN_LOGIN · AUTO_BACKUP
+-- - action_name: 한국어 라벨 (예: '품절 처리', '가격 변경', '장사 시작')
+-- - actor: 'admin' | 'system' (자동 백업은 system)
+-- - operating_date: 메뉴 이벤트와 BUSINESS_OPEN/AUTO_BACKUP 시 채움. ADMIN_LOGIN은 NULL 가능.
+-- - target_id/target_name: 메뉴 변경 시 menu.id / menu.name
+-- - before_value/after_value: '17000' / 'true' 등 단순 문자열 표현
+CREATE TABLE IF NOT EXISTS admin_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL CHECK(category IN ('menu','system')),
+  event_type TEXT NOT NULL,
+  action_name TEXT NOT NULL,
+  actor TEXT NOT NULL,
+  operating_date TEXT,
+  target_id INTEGER,
+  target_name TEXT,
+  before_value TEXT,
+  after_value TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_admin_events_created_at ON admin_events(created_at);
+CREATE INDEX IF NOT EXISTS idx_admin_events_category ON admin_events(category);
+CREATE INDEX IF NOT EXISTS idx_admin_events_operating_date ON admin_events(operating_date);
 
 -- ============================================================
 -- 시드 데이터

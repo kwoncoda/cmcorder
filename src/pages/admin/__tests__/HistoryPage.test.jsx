@@ -1,13 +1,15 @@
-// find_error_v2 — HistoryPage 단위 테스트.
+// find_error_v3 — HistoryPage 단위 테스트 (4탭 필터 확장).
 //
 // 회귀:
 //  - Loading 분기 — testid 래퍼만 노출
 //  - Empty — '해당 조건의 내역이 없어요'
-//  - 목록 렌더 — 행마다 시간 · 주문번호 · action_name · from→to · actor
+//  - 목록 렌더 — 행마다 시간 · action_name · actor
+//  - 탭 4개 (전체/주문/메뉴/시스템) + 클릭 시 type 쿼리로 fetch
+//  - 카운트 표시
 //  - 401 → /admin/login redirect
-//  - 페이지 ≤120줄 (§3.5 1조)
+//  - 페이지 ≤140줄 (find_error_v3 — 4탭 + 카운트로 한도 확대)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../api/client.js', async () => {
@@ -24,30 +26,60 @@ vi.mock('react-router-dom', async () => {
 
 import HistoryPage from '../HistoryPage.jsx';
 
-const SAMPLE = [
+const SAMPLE_ALL = [
   {
-    id: 1,
-    order_id: 17,
-    order_no: 17,
+    id: 'o-1',
+    source: 'order',
+    category: 'order',
     event_type: 'PAID',
-    from_status: 'TRANSFER_REPORTED',
-    to_status: 'PAID',
     action_name: '이체 확인',
     actor: 'admin',
+    order_id: 17,
+    order_no: 17,
+    from_status: 'TRANSFER_REPORTED',
+    to_status: 'PAID',
+    target_id: null,
+    target_name: null,
+    before_value: null,
+    after_value: null,
     note: null,
     created_at: '2026-05-20T17:31:00Z',
   },
   {
-    id: 2,
-    order_id: 17,
-    order_no: 17,
-    event_type: 'CREATED',
+    id: 'a-2',
+    source: 'admin',
+    category: 'menu',
+    event_type: 'SOLDOUT_ON',
+    action_name: '품절 처리',
+    actor: 'admin',
+    order_id: null,
+    order_no: null,
     from_status: null,
-    to_status: 'ORDERED',
-    action_name: '주문 접수',
-    actor: 'customer',
+    to_status: null,
+    target_id: 1,
+    target_name: '후라이드',
+    before_value: 'false',
+    after_value: 'true',
     note: null,
-    created_at: '2026-05-20T17:25:00Z',
+    created_at: '2026-05-20T17:30:00Z',
+  },
+  {
+    id: 'a-1',
+    source: 'admin',
+    category: 'system',
+    event_type: 'BUSINESS_OPEN',
+    action_name: '장사 시작',
+    actor: 'admin',
+    order_id: null,
+    order_no: null,
+    from_status: null,
+    to_status: null,
+    target_id: null,
+    target_name: null,
+    before_value: null,
+    after_value: null,
+    note: null,
+    created_at: '2026-05-20T15:00:00Z',
   },
 ];
 
@@ -83,24 +115,87 @@ describe('HistoryPage', () => {
     });
   });
 
-  it('★ 목록 — 행마다 시각·주문번호·action·from→to·actor 표시', async () => {
-    apiFetch.mockResolvedValueOnce(SAMPLE);
+  it('★ 목록 — 행마다 action_name·actor 표시 (default type=all)', async () => {
+    apiFetch.mockResolvedValueOnce(SAMPLE_ALL);
     renderPage();
     await waitFor(() => {
-      expect(screen.getByTestId('history-row-1')).toBeInTheDocument();
+      expect(screen.getByTestId('history-row-o-1')).toBeInTheDocument();
     });
-    expect(screen.getByTestId('history-row-2')).toBeInTheDocument();
-    // action_name 라벨
+    expect(screen.getByTestId('history-row-a-2')).toBeInTheDocument();
+    expect(screen.getByTestId('history-row-a-1')).toBeInTheDocument();
     expect(screen.getByText('이체 확인')).toBeInTheDocument();
-    expect(screen.getByText('주문 접수')).toBeInTheDocument();
-    // order_no
-    expect(screen.getAllByText('#17')).toHaveLength(2);
-    // actor
-    expect(screen.getByText('admin')).toBeInTheDocument();
-    expect(screen.getByText('customer')).toBeInTheDocument();
-    // from→to chip
-    expect(screen.getByText('TRANSFER_REPORTED')).toBeInTheDocument();
-    expect(screen.getByText('PAID')).toBeInTheDocument();
+    expect(screen.getByText('품절 처리')).toBeInTheDocument();
+    expect(screen.getByText('장사 시작')).toBeInTheDocument();
+  });
+
+  it('★ 4탭 (전체/주문/메뉴/시스템) 렌더링', async () => {
+    apiFetch.mockResolvedValue([]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('history-tab-all')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('history-tab-orders')).toBeInTheDocument();
+    expect(screen.getByTestId('history-tab-menus')).toBeInTheDocument();
+    expect(screen.getByTestId('history-tab-system')).toBeInTheDocument();
+  });
+
+  it('★ 카운트 표시 — 각 탭 라벨에 (N) 포함', async () => {
+    apiFetch.mockResolvedValueOnce(SAMPLE_ALL);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('history-row-o-1')).toBeInTheDocument();
+    });
+    // 전체 3, 주문 1, 메뉴 1, 시스템 1
+    expect(screen.getByTestId('history-tab-all').textContent).toContain('3');
+    expect(screen.getByTestId('history-tab-orders').textContent).toContain('1');
+    expect(screen.getByTestId('history-tab-menus').textContent).toContain('1');
+    expect(screen.getByTestId('history-tab-system').textContent).toContain('1');
+  });
+
+  it('★ 탭 클릭 시 type 쿼리 파라미터로 fetch — orders', async () => {
+    apiFetch.mockResolvedValue(SAMPLE_ALL);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('history-tab-orders')).toBeInTheDocument();
+    });
+    apiFetch.mockClear();
+    apiFetch.mockResolvedValueOnce([SAMPLE_ALL[0]]);
+    fireEvent.click(screen.getByTestId('history-tab-orders'));
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalled();
+      const calledUrl = apiFetch.mock.calls[0][0];
+      expect(calledUrl).toContain('type=orders');
+    });
+  });
+
+  it('★ 탭 클릭 시 type=menus 쿼리', async () => {
+    apiFetch.mockResolvedValue(SAMPLE_ALL);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('history-tab-menus')).toBeInTheDocument();
+    });
+    apiFetch.mockClear();
+    apiFetch.mockResolvedValueOnce([SAMPLE_ALL[1]]);
+    fireEvent.click(screen.getByTestId('history-tab-menus'));
+    await waitFor(() => {
+      const calledUrl = apiFetch.mock.calls[0][0];
+      expect(calledUrl).toContain('type=menus');
+    });
+  });
+
+  it('★ 활성 탭 표시 — active 클래스', async () => {
+    apiFetch.mockResolvedValueOnce(SAMPLE_ALL);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('history-tab-all')).toBeInTheDocument();
+    });
+    // default는 'all'
+    expect(screen.getByTestId('history-tab-all').className).toContain('active');
+    apiFetch.mockResolvedValueOnce([]);
+    fireEvent.click(screen.getByTestId('history-tab-system'));
+    await waitFor(() => {
+      expect(screen.getByTestId('history-tab-system').className).toContain('active');
+    });
   });
 
   it('★ 401 → /admin/login redirect', async () => {
@@ -109,6 +204,17 @@ describe('HistoryPage', () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/admin/login');
     });
+  });
+
+  it("★ find_error_v3 — actor 'admin' row 는 '어드민' 으로 표시", async () => {
+    apiFetch.mockResolvedValueOnce(SAMPLE_ALL);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('history-row-o-1')).toBeInTheDocument();
+    });
+    const row = screen.getByTestId('history-row-o-1');
+    // log-actor 영역에 '어드민' 표시 + 'admin' 영문 표시는 부재.
+    expect(row.querySelector('.log-actor')?.textContent).toBe('어드민');
   });
 
   it('★ 페이지 ≤120줄 (§3.5 1조)', async () => {

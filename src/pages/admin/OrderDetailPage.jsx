@@ -65,7 +65,7 @@ export default function OrderDetailPage() {
     <section data-testid="admin-order-detail-page" className="flex flex-col gap-md p-md">
       <header className="flex items-center justify-between">
         <h1 className="font-display font-black text-2xl">주문 #{order.no}</h1>
-        <StatusChip status={order.status} />
+        <StatusChip status={order.status} showIcon={false} />
       </header>
 
       <section aria-labelledby="items-title" className="bg-elevated rounded-md p-md flex flex-col gap-sm">

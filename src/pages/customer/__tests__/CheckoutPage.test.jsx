@@ -100,19 +100,20 @@ describe('CheckoutPage', () => {
   });
 
   // ── 쿠폰 자격 — 컴모융(37)만 활성, 외 9자리는 비활성이되 주문 가능 ───
+  // find_error_v3 — 쿠폰 라벨이 '컴모융 학생 1,000원 할인' 으로 단순화. 기존 /쿠폰/ 정규식 → /컴모융 학생 1,000원 할인/.
   it('★ 쿠폰 자격 — 9자리 비-37 학번은 쿠폰 비활성 (주문은 가능)', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202111123' } });
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
     fireEvent.blur(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }));
-    expect(screen.getByLabelText(/쿠폰/)).toBeDisabled();
+    expect(screen.getByLabelText(/컴모융 학생 1,000원 할인/)).toBeDisabled();
   });
 
   it('★ 쿠폰 자격 — 9자리 37 학번 + 이름 입력 시 쿠폰 활성', () => {
     renderPage();
     fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637123' } });
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
-    expect(screen.getByLabelText(/쿠폰/)).not.toBeDisabled();
+    expect(screen.getByLabelText(/컴모융 학생 1,000원 할인/)).not.toBeDisabled();
   });
 
   // ── 외부인 ("학번 없음") 분기 — useState 조건부 ───────────────
@@ -125,9 +126,9 @@ describe('CheckoutPage', () => {
 
   it('★ "학번 없음" 체크 시 쿠폰 체크박스 사라짐 (외부인은 쿠폰 X)', () => {
     renderPage();
-    expect(screen.getByLabelText(/쿠폰/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/컴모융 학생 1,000원 할인/)).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/학번 없음/));
-    expect(screen.queryByLabelText(/쿠폰/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/컴모융 학생 1,000원 할인/)).not.toBeInTheDocument();
   });
 
   // ── 수령 방식 / 테이블 분기 — useState 조건부 ────────────────
@@ -145,10 +146,39 @@ describe('CheckoutPage', () => {
   // ── 쿠폰 ────────────────────────────────────────────────────
   it('쿠폰 체크박스 토글 동작', () => {
     renderPage();
-    const cb = screen.getByLabelText(/쿠폰/);
+    const cb = screen.getByLabelText(/컴모융 학생 1,000원 할인/);
     expect(cb.checked).toBe(false);
     fireEvent.click(cb);
     expect(cb.checked).toBe(true);
+  });
+
+  // ── find_error_v3 — 쿠폰 라벨/안내 문구 단순화 ─────────────────
+  it("★ find_error_v3 — 쿠폰 라벨 '컴모융 학생 1,000원 할인' (이모지·괄호 미포함)", () => {
+    renderPage();
+    const cb = screen.getByLabelText(/컴모융 학생 1,000원 할인/);
+    expect(cb).toBeInTheDocument();
+    // 옛 라벨('🎫 쿠폰 사용 (컴모융 학생 한정 1,000원 할인)') 부재 검증.
+    expect(screen.queryByLabelText(/🎫/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/쿠폰 사용 \(/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/한정/)).not.toBeInTheDocument();
+  });
+
+  it("★ find_error_v3 — '컴모융(****37***)' 안내 문구 제거", () => {
+    renderPage();
+    // 9자리이지만 학과 코드 37 아닌 학번 입력 → 옛 정책으로는 '컴모융(****37***)' 안내가 떴음.
+    fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202647001' } });
+    fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+    fireEvent.blur(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }));
+    expect(screen.queryByText(/컴모융\(\*\*\*\*37\*\*\*\)/)).not.toBeInTheDocument();
+  });
+
+  it('★ find_error_v3 — 쿠폰 자격 불충족 시 통합 안내 문구 노출', () => {
+    renderPage();
+    // 학번이 비-37 9자리 → 통합 안내 ('학번 9자리 + 이름 입력 시 활성화됩니다.').
+    fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202647001' } });
+    fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+    fireEvent.blur(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }));
+    expect(screen.getByText(/학번 9자리 \+ 이름 입력 시 활성화됩니다/)).toBeInTheDocument();
   });
 
   // ── 폼 제출 흐름 ─────────────────────────────────────────────
