@@ -157,6 +157,24 @@ describe('CompletePage', () => {
     });
   });
 
+  it('★ Bug 4 — 계좌 복사 문구는 "국민은행 233001-04-403536"만 (예금주 미포함)', async () => {
+    apiFetch.mockResolvedValue(SAMPLE_ORDER);
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByLabelText('계좌번호 복사')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByLabelText('계좌번호 복사'));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith('국민은행 233001-04-403536');
+    });
+    expect(writeText).not.toHaveBeenCalledWith(expect.stringContaining('박동빈'));
+  });
+
   it('★ Clipboard 실패 시 execCommand fallback — "복사됨" 표시', async () => {
     apiFetch.mockResolvedValue(SAMPLE_ORDER);
     // clipboard API 없음 (HTTP 환경)

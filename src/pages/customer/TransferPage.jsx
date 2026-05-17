@@ -43,7 +43,7 @@ export default function TransferPage() {
       navigate(`/orders/${id}/status${tokenQuery}`);
     } catch (err) {
       if (err instanceof BusinessClosedError) throw err;
-      setServerError(err instanceof ApiError ? err.message : '이체 신고에 실패했어요.');
+      setServerError(err instanceof ApiError ? err.message : '이체 완료 요청에 실패했어요.');
     } finally { setSubmitting(false); }
   };
 
@@ -76,7 +76,7 @@ export default function TransferPage() {
       </div>
 
       <div className="section">
-        <div className="section-label">이체 신고</div>
+        <div className="section-label">이체 완료 요청</div>
         <TransferReportForm
           orderId={Number(id)}
           expectedAmount={total}
@@ -96,7 +96,7 @@ export default function TransferPage() {
       <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40 }}>
         <button type="submit" form="transfer-report-form" className="btn btn-primary btn-lg btn-block"
           disabled={submitting}>
-          {submitting ? '전송 중…' : '이체 신고 제출'}
+          {submitting ? '전송 중…' : '이체 완료 요청'}
         </button>
       </div>
     </section>

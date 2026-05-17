@@ -19,7 +19,7 @@ import DogTagFrame from '../../components/molecules/DogTagFrame.jsx';
 
 const STATE_LABEL = {
   ORDERED:           '주문 접수됨 — 입금 대기 중',
-  TRANSFER_REPORTED: '이체 신고 완료 — 본부 확인 대기',
+  TRANSFER_REPORTED: '이체 완료 요청 — 본부 확인 중',
   PAID:              '입금 확인 완료 — 조리 대기',
   COOKING:           '조리 중! 잠시만 기다려 주세요.',
   READY:             '🍗 픽업 준비 완료! 본부로 와 주세요!',
@@ -83,18 +83,19 @@ export default function StatusPage() {
           pulse={currentStatus === 'READY'} role="img" aria-label={`주문 번호 ${order.no ?? id} 도그태그`} />
       </div>
       {currentStatus === 'HOLD' && (
-        <div className="warn-banner danger">⚠️ <span><b>이체 정보가 일치하지 않아요.</b><br />은행·이름을 다시 확인하고 재제출해 주세요.</span></div>
+        <div className="warn-banner danger" role="alert"><span><b>이체 확인이 보류되었어요.</b><br />부스 운영진에게 문의해 주세요.</span></div>
       )}
       <div style={{ height: 132 }} />
       <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40, flexDirection: 'column', gap: 6 }}>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', fontSize: 12, color: 'var(--color-muted)', padding: '0 4px' }}>
           <span>현재 상태</span><StatusChip status={currentStatus} />
         </div>
-        {currentStatus === 'HOLD' && (
-          <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
-            이체 정보 다시 보내기
+        {currentStatus === 'ORDERED' && (
+          <button type="button" className="btn btn-primary btn-lg btn-block" data-testid="status-page-ordered-cta" onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
+            이체 완료 요청
           </button>
         )}
+        {/* P2-1: HOLD는 서버 정책상 사용자 재요청 차단 — CTA 제거. 위 warn-banner 안내로 처리. */}
       </div>
     </section>
   );

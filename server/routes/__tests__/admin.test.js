@@ -287,6 +287,57 @@ describe('GET /admin/api/orders/:id', () => {
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('ORDER_NOT_FOUND');
   });
+
+  it('★ Bug 8 회귀 — is_external 은 SQLite 0/1이 아니라 boolean 으로 직렬화', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get(`/admin/api/orders/${create.body.id}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.is_external).toBe('boolean');
+    expect(res.body.is_external).toBe(false);
+  });
+
+  it('★ Bug 8 회귀 — 외부인 주문 is_external=true', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '외부인', is_external: true });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get(`/admin/api/orders/${create.body.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body.is_external).toBe(true);
+  });
+
+  it('★ Bug 8 회귀 — OrderSchema(zod)로 admin 응답 검증 통과', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get(`/admin/api/orders/${create.body.id}`);
+    // 동적 import로 OrderSchema 검증 — server 측 테스트가 client 스키마와 정합 확인.
+    const { OrderSchema } = await import('../../../src/api/schemas.js');
+    expect(() => OrderSchema.parse(res.body)).not.toThrow();
+  });
+
+  it('★ Bug 7 회귀 — admin 주문 응답 timestamps ISO 8601 UTC (T...Z)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get(`/admin/api/orders/${create.body.id}`);
+    expect(res.status).toBe(200);
+    // created_at은 'YYYY-MM-DDTHH:MM:SSZ' 형식이어야 한다 — 브라우저 KST 540분 오차 방어.
+    expect(res.body.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
 });
 
 describe('POST /admin/api/orders/:id/transition', () => {

@@ -4,7 +4,7 @@
 // 회귀 보호 항목:
 //   - 본명 표시 (G10 — 콜라/사이다 등 리스킨 X)
 //   - basePrice 천 단위 콤마 (PriceTag)
-//   - RECOMMENDED / SOLD OUT 도장 (StampBadge — sold-out 우선)
+//   - 추천 / SOLD OUT 도장 (StampBadge — sold-out 우선, Bug 1: recommended 라벨 한글화)
 //   - "줍기" 버튼만 클릭 영역 (결정 f — 카드 article onClick X)
 //   - soldOut 시 onAdd 호출 X (버튼 disabled)
 //   - 카드 내 형광 옐로 텍스트 금지 (AI 슬롭 #26 — 본명·가격에 text-accent X)
@@ -44,9 +44,9 @@ describe('MenuCard', () => {
     expect(screen.getByText(/18,000/)).toBeInTheDocument();
   });
 
-  it('recommended=true 시 RECOMMENDED 도장 표시', () => {
+  it('recommended=true 시 추천 도장 표시 (Bug 1: 한글 라벨)', () => {
     render(<MenuCard menu={SAMPLE_MENU} recommended useFallback />);
-    expect(screen.getByText('RECOMMENDED')).toBeInTheDocument();
+    expect(screen.getByText('추천')).toBeInTheDocument();
   });
 
   it('soldOut=true 시 SOLD OUT 도장 + 버튼 disabled + opacity 흐림', () => {
@@ -59,7 +59,7 @@ describe('MenuCard', () => {
   it('recommended + soldOut 동시 시 sold-out 우선 (recommended 도장 X)', () => {
     render(<MenuCard menu={SAMPLE_MENU} recommended soldOut useFallback />);
     expect(screen.getByText('SOLD OUT')).toBeInTheDocument();
-    expect(screen.queryByText('RECOMMENDED')).not.toBeInTheDocument();
+    expect(screen.queryByText('추천')).not.toBeInTheDocument();
   });
 
   it('★ "줍기" 버튼 클릭 시에만 onAdd 호출 (카드 전체 클릭 X) — 결정 f', () => {

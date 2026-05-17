@@ -41,9 +41,10 @@ describe('BusinessStateStore', () => {
     vi.useRealTimers();
   });
 
-  it('shouldBeOpen — 시작 전 false (5/20 15:00)', () => {
+  // Bug 12 — 5/20 오픈을 16:30 → 15:00으로 앞당김. 시작 전 검증 시점도 14:59로 조정.
+  it('shouldBeOpen — 시작 전 false (5/20 14:59)', () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-05-20T15:00:00'));
+    vi.setSystemTime(new Date('2026-05-20T14:59:00'));
     useBusinessStateStore.setState({ operating_date: '2026-05-20' });
     expect(businessStateSelectors.shouldBeOpen(useBusinessStateStore.getState())).toBe(false);
     vi.useRealTimers();

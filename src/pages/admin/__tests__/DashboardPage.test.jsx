@@ -248,7 +248,7 @@ describe('DashboardPage', () => {
     });
   });
 
-  it('★ 키보드 Enter — OrderCard <button> 이라 키보드 활성화 가능 (Task 2.7 통합 회귀)', () => {
+  it('★ 키보드 Enter — OrderCard 본문 <button> 으로 키보드 활성화 가능 (Bug 9/10 분리 구조)', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({
       data: SAMPLE_ORDERS,
@@ -258,8 +258,11 @@ describe('DashboardPage', () => {
     });
     renderPage();
     const card = screen.getByTestId('admin-order-card-1');
-    // <button> 시맨틱 — fireEvent.click 이 Enter/Space 와 동등.
-    expect(card.tagName).toBe('BUTTON');
+    // Bug 9/10: article 컨테이너 + 본문 button + 액션 button row 분리 구조.
+    // 카드 안에 type=button 본문 버튼이 있어 키보드 Enter/Space 활성화 가능.
+    expect(card.tagName).toBe('ARTICLE');
+    const bodyBtn = card.querySelector('button[type="button"]');
+    expect(bodyBtn).not.toBeNull();
   });
 
   it('★ memo 회귀 — 동일 order reference 재전달 시 OrderCard 리렌더 X (Task 2.7 통합)', () => {
@@ -368,6 +371,64 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(useBusinessStateStore.getState().status).toBe('OPEN');
     });
+  });
+
+  // ── P1-2 (Codex 리뷰) 칸반 inline action 실패 표시 / 중복 클릭 방어 ──
+  // 이전: console.warn만 — 운영자가 실패를 알 수 없음.
+  // 회귀: 실패 시 화면 banner 노출, 진행 중 카드 액션 disabled, 성공 시 에러 클리어.
+  it('★ P1-2 — 액션 API 실패 시 admin-action-error banner 노출', async () => {
+    const refetch = vi.fn();
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({ data: SAMPLE_ORDERS, isLoading: false, error: null, refetch });
+    apiFetch.mockRejectedValueOnce(new ApiError('현재 상태에서 변경할 수 없습니다', { status: 409, code: 'ILLEGAL_TRANSITION' }));
+    renderPage();
+    // TRANSFER_REPORTED 카드 #2의 "확인" 액션 클릭.
+    const card = screen.getByTestId('admin-order-card-2');
+    fireEvent.click(card.querySelector('button:nth-of-type(2)')); // 본문 button 다음의 첫 action button (확인)
+    await waitFor(() => {
+      expect(screen.getByTestId('admin-action-error')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('admin-action-error')).toHaveTextContent(/현재 상태에서 변경할 수 없습니다/);
+    // 실패 시 refetch는 호출되지 않아야 (상태가 임의로 바뀌면 안 됨).
+    expect(refetch).not.toHaveBeenCalled();
+  });
+
+  it('★ P1-2 — 액션 성공 후 에러 banner 클리어 + refetch 호출', async () => {
+    const refetch = vi.fn();
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({ data: SAMPLE_ORDERS, isLoading: false, error: null, refetch });
+    // 1차 호출: 실패 → banner 표시.
+    apiFetch.mockRejectedValueOnce(new ApiError('일시 오류', { status: 500 }));
+    renderPage();
+    const card = screen.getByTestId('admin-order-card-2');
+    const confirmBtn = card.querySelector('button:nth-of-type(2)');
+    fireEvent.click(confirmBtn);
+    await waitFor(() => expect(screen.getByTestId('admin-action-error')).toBeInTheDocument());
+    // 2차 호출: 성공 → banner 사라짐 + refetch 호출.
+    apiFetch.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(card.querySelector('button:nth-of-type(2)'));
+    await waitFor(() => expect(refetch).toHaveBeenCalled());
+    expect(screen.queryByTestId('admin-action-error')).not.toBeInTheDocument();
+  });
+
+  it('★ P1-2 — 요청 진행 중 같은 카드 액션 버튼 disabled (중복 클릭 차단)', async () => {
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({ data: SAMPLE_ORDERS, isLoading: false, error: null, refetch: vi.fn() });
+    // apiFetch는 영원히 pending — 진행 중 상태 시뮬.
+    let resolveFn;
+    apiFetch.mockImplementation(() => new Promise((resolve) => { resolveFn = resolve; }));
+    renderPage();
+    const card = screen.getByTestId('admin-order-card-2');
+    const confirmBtn = card.querySelector('button:nth-of-type(2)');
+    fireEvent.click(confirmBtn);
+    // pending 동안 같은 버튼은 disabled.
+    await waitFor(() => expect(confirmBtn).toBeDisabled());
+    // 중복 클릭 시도해도 apiFetch는 1회만 호출됨.
+    fireEvent.click(confirmBtn);
+    fireEvent.click(confirmBtn);
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    // cleanup.
+    resolveFn?.({ ok: true });
   });
 
   it('★ 새로고침 시뮬: store=CLOSED·서버=OPEN → 마운트 후 Kanban으로 전환 (I-2)', async () => {

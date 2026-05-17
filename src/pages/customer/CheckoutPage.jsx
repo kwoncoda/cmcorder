@@ -1,11 +1,11 @@
-// C-3 주문 정보 — design-bundle ScreenCheckout (screens-customer.jsx:211-381).
-// 6-col 테이블 grid, 쿠폰 eligibility(opacity/disabled), receipt + sticky discount.
+// C-3 주문 정보 — design-bundle ScreenCheckout (screens-customer.jsx:211-381). 6-col 테이블 grid + 쿠폰 eligibility + receipt + sticky discount.
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore, { cartSelectors } from '../../store/cart.js';
 import { apiFetch, BusinessClosedError, ApiError } from '../../api/client.js';
 import { API } from '../../api/routes.js';
 import { storeOrderToken } from '../../hooks/useOrderToken.js';
+import useRecentOrdersStore from '../../store/recentOrders.js';
 import Label from '../../components/atoms/Label.jsx';
 import Input from '../../components/atoms/Input.jsx';
 import Checkbox from '../../components/atoms/Checkbox.jsx';
@@ -28,8 +28,7 @@ export default function CheckoutPage() {
   const [touched, setTouched] = useState({}); const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
-  const sidIs9 = SID_9.test(sid); const sidDeptOK = SID_PATTERN.test(sid);
-  const nameValid = name.trim().length >= 1;
+  const sidIs9 = SID_9.test(sid); const sidDeptOK = SID_PATTERN.test(sid); const nameValid = name.trim().length >= 1;
   const couponEligible = !external && sidIs9 && sidDeptOK && nameValid;
   const useCoupon = coupon && couponEligible;
   const discount = useCoupon ? 1000 : 0;
@@ -49,9 +48,10 @@ export default function CheckoutPage() {
         table_no: delivery === 'dineIn' ? Number(tableNo) : null,
         coupon: useCoupon ? { used: true } : null,
       } });
-      storeOrderToken(order.id, order.access_token); clearCart();
-      const tq = order.access_token ? `?token=${encodeURIComponent(order.access_token)}` : '';
-      navigate(`/orders/${order.id}/complete${tq}`);
+      storeOrderToken(order.id, order.access_token);
+      useRecentOrdersStore.getState().addOrder({ id: order.id, no: order.no, token: order.access_token, operating_date: order.operating_date }); // Bug 13 — 메뉴 페이지 진행 중 주문 카드 노출용 영속화.
+      clearCart();
+      navigate(`/orders/${order.id}/complete${order.access_token ? `?token=${encodeURIComponent(order.access_token)}` : ''}`);
     } catch (err) {
       if (err instanceof BusinessClosedError) throw err;
       setSubmitError(err instanceof ApiError ? err.message : '주문 접수에 실패했어요.');

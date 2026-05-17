@@ -15,7 +15,8 @@ import ErrorState from '../../components/state/ErrorState.jsx';
 const ACCOUNT_BANK = '국민은행';
 const ACCOUNT_NUMBER = '233001-04-403536';
 const ACCOUNT_HOLDER = '박동빈';
-const ACCOUNT_TEXT = `${ACCOUNT_BANK} ${ACCOUNT_NUMBER} ${ACCOUNT_HOLDER}`;
+// Bug 4 — 복사 문자열에는 예금주 미포함 (은행 앱 송금란에 깨끗하게 붙여넣기). 화면 안내는 유지.
+const ACCOUNT_TEXT = `${ACCOUNT_BANK} ${ACCOUNT_NUMBER}`;
 const fmt = (n) => (n ?? 0).toLocaleString('ko-KR');
 
 async function copyText(text) {

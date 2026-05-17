@@ -1,7 +1,7 @@
 // AdminLayout — design-bundle .admin-shell + .admin-topnav (screens-admin.jsx:48-76) 정합.
-// 5종 nav: 본부 / 메뉴 / 내역 / 정산 / 쿠폰 + biz-badge + admin1 + 로그아웃.
-// 내역(history)·쿠폰(coupons)은 시안에 명시된 P1 Phase 2 라벨 — 라우트 미구현 시 disabled.
-// 기존 /admin/transfers 라우트는 보존 (이체확인 보조 화면 — main nav 에서 제거하되 라우팅은 유지).
+// nav: 본부 / 메뉴 / 정산 / 이체확인 + biz-badge + admin1 + 로그아웃.
+// Bug 11 (2026-05-17) — 일회성 서비스이므로 내역(history)·쿠폰(coupons) nav 제거.
+// 두 화면 모두 라우트/API 미구현이고 D-day(2026-05-20) 후 운영 종료 → 운영자 혼란 방지 위해 hide.
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import { apiFetch, ApiError } from '../../api/client.js';
@@ -10,15 +10,12 @@ import { useApi } from '../../hooks/useApi.js';
 import { BusinessStateSchema } from '../../api/schemas.js';
 import useBusinessStateStore from '../../store/businessState.js';
 
-// design-bundle 5종 nav + 기존 /admin/transfers 보존.
-// 내역/쿠폰은 P1 Phase 2 — 라우트 미구현이라 disabled placeholder.
+// 4종 nav — Bug 11 hide policy 적용 (내역·쿠폰 미구현 nav 항목 제거).
 const ITEMS = [
   { to: '/admin/dashboard',  label: '본부',     testid: 'admin-nav-dashboard' },
   { to: '/admin/menus',      label: '메뉴',     testid: 'admin-nav-menus' },
-  { to: '/admin/history',    label: '내역',     testid: 'admin-nav-history',    disabled: true },
   { to: '/admin/settlement', label: '정산',     testid: 'admin-nav-settlement' },
   { to: '/admin/transfers',  label: '이체확인', testid: 'admin-nav-transfers' },
-  { to: '/admin/coupons',    label: '쿠폰',     testid: 'admin-nav-coupons',    disabled: true },
 ];
 
 function formatNow() {
@@ -52,13 +49,8 @@ export default function AdminLayout() {
           <Link to="/admin/dashboard" className="logo" style={{ textDecoration: 'none' }}>치킨이닭 · 본부</Link>
           <div className="nav">
             {ITEMS.map((it) => (
-              it.disabled ? (
-                <span key={it.to} className="nav-link" data-testid={it.testid} aria-disabled="true"
-                  title="Phase 2 구현 예정" style={{ opacity: 0.4, cursor: 'not-allowed' }}>{it.label}</span>
-              ) : (
-                <NavLink key={it.to} to={it.to} data-testid={it.testid}
-                  className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>{it.label}</NavLink>
-              )
+              <NavLink key={it.to} to={it.to} data-testid={it.testid}
+                className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>{it.label}</NavLink>
             ))}
           </div>
           <div className="right">

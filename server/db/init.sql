@@ -169,9 +169,10 @@ INSERT OR IGNORE INTO business_state (id, status, operating_date) VALUES
   (1, 'CLOSED', '2026-05-20');
 
 -- 시스템 설정 — G14 일회성 운영 일정 + 자동 ZIP 주기.
+-- business_open_time: Bug 12 — 16:30 → 15:00 (사용자 결정으로 오픈 앞당김).
 INSERT OR IGNORE INTO system_settings (key, value) VALUES
   ('operating_dates',            '2026-05-20,2026-05-21'),
-  ('business_open_time',         '16:30'),
+  ('business_open_time',         '15:00'),
   ('auto_snapshot_interval_min', '120'),
   ('auto_snapshot_rotate',       '6');
 

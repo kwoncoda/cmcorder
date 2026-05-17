@@ -30,11 +30,9 @@ export default function DashboardPage() {
   const [startError, setStartError] = useState(null);
   const [starting, setStarting] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [actionPending, setActionPending] = useState(null); const [actionError, setActionError] = useState(null); // P1-2 inline action 진행/실패 상태
 
-  useEffect(() => {
-    const id = setInterval(() => setTick(Date.now()), TICK_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, []);
+  useEffect(() => { const id = setInterval(() => setTick(Date.now()), TICK_INTERVAL_MS); return () => clearInterval(id); }, []);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -42,8 +40,7 @@ export default function DashboardPage() {
       if (e.target instanceof HTMLElement && e.target.matches('input, textarea, select, [contenteditable="true"]')) return;
       setShowHelp((s) => !s);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   const businessQuery = useApi(({ signal }) => apiFetch(API.ADMIN_BUSINESS_STATE, { schema: BusinessStateSchema, signal }), []);
@@ -53,19 +50,24 @@ export default function DashboardPage() {
   const { refetch } = ordersQuery;
   useEffect(() => {
     if (status !== 'OPEN') return undefined;
-    const id = setInterval(() => refetch(), POLL_INTERVAL_MS);
-    return () => clearInterval(id);
+    const id = setInterval(() => refetch(), POLL_INTERVAL_MS); return () => clearInterval(id);
   }, [status, refetch]);
 
   useEffect(() => { if (ordersQuery.error?.status === 401) navigate('/admin/login'); }, [ordersQuery.error, navigate]);
 
   const handleStartBusiness = async () => {
     setStarting(true); setStartError(null);
-    try {
-      await apiFetch(API.ADMIN_BUSINESS_OPEN, { method: 'POST', body: {} });
-      setStatus('OPEN'); refetch();
-    } catch (err) { setStartError(err instanceof ApiError ? err.message : '장사 시작에 실패했어요.'); }
+    try { await apiFetch(API.ADMIN_BUSINESS_OPEN, { method: 'POST', body: {} }); setStatus('OPEN'); refetch(); }
+    catch (err) { setStartError(err instanceof ApiError ? err.message : '장사 시작에 실패했어요.'); }
     finally { setStarting(false); }
+  };
+
+  const handleAction = async (orderId, to) => {
+    if (actionPending !== null) return;
+    setActionPending(orderId); setActionError(null);
+    try { await apiFetch(API.ADMIN_ORDER_TRANSITION(orderId), { method: 'POST', body: { to } }); refetch(); }
+    catch (err) { if (err instanceof ApiError && err.status === 401) { navigate('/admin/login'); return; } setActionError(err instanceof ApiError ? err.message : '상태 변경에 실패했어요.'); }
+    finally { setActionPending(null); }
   };
 
   if (status !== 'OPEN') {
@@ -86,12 +88,9 @@ export default function DashboardPage() {
   }
 
   if (ordersQuery.isLoading) return <LoadingState variant="page" label="주문 목록 로딩 중…" minimumDelay={0} />;
-  if (ordersQuery.error) {
-    if (ordersQuery.error.status === 401) return null;
-    return <ErrorState variant="page" title="주문을 불러올 수 없어요" actionLabel="다시 시도" onAction={refetch} />;
-  }
-  const orders = Array.isArray(ordersQuery.data) ? ordersQuery.data : [];
-  const byColumn = groupOrdersByStatus(orders);
+  if (ordersQuery.error) { if (ordersQuery.error.status === 401) return null;
+    return <ErrorState variant="page" title="주문을 불러올 수 없어요" actionLabel="다시 시도" onAction={refetch} />; }
+  const orders = Array.isArray(ordersQuery.data) ? ordersQuery.data : []; const byColumn = groupOrdersByStatus(orders);
 
   return (
     <section data-testid="admin-dashboard-page" className="admin-page">
@@ -104,12 +103,14 @@ export default function DashboardPage() {
         <h1>📋 본부 대시보드</h1>
         <div style={{ marginLeft: 'auto' }}><BusinessStateBadge status={status} shouldBeOpen /></div>
       </header>
+      {actionError && (<div role="alert" data-testid="admin-action-error" className="warn-banner danger" style={{ margin: '8px 0' }}>⚠️ {actionError}</div>)}
       {orders.length === 0 ? (
         <EmptyState variant="card" title="오늘 첫 주문 대기 중" description="주문이 들어오면 여기에 표시됩니다." />
       ) : (<div className="admin-board" data-testid="kanban-board">
         {ADMIN_COLUMNS.map((col) => (
           <AdminCardColumn key={col.status} title={col.title} status={col.status}
-            orders={byColumn[col.status]} tick={tick} onSelectOrder={(id) => navigate(`/admin/orders/${id}`)} />
+            orders={byColumn[col.status]} tick={tick} pendingOrderId={actionPending}
+            onSelectOrder={(id) => navigate(`/admin/orders/${id}`)} onAction={handleAction} />
         ))}
       </div>)}
       <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />

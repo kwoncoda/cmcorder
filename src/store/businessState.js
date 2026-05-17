@@ -5,8 +5,8 @@
 // shouldBeOpen: *셀렉터*로 계산 (저장 X) — 일정표 + 현재 시각 기반.
 //
 // 운영 일정 (USER_FLOW §8.8 / Task 2.9 OPERATING_SCHEDULE 와 동기화):
-//   2026-05-20: 16:30 ~ 21:00
-//   2026-05-21: 11:00 ~ 21:00
+//   2026-05-20: 15:00 ~ 21:00
+//   2026-05-21: 15:00 ~ 21:00 (Bug 12 / P2-1 — 양일 모두 오후 3시 오픈으로 통일)
 //
 // 사용 예:
 //   useBusinessStateStore((s) => s.status)
@@ -15,8 +15,8 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
 const SCHEDULE = {
-  '2026-05-20': { start: '16:30', end: '21:00' },
-  '2026-05-21': { start: '11:00', end: '21:00' },
+  '2026-05-20': { start: '15:00', end: '21:00' },
+  '2026-05-21': { start: '15:00', end: '21:00' },
 };
 
 const businessStateImpl = (set) => ({

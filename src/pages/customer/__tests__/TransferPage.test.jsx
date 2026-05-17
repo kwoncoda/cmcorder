@@ -116,7 +116,7 @@ describe('TransferPage', () => {
     // 두번째 호출(submit)은 다른 응답.
     apiFetch.mockResolvedValueOnce(SAMPLE_ORDER).mockResolvedValueOnce({ ok: true });
     fillValidForm();
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
     await waitFor(() => {
       // /api/orders/17/transfer-report POST 호출되어야 함
       const calls = apiFetch.mock.calls.filter((c) =>
@@ -135,7 +135,7 @@ describe('TransferPage', () => {
       expect(screen.getByLabelText(/은행/)).toBeInTheDocument();
     });
     fillValidForm();
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
     await waitFor(() => {
       expect(screen.getByTestId('status-page-stub')).toBeInTheDocument();
     });
@@ -154,7 +154,7 @@ describe('TransferPage', () => {
       expect(screen.getByLabelText(/은행/)).toBeInTheDocument();
     });
     fillValidForm();
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
     await waitFor(() => {
       expect(screen.getByTestId('form-error')).toBeInTheDocument();
     });
@@ -186,7 +186,7 @@ describe('TransferPage', () => {
     });
 
     fillValidForm();
-    fireEvent.click(screen.getByRole('button', { name: /이체 신고 제출/ }));
+    fireEvent.click(screen.getByRole('button', { name: /이체 완료 요청/ }));
 
     // 충분히 대기 후 form-error 미렌더 확인.
     // 핵심 검증: 페이지가 BusinessClosedError 메시지를 자체 ErrorState 로 표시하지 X

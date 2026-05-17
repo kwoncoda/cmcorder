@@ -25,6 +25,7 @@ import { calculatePrice } from '../domain/pricing.js';
 import { consumeCoupon, CouponError } from '../domain/coupon.js';
 import { getPopularMenus } from '../domain/popularity.js';
 import { getBusinessState } from '../domain/business-state.js';
+import { transition } from '../domain/order-state.js';
 
 const CreateOrderSchema = z.object({
   items: z
@@ -200,6 +201,11 @@ export function customerRoutes(db) {
         return res.status(403).json({ error: 'FORBIDDEN', message: '주문 접근 권한이 없습니다.' });
       }
       const input = TransferReportSchema.parse(req.body);
+      // P1-1 (Codex 리뷰) — 상태 가드.
+      // LEGAL_TRANSITIONS상 ORDERED → TRANSFER_REPORTED만 합법. 다른 상태(이미 TRANSFER_REPORTED,
+      // HOLD, PAID, COOKING, READY, DONE, CANCELED)는 자동 409 거부 — errorHandler가
+      // StateTransitionError를 409 ILLEGAL_TRANSITION으로 변환.
+      transition(existing.status, 'TRANSFER_REPORTED');
       const order = updateTransferInfo(db, Number(req.params.id), {
         depositor_name: input.depositorName,
         bank: input.bank,
@@ -217,8 +223,20 @@ export function customerRoutes(db) {
   return router;
 }
 
+// Bug 7 — SQLite 'YYYY-MM-DD HH:MM:SS' (UTC, marker 없음) → 'YYYY-MM-DDTHH:MM:SSZ' ISO 8601.
+// 브라우저(KST)가 marker 없는 문자열을 local time으로 잘못 해석해 540분 오차가 생기는 문제 방어.
+function toIsoUtc(str) {
+  if (str == null) return str;
+  if (typeof str !== 'string') return str;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(str)) {
+    return str.replace(' ', 'T') + 'Z';
+  }
+  return str;
+}
+
 // P0-4: GET 응답에서 access_token, external_token은 노출하지 않는다.
 // 토큰은 POST /api/orders 응답에서만 최초 1회 전달 (클라가 sessionStorage에 보관).
+// Bug 7: timestamp는 ISO 8601 Z 형식으로 변환하여 브라우저 timezone 오차 방지.
 function serializeOrder(o) {
   return {
     id: o.id,
@@ -234,11 +252,11 @@ function serializeOrder(o) {
     depositor_name: o.depositor_name,
     bank: o.bank,
     amount: o.amount,
-    created_at: o.created_at,
-    transferred_at: o.transferred_at,
-    paid_at: o.paid_at,
-    cooking_at: o.cooking_at,
-    ready_at: o.ready_at,
-    done_at: o.done_at,
+    created_at: toIsoUtc(o.created_at),
+    transferred_at: toIsoUtc(o.transferred_at),
+    paid_at: toIsoUtc(o.paid_at),
+    cooking_at: toIsoUtc(o.cooking_at),
+    ready_at: toIsoUtc(o.ready_at),
+    done_at: toIsoUtc(o.done_at),
   };
 }

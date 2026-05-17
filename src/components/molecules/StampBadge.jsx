@@ -12,13 +12,15 @@
 import { forwardRef } from 'react';
 
 // variant 별 설정 — 모듈 최상위 (CLAUDE.md §3.5 6조: VARIANT_CONFIG 패턴).
-// label: 표시 텍스트 (대문자 영문 — 도장 미학)
+// label: 표시 텍스트 (대문자 영문 — 도장 미학).
+//   recommended는 한글 '추천' (Bug 1 — 영문 RECOMMENDED 가독성 낮다는 사용자 피드백).
+//   나머지 paid/done/sold-out/canceled 는 도장 미학(영문 대문자) 유지.
 // colorClasses: 완전한 Tailwind 클래스 문자열 (text-X border-X) — 동적 보간 X.
 //   Tailwind purge 는 소스에서 *완전한* 클래스 문자열만 스캔 → `text-${token}` 형태 보간 X.
 // rotation: CSS rotate() 인자 — 양수는 '2deg' (단항 '+' 없이도 CSS 유효)
 const VARIANT_CONFIG = {
   recommended: {
-    label: 'RECOMMENDED',
+    label: '추천',
     colorClasses: 'text-stamp-green border-stamp-green',
     rotation: '-3deg',
   },

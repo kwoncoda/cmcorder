@@ -13,7 +13,7 @@
 //   - forwardRef 로 section 참조 전달
 //   - a11y (axe)
 import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+import { render, fireEvent, screen, within } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { createRef } from 'react';
 import AdminCardColumn, { OrderCard } from '../AdminCardColumn.jsx';
@@ -261,5 +261,90 @@ describe('AdminCardColumn', () => {
     );
     const r = await axe(container);
     expect(r).toHaveNoViolations();
+  });
+});
+
+// ── Bug 9, 10 — OrderCard inline 액션 ─────────────────────────
+// 칸반 카드 안에서 상태별 빠른 전이 버튼 노출 + onAction(id, to) 호출.
+// design-bundle screens-admin.jsx 295~322 라인의 act(o.id, ...) 패턴 정합.
+describe('OrderCard inline 액션 (Bug 9, 10)', () => {
+  // 상태별 액션 노출 매트릭스.
+  const ACTION_MATRIX = [
+    { status: 'ORDERED',           labels: ['취소'] },
+    { status: 'TRANSFER_REPORTED', labels: ['확인', '보류'] },
+    { status: 'PAID',              labels: ['조리 시작'] },
+    { status: 'COOKING',           labels: ['조리 완료'] },
+    { status: 'READY',             labels: ['전달 완료'] },
+    { status: 'HOLD',              labels: ['재확인', '취소'] },
+  ];
+
+  it.each(ACTION_MATRIX)('status=$status 카드에 inline 액션 버튼 노출 — $labels', ({ status, labels }) => {
+    const orders = [mkOrder({ id: 17, no: 17, status })];
+    render(
+      <AdminCardColumn title="x" status={status} orders={orders} tick={BASE_TICK} />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    for (const label of labels) {
+      // 카드 내부에 해당 라벨 버튼이 있어야 한다 (within(card)).
+      const btn = within(card).getByRole('button', { name: label });
+      expect(btn).toBeInTheDocument();
+    }
+  });
+
+  it('★ Bug 10 — TRANSFER_REPORTED 카드 "확인" 클릭 시 onAction(17, "PAID") 호출', () => {
+    const onAction = vi.fn();
+    const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
+    render(
+      <AdminCardColumn
+        title="x" status="TRANSFER_REPORTED" orders={orders}
+        tick={BASE_TICK} onAction={onAction}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    fireEvent.click(within(card).getByRole('button', { name: '확인' }));
+    expect(onAction).toHaveBeenCalledWith(17, 'PAID');
+  });
+
+  it('★ Bug 9 — TRANSFER_REPORTED 카드 "보류" 클릭 시 onAction(17, "HOLD") 호출', () => {
+    const onAction = vi.fn();
+    const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
+    render(
+      <AdminCardColumn
+        title="x" status="TRANSFER_REPORTED" orders={orders}
+        tick={BASE_TICK} onAction={onAction}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    fireEvent.click(within(card).getByRole('button', { name: '보류' }));
+    expect(onAction).toHaveBeenCalledWith(17, 'HOLD');
+  });
+
+  it('★ inline 액션 버튼 클릭은 onSelectOrder 를 호출하지 않는다 (이벤트 분리)', () => {
+    const onAction = vi.fn();
+    const onSelectOrder = vi.fn();
+    const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
+    render(
+      <AdminCardColumn
+        title="x" status="TRANSFER_REPORTED" orders={orders}
+        tick={BASE_TICK} onAction={onAction} onSelectOrder={onSelectOrder}
+      />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    fireEvent.click(within(card).getByRole('button', { name: '확인' }));
+    expect(onSelectOrder).not.toHaveBeenCalled();
+  });
+
+  it('★ 카드 본문 클릭은 여전히 onSelectOrder(id) 호출 (회귀)', () => {
+    const onSelectOrder = vi.fn();
+    const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
+    render(
+      <AdminCardColumn
+        title="x" status="TRANSFER_REPORTED" orders={orders}
+        tick={BASE_TICK} onSelectOrder={onSelectOrder}
+      />,
+    );
+    // 본문(article testid 자체) 클릭 — inline 액션 영역이 아닌 곳.
+    fireEvent.click(screen.getByTestId('admin-order-card-17'));
+    expect(onSelectOrder).toHaveBeenCalledWith(17);
   });
 });

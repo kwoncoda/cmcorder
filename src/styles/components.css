@@ -20,13 +20,16 @@
 .app-header .brand {
   display: flex; align-items: center; gap: 8px;
 }
+/* Bug 3 — 28px 영역에 mascot.png가 cover로 잘려 어두운 배경(#1a1d12)만 보이던 문제 수정.
+   contain + transparent로 마스코트 전체가 보이도록 변경. no-repeat 명시. */
 .app-header .brand-mark {
   width: 28px; height: 28px;
   background-image: url('/mascot/mascot.png');
-  background-size: cover;
+  background-size: contain;
   background-position: center;
+  background-repeat: no-repeat;
   border-radius: 4px;
-  background-color: #1a1d12;
+  background-color: transparent;
   flex-shrink: 0;
 }
 .app-header .brand-name {
@@ -1903,13 +1906,15 @@ code.ammo {
   justify-content: center;
   margin-bottom: 14px;
 }
+/* Bug 3 — 헤더와 같은 이슈 (login 화면 동일 적용). contain + transparent. */
 .login-mark .brand-mark {
   width: 48px; height: 48px;
   background-image: url('/mascot/mascot.png');
-  background-size: cover;
+  background-size: contain;
   background-position: center;
+  background-repeat: no-repeat;
   border-radius: 8px;
-  background-color: #1a1d12;
+  background-color: transparent;
 }
 .login-title {
   font-family: var(--font-display);

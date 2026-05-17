@@ -13,9 +13,9 @@ import { createRef } from 'react';
 import StampBadge from '../StampBadge.jsx';
 
 describe('StampBadge', () => {
-  // ── variant 별 텍스트 ──
+  // ── variant 별 텍스트 ── (Bug 1: recommended는 한글 '추천')
   it.each([
-    ['recommended', 'RECOMMENDED'],
+    ['recommended', '추천'],
     ['sold-out', 'SOLD OUT'],
     ['paid', 'PAID'],
     ['done', 'DONE'],
@@ -63,7 +63,7 @@ describe('StampBadge', () => {
   it('customLabel prop 으로 텍스트와 aria-label 동시 override', () => {
     render(<StampBadge variant="recommended" label="베스트" />);
     expect(screen.getByText('베스트')).toBeInTheDocument();
-    expect(screen.queryByText('RECOMMENDED')).not.toBeInTheDocument();
+    expect(screen.queryByText('추천')).not.toBeInTheDocument();
     expect(screen.getByRole('img')).toHaveAttribute('aria-label', '베스트 도장');
   });
 
@@ -89,16 +89,16 @@ describe('StampBadge', () => {
     expect(stamp.className).toMatch(/\bduration-stamp\b/);
   });
 
-  // ── 기본 variant (variant prop 누락 시) ──
+  // ── 기본 variant (variant prop 누락 시) ── (Bug 1: '추천' 한글)
   it('variant prop 누락 시 recommended 기본값', () => {
     render(<StampBadge />);
-    expect(screen.getByText('RECOMMENDED')).toBeInTheDocument();
+    expect(screen.getByText('추천')).toBeInTheDocument();
   });
 
-  // ── 알 수 없는 variant fallback ──
+  // ── 알 수 없는 variant fallback ── (Bug 1: '추천' 한글)
   it('알 수 없는 variant 시 recommended fallback', () => {
     render(<StampBadge variant="unknown-variant" />);
-    expect(screen.getByText('RECOMMENDED')).toBeInTheDocument();
+    expect(screen.getByText('추천')).toBeInTheDocument();
   });
 
   // ── forwardRef ──

@@ -126,6 +126,17 @@ describe('사용자 API — POST /api/orders (정상)', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('PRICING_ERROR');
   });
+
+  it('★ Bug 7 회귀 — 주문 응답 timestamps는 ISO 8601 UTC (T...Z) 형식', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+    expect(res.status).toBe(200);
+    // SQLite datetime('now')는 'YYYY-MM-DD HH:MM:SS' (UTC, marker 없음) 출력.
+    // serializeOrder가 ISO 8601 Z 형식으로 변환해야 브라우저(KST)가 540분 오차 없이 해석.
+    expect(res.body.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
 });
 
 describe('사용자 API — POST /api/orders + 쿠폰', () => {
@@ -486,8 +497,51 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db: freshDb() });
     const res = await request(app)
       .post('/api/orders/9999/transfer-report?token=anything')
-      .send({ bank: '국민', depositorName: 'X', amount: 1000 });
+      .send({ bank: '날부', depositorName: 'X', amount: 1000 });
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('ORDER_NOT_FOUND');
+  });
+
+  // ── P1-1 (Codex 리뷰) 상태 가드 — ORDERED만 허용 ─────────────────
+  // transfer-report API는 LEGAL_TRANSITIONS를 우회해 status를 강제 변경했었다.
+  // 회귀: ORDERED 외 모든 상태에서 409 ILLEGAL_TRANSITION 거부.
+  it('★ P1-1 — ORDERED 주문은 transfer-report 성공 (회귀)', async () => {
+    const app = createApp({ db: freshDb() });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+    const report = await request(app)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
+      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+    expect(report.status).toBe(200);
+    expect(report.body.status).toBe('TRANSFER_REPORTED');
+  });
+
+  it.each([
+    ['TRANSFER_REPORTED'],
+    ['PAID'],
+    ['COOKING'],
+    ['READY'],
+    ['DONE'],
+    ['CANCELED'],
+    ['HOLD'],
+  ])('★ P1-1 — %s 상태 주문은 transfer-report 거부 (409 ILLEGAL_TRANSITION)', async (state) => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동' });
+    // 테스트 fixture — DB SQL로 상태 강제 (도메인 검증 우회는 의도된 setup).
+    db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(state, create.body.id);
+
+    const report = await request(app)
+      .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
+      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+    expect(report.status).toBe(409);
+    expect(report.body.error).toBe('ILLEGAL_TRANSITION');
+
+    // 상태가 임의로 TRANSFER_REPORTED로 되돌아가지 않았는지 회귀.
+    const dbRow = db.prepare('SELECT status FROM orders WHERE id = ?').get(create.body.id);
+    expect(dbRow.status).toBe(state);
   });
 });
