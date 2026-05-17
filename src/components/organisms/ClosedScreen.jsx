@@ -1,7 +1,9 @@
 // ClosedScreen — design-bundle ScreenClosed (.closed-screen) 정합.
 //
-// 4 reason 매핑 + 운영 일정 카드(.schedule) + 새로고침 secondary CTA.
+// 4 reason 매핑 + 운영 일정 카드(.schedule).
 // 마스코트는 design-bundle .mascot.mascot-md (mascot.png 배경).
+// 자물쇠/새로고침 제거 (2026-05-17 front_closed_design)
+//   — CustomerLayout 30초 폴링이 OPEN 전환을 자동 수행하므로 새로고침 CTA 불요.
 import { forwardRef } from 'react';
 import MascotState from '../molecules/MascotState.jsx';
 
@@ -19,7 +21,7 @@ const OPERATING_SCHEDULE = [
 ];
 
 const ClosedScreen = forwardRef(function ClosedScreen(
-  { reason = 'before-open', operatingDate, onRefresh, className = '', ...rest },
+  { reason = 'before-open', operatingDate, className = '', ...rest },
   ref,
 ) {
   const config = REASON_CONFIG[reason] ?? REASON_CONFIG['before-open'];
@@ -33,7 +35,6 @@ const ClosedScreen = forwardRef(function ClosedScreen(
       className={`closed-screen ${className}`.trim()}
       {...rest}
     >
-      <div className="icon" aria-hidden="true">🔒</div>
       <h1 id="closed-title">{config.title}</h1>
       <MascotState state={config.mascot} size="md" useFallback />
       <p style={{ color: 'var(--color-muted)', maxWidth: 280, textAlign: 'center' }}>
@@ -59,9 +60,6 @@ const ClosedScreen = forwardRef(function ClosedScreen(
           ))}
         </ul>
       </div>
-      <button type="button" className="btn btn-secondary" onClick={() => onRefresh?.()} aria-label="화면 새로고침">
-        🔄 새로고침
-      </button>
     </section>
   );
 });

@@ -1916,6 +1916,15 @@ code.ammo {
   border-radius: 8px;
   background-color: transparent;
 }
+/* 2026-05-17 front_closed_design — 웹로고 교체. 가로형 비율 보존. */
+.login-mark .login-logo {
+  max-width: 200px;
+  max-height: 64px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
 .login-title {
   font-family: var(--font-display);
   font-weight: 800;

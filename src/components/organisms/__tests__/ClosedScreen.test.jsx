@@ -6,12 +6,12 @@
 //   - 운영 일정 SoT 2일 모두 표시 (5/20·5/21)
 //   - operatingDate=오늘 일자만 강조 (text-accent 또는 font-semibold)
 //   - 운영 일정 aria-live="polite" — UX §8.8 자동 announce
-//   - 새로고침 CTA 클릭 시 onRefresh 호출 (Button atom 재사용)
 //   - 알 수 없는 reason fallback → 'before-open'
 //   - MascotState 재사용 — reason='both-days-done' 시 canceled (😢 이모지 fallback)
 //   - a11y (axe)
-import { describe, it, expect, vi } from 'vitest';
-import { render, fireEvent, screen } from '@testing-library/react';
+// 자물쇠/새로고침 케이스 제거 (2026-05-17 front_closed_design).
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import ClosedScreen from '../ClosedScreen.jsx';
 
@@ -69,19 +69,6 @@ describe('ClosedScreen', () => {
       'aria-live',
       'polite',
     );
-  });
-
-  it('새로고침 CTA 클릭 시 onRefresh 호출', () => {
-    const onRefresh = vi.fn();
-    render(
-      <ClosedScreen
-        reason="before-open"
-        operatingDate="2026-05-20"
-        onRefresh={onRefresh}
-      />,
-    );
-    fireEvent.click(screen.getByRole('button', { name: /새로고침/ }));
-    expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
   it('알 수 없는 reason 시 before-open fallback', () => {
