@@ -31,13 +31,18 @@ const MenuCard = forwardRef(function MenuCard(
   },
   ref,
 ) {
+  // ★ Hook 은 early return *위* 에서 호출 — React Hook 순서 규칙.
+  //   menu 가 null 이어도 selector 는 안전하게 0 반환. inCartQty 자체는 early return 후
+  //   사용되지 않으므로 비용·결과 영향 없음.
+  const menuId = menu?.id;
+  // 카트 내 동일 메뉴 수량 — pick-btn 라벨용. shallow 셀렉터.
+  const inCartQty = useCartStore(
+    (s) => (menuId == null ? 0 : s.items.find((i) => i.menuId === menuId)?.quantity ?? 0),
+  );
+
   if (!menu) return null;
 
   const isSoldOut = Boolean(soldOut || menu.soldOut);
-  // 카트 내 동일 메뉴 수량 — pick-btn 라벨용. shallow 셀렉터.
-  const inCartQty = useCartStore(
-    (s) => s.items.find((i) => i.menuId === menu.id)?.quantity ?? 0,
-  );
 
   const handleAdd = () => {
     if (isSoldOut) return;

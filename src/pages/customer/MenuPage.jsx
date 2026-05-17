@@ -26,18 +26,20 @@ export default function MenuPage() {
   const navigate = useNavigate();
   const addItem = useCartStore((s) => s.addItem);
 
+  // ★ useMemo 는 early return *위* 에 — React Hook 순서 규칙. menus 는 useMenuData 가
+  //   `menuQuery.data ?? []` 로 항상 배열을 보장하므로 isLoading=true 시에도 안전.
+  const filteredMenus = useMemo(() => {
+    if (category === 'all') return menus;
+    if (category === 'recommended') return menus.filter((m) => m.recommended);
+    return menus.filter((m) => m.category === category);
+  }, [category, menus]);
+
   if (isLoading) return (<div data-testid="menu-page"><LoadingState variant="page" label="메뉴 가져오는 중…" minimumDelay={0} /></div>);
   if (error) return (
     <div data-testid="menu-page">
       <ErrorState variant="page" title="메뉴를 불러오지 못했어요" description="네트워크를 확인하고 다시 시도해 주세요." code={error.code ?? 'NETWORK'} actionLabel="다시 시도" onAction={refetch} />
     </div>
   );
-
-  const filteredMenus = useMemo(() => {
-    if (category === 'all') return menus;
-    if (category === 'recommended') return menus.filter((m) => m.recommended);
-    return menus.filter((m) => m.category === category);
-  }, [category, menus]);
 
   return (
     <section data-testid="menu-page" style={{ paddingBottom: 96 }}>

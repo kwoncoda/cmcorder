@@ -34,14 +34,26 @@ export default function CustomerLayout() {
     ({ signal }) => apiFetch(API.BUSINESS_STATE, { schema: BusinessStateSchema, signal }),
     [],
   );
+  const { refetch: refetchBusinessState } = businessQuery;
   useEffect(() => {
     if (businessQuery.data?.status) syncFromServer(businessQuery.data);
   }, [businessQuery.data, syncFromServer]);
+
+  // 어드민 OPEN/CLOSED 전환을 사용자 측이 ≤30s 내 감지 (D-day 안전망).
+  useEffect(() => {
+    const id = setInterval(() => refetchBusinessState(), 30_000);
+    return () => clearInterval(id);
+  }, [refetchBusinessState]);
 
   useEffect(() => {
     if (!businessQuery.data) return;
     if (status === 'CLOSED' && !isClosedAllowedPath(location.pathname)) {
       navigate('/closed', { replace: true });
+      return;
+    }
+    // OPEN 전환 시 /closed 에 머문 사용자는 자동으로 /menu 진입.
+    if (status === 'OPEN' && location.pathname === '/closed') {
+      navigate('/menu', { replace: true });
     }
   }, [businessQuery.data, status, location.pathname, navigate]);
 
