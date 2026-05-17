@@ -1329,6 +1329,25 @@
   font-family: var(--font-mono);
   color: var(--color-muted);
 }
+
+/* Codex final-gate P3 — 관리자 6탭 nav 모바일 보정.
+   nav를 4→6 탭으로 확장하면서 좁은 화면에서 가로 overflow 발생 가능. 본 topnav를
+   가로 스크롤 가능하게 풀고 padding/gap/폰트를 축소해 데스크톱 UI는 보존한다. */
+@media (max-width: 768px) {
+  .admin-topnav {
+    gap: 8px;
+    padding: 0 8px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .admin-topnav::-webkit-scrollbar { display: none; }
+  .admin-topnav > * { flex-shrink: 0; }
+  .admin-topnav .logo { font-size: 12px; }
+  .admin-topnav .nav { gap: 2px; }
+  .admin-topnav .nav-link { padding: 6px 8px; font-size: 12px; }
+  .admin-topnav .right { gap: 6px; font-size: 11px; }
+}
 .biz-badge {
   display: inline-flex;
   align-items: center;

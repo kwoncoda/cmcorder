@@ -1,7 +1,7 @@
 // C-4 주문 완료 (★ 절정) — design-bundle ScreenComplete (screens-customer.jsx:384-467).
 // CustomerLayout 공통 헤더 사용 (P1 #1) — 자체 .app-header 제거.
 // 누락 요소 복원 (P2 #7): 금액 복사 버튼, 주문 내역 receipt, 수령 정보 info banner, 조리 현황 ghost CTA.
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
 import { apiFetch } from '../../api/client.js';
@@ -36,13 +36,12 @@ export default function CompletePage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { token, query: tokenQuery, withQuery } = useOrderToken(id);
-  const [copyState, setCopyState] = useState('idle');
-  const [amountCopyState, setAmountCopyState] = useState('idle');
+  const [copyState, setCopyState] = useState('idle'); const [amountCopyState, setAmountCopyState] = useState('idle');
+  // Codex final-gate P2 — 복사 성공 후 2초 idle 복귀 setTimeout이 테스트 teardown 이후 실행되어 ReferenceError를 일으키는 회귀 차단.
+  const copyTimerRef = useRef(null); const amountTimerRef = useRef(null);
+  useEffect(() => () => { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); if (amountTimerRef.current) clearTimeout(amountTimerRef.current); }, []);
 
-  const orderQuery = useApi(
-    ({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }),
-    [id, token],
-  );
+  const orderQuery = useApi(({ signal }) => apiFetch(withQuery(API.ORDER(id)), { schema: OrderSchema, signal }), [id, token]);
 
   if (orderQuery.isLoading) return <LoadingState variant="page" label="주문 정보 가져오는 중…" minimumDelay={0} />;
   if (orderQuery.error) {
@@ -56,8 +55,8 @@ export default function CompletePage() {
   const items = Array.isArray(order.items) ? order.items : [];
   const couponApplied = items.length > 0 && items.reduce((a, it) => a + it.base_price * it.quantity, 0) > total;
 
-  const copyAccount = async () => { const r = await copyText(ACCOUNT_TEXT); setCopyState(r); if (r === 'copied') setTimeout(() => setCopyState('idle'), 2000); };
-  const copyAmount = async () => { const r = await copyText(String(total)); setAmountCopyState(r); if (r === 'copied') setTimeout(() => setAmountCopyState('idle'), 2000); };
+  const copyAccount = async () => { const r = await copyText(ACCOUNT_TEXT); setCopyState(r); if (r === 'copied') { if (copyTimerRef.current) clearTimeout(copyTimerRef.current); copyTimerRef.current = setTimeout(() => setCopyState('idle'), 2000); } };
+  const copyAmount = async () => { const r = await copyText(String(total)); setAmountCopyState(r); if (r === 'copied') { if (amountTimerRef.current) clearTimeout(amountTimerRef.current); amountTimerRef.current = setTimeout(() => setAmountCopyState('idle'), 2000); } };
 
   return (
     <section data-testid="complete-page">
