@@ -114,24 +114,29 @@ describe('CompletePage', () => {
     expect(screen.getByText('CHICKEN DINNER')).toBeInTheDocument();
   });
 
-  it('★ 한글 부 카피 — "치킨 디너 위너!" (결정 g)', async () => {
+  it('★ design_fix — 한글 부 카피 "치킨 디너 위너!" 제거 (DOM 미노출)', async () => {
     apiFetch.mockResolvedValue(SAMPLE_ORDER);
     renderPage();
     await waitFor(() => {
-      expect(screen.getByText('치킨 디너 위너!')).toBeInTheDocument();
+      expect(screen.getByText('WINNER WINNER')).toBeInTheDocument();
     });
+    // design_bundle ScreenComplete 와 정합: 영문 두 줄만 유지, 한글 부 카피는 제거.
+    expect(screen.queryByText('치킨 디너 위너!')).not.toBeInTheDocument();
   });
 
   // ── 계좌 정보 (G9) ──────────────────────────────────────────
   it('★ 계좌 정보 정확 (G9) — 국민은행 233001-04-403536 박동빈', async () => {
     apiFetch.mockResolvedValue(SAMPLE_ORDER);
     renderPage();
+    // design_fix — design_bundle ScreenComplete 구조 정합:
+    //   .acc-bank = 은행/예금주 (account-info 컨테이너에 포함)
+    //   .acc-no   = 계좌번호만 (account-number testid)
     await waitFor(() => {
-      const accNum = screen.getByTestId('account-number');
-      expect(accNum).toHaveTextContent('국민은행');
-      expect(accNum).toHaveTextContent('233001-04-403536');
+      expect(screen.getByTestId('account-number')).toHaveTextContent('233001-04-403536');
     });
-    expect(screen.getByText(/박동빈/)).toBeInTheDocument();
+    const card = screen.getByTestId('account-info');
+    expect(card).toHaveTextContent('국민은행');
+    expect(card).toHaveTextContent('박동빈');
   });
 
   // ── Clipboard 3단계 fallback ────────────────────────────────

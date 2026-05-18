@@ -19,7 +19,6 @@
 // - **find_error_v2 (2026-05-18): items 미리보기.** 카드에 order.items 최대 3개를
 //   "이름 ×수량" 으로 노출. 초과 시 "외 N개".
 import { forwardRef, useMemo } from 'react';
-import StatusChip from '../molecules/StatusChip.jsx';
 import { elapsedMinutes as elapsedMinutesUtil } from '../../utils/time.js';
 
 // 경과 분 계산 — transferred_at 없으면 0.
@@ -93,10 +92,13 @@ function previewItems(items) {
 // OrderCard — 단순 함수 컴포넌트 (P2-3 Codex v3 — memo 제거, A 방향).
 // 폴링 5초마다 order reference 새로 생성되므로 memo 효과 0이라 단순화.
 //
-// find_error_v2 (2026-05-18): 카드 클릭 네비게이션 제거.
-//   - 본문은 <div> 정적 표시 — onSelect prop 미사용.
-//   - cursor-pointer / hover:opacity-90 클래스 제거.
-//   - 액션 버튼만 인터랙션 (이체 확인/조리 시작 등).
+// design_fix (2026-05-18): design-bundle AdminOrderCard 구조 정렬.
+//   - Tailwind bg-card-bg/text-card-ink 제거 (semantic .order-card 의 --color-bg/-ink 와 충돌 →
+//     배경은 dark green 인데 글자는 dark brown 으로 잡혀 가독성 저하).
+//   - semantic .id/.who/.meta/.amount/.row/.actions 클래스 사용 (원본과 동일).
+//   - 위험 액션은 .order-card .actions button 기본 톤 (btn-danger* 제거) — primary 만 .primary.
+//   - StatusChip 카드 내부 제거: 컬럼 헤더가 이미 상태를 나타냄.
+//   - tone 클래스(border-divider/warning/danger) 는 기존 회귀 테스트 호환 위해 유지.
 function OrderCard({ order, tick, onAction, isPending = false }) {
   const elapsedMin = useMemo(
     () => calcElapsedMinutes(order.transferred_at, new Date(tick)),
@@ -109,49 +111,31 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
   const itemsPreview = previewItems(order.items);
 
   const cls = [
-    // find_error_v3 — design-bundle .order-card / .order-card.warn / .order-card.danger 병행.
     orderCardDesignClass(tone),
-    'text-left w-full',
-    'bg-card-bg text-card-ink',
-    'rounded-md p-md shadow-card',
-    'border-2',
     tone,
     'transition-all duration-tap',
   ].join(' ');
 
   return (
     <article data-testid={`admin-order-card-${order.id}`} className={cls}>
-      <div className="flex items-baseline justify-between gap-sm">
-        <div className="font-display font-bold text-base">#{order.no}</div>
-        {priceText && (
-          <span className="font-mono tabular-nums text-sm text-card-ink">
-            {priceText}
-          </span>
-        )}
+      <div className="row">
+        <span className="id">#{order.no}</span>
+        <span className="ago font-mono tabular-nums">{elapsedMin}분 경과</span>
       </div>
-      <div className="text-xs text-card-muted truncate">
-        {displayName ?? '(이름 없음)'}
-      </div>
+      <div className="who">{displayName ?? '(이름 없음)'}</div>
       {itemsPreview && (
-        <ul className="mt-2xs flex flex-col gap-3xs text-xs text-card-muted">
+        <div className="meta">
           {itemsPreview.head.map((it, idx) => (
-            <li key={`${it.menu_id ?? it.name}-${idx}`} className="truncate">
-              {it.name} ×{it.quantity}
-            </li>
+            <div key={`${it.menu_id ?? it.name}-${idx}`}>{it.name} ×{it.quantity}</div>
           ))}
-          {itemsPreview.surplus > 0 && (
-            <li className="text-card-muted">외 {itemsPreview.surplus}개</li>
-          )}
-        </ul>
+          {itemsPreview.surplus > 0 && <div>외 {itemsPreview.surplus}개</div>}
+        </div>
       )}
-      <div className="mt-2xs flex items-center justify-between gap-sm">
-        <StatusChip status={order.status} size="sm" showIcon={false} />
-        <span className="font-mono tabular-nums text-xs text-card-ink">
-          {elapsedMin}분 경과
-        </span>
-      </div>
+      {priceText && (
+        <div className="row"><span className="amount">{priceText}</span></div>
+      )}
       {actions.length > 0 && (
-        <div className="mt-sm flex gap-xs">
+        <div className="actions">
           {actions.map((a) => (
             <button
               key={a.to}
@@ -162,12 +146,7 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
               }}
               disabled={isPending}
               aria-busy={isPending || undefined}
-              // find_error_v3 — 위험 액션(취소·보류)은 outline 톤으로 변경 (변경: btn-danger → btn-danger-outline).
-              className={
-                a.variant === 'danger'
-                  ? 'btn btn-danger-outline btn-sm flex-1'
-                  : `btn btn-${a.variant ?? 'primary'} btn-sm flex-1`
-              }
+              className={a.variant === 'primary' ? 'primary' : undefined}
             >
               {a.label}
             </button>
@@ -194,15 +173,9 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
   },
   ref,
 ) {
-  // find_error_v3 — design-bundle .col / .col-head / .col-body 클래스 추가 (Tailwind 병행).
-  const wrapperCls = [
-    'col',
-    'bg-elevated text-ink',
-    'rounded-md',
-    className,
-  ]
-    .filter(Boolean)
-    .join(' ');
+  // design-bundle .col / .col-head / .col-body — semantic CSS 가 background·radius·flex 모두 처리.
+  // Tailwind bg-elevated 와 충돌하지 않게 utility 제거 (semantic 단일 출처).
+  const wrapperCls = ['col', className].filter(Boolean).join(' ');
 
   return (
     <section
@@ -212,16 +185,14 @@ const AdminCardColumn = forwardRef(function AdminCardColumn(
       aria-label={`${title} 컬럼`}
       {...rest}
     >
-      <header className="col-head flex items-center justify-between">
-        <h2 className="font-display font-bold text-lg">{title}</h2>
-        <span className="count font-mono tabular-nums text-sm text-muted">
-          {orders.length}
-        </span>
+      <header className="col-head">
+        <h2 className="font-display font-bold">{title}</h2>
+        <span className="count">{orders.length}</span>
       </header>
 
-      <ol className="col-body flex flex-col gap-sm">
+      <ol className="col-body" style={{ listStyle: 'none', margin: 0, padding: 8 }}>
         {orders.length === 0 ? (
-          <li className="text-muted text-xs">해당 상태 주문 없음</li>
+          <li className="text-muted text-xs" style={{ textAlign: 'center', padding: '12px 4px' }}>해당 상태 주문 없음</li>
         ) : (
           orders.map((o) => (
             // key={o.id} — index 금지 (§3.5 7조).

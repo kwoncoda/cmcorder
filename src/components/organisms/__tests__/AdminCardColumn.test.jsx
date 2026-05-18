@@ -489,25 +489,31 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     expect(onAction).toHaveBeenCalledWith(17, 'PAID');
   });
 
-  // ── find_error_v3 — 취소/보류 위험 액션은 btn-danger-outline 톤 다운 ──
-  it('★ find_error_v3 — ORDERED 카드 "취소" 버튼이 btn-danger-outline 클래스 (.btn-danger 미사용)', () => {
+  // ── design_fix — 카드 액션 버튼은 design_bundle .order-card .actions button 톤 ──
+  // 위험 액션(취소/보류) 은 전역 btn-danger* 변형을 쓰지 않고 카드 액션 기본 톤(elevated bg + ink text) 만 사용.
+  // primary(확인/조리 시작 등) 만 .primary 클래스로 옐로 강조 (.order-card .actions button.primary CSS).
+  it('★ design_fix — ORDERED 카드 "취소" 버튼은 btn-danger* 클래스 미사용 (.order-card .actions 기본 톤)', () => {
     const orders = [mkOrder({ id: 17, no: 17, status: 'ORDERED' })];
     render(
       <AdminCardColumn title="x" status="ORDERED" orders={orders} tick={BASE_TICK} />,
     );
     const card = screen.getByTestId('admin-order-card-17');
     const btn = within(card).getByRole('button', { name: '취소' });
-    expect(btn).toHaveClass('btn-danger-outline');
     expect(btn).not.toHaveClass('btn-danger');
+    expect(btn).not.toHaveClass('btn-danger-outline');
+    expect(btn).not.toHaveClass('primary');
   });
 
-  it('★ find_error_v3 — TRANSFER_REPORTED "보류" 버튼이 btn-danger-outline (확인은 btn-primary 유지)', () => {
+  it('★ design_fix — TRANSFER_REPORTED "보류"는 기본 톤, "확인"은 .primary (옐로 강조)', () => {
     const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
     render(
       <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
     );
     const card = screen.getByTestId('admin-order-card-17');
-    expect(within(card).getByRole('button', { name: '보류' })).toHaveClass('btn-danger-outline');
-    expect(within(card).getByRole('button', { name: '확인' })).toHaveClass('btn-primary');
+    const holdBtn = within(card).getByRole('button', { name: '보류' });
+    expect(holdBtn).not.toHaveClass('btn-danger-outline');
+    expect(holdBtn).not.toHaveClass('primary');
+    const confirmBtn = within(card).getByRole('button', { name: '확인' });
+    expect(confirmBtn).toHaveClass('primary');
   });
 });

@@ -61,15 +61,14 @@ export default function CompletePage() {
   return (
     <section data-testid="complete-page">
       <div className="dogtag-stage">
-        <DogTagFrame no={order.no} total={100} date={order.operating_date} dropping pulse={false} />
+        <DogTagFrame no={order.no} total={100} date={order.operating_date} dropping pulse />
         <h1 className="winner-copy"><span>WINNER WINNER</span><br /><span>CHICKEN DINNER</span></h1>
-        <p className="font-display font-bold text-base text-ink">치킨 디너 위너!</p>
       </div>
 
       <div className="account-card" role="region" aria-labelledby="account-title" data-testid="account-info">
         <div className="acc-label" id="account-title">💸 입금 안내</div>
         <div className="acc-bank">{ACCOUNT_BANK} · 예금주 {ACCOUNT_HOLDER}</div>
-        <div className="acc-no" data-testid="account-number">{ACCOUNT_BANK} {ACCOUNT_NUMBER}</div>
+        <div className="acc-no" data-testid="account-number">{ACCOUNT_NUMBER}</div>
         <div className="acc-amount">{fmt(total)} 원</div>
         <div className="acc-actions">
           <button type="button" className="btn btn-secondary btn-sm btn-block" onClick={copyAccount} aria-label="계좌번호 복사">

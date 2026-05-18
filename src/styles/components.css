@@ -202,17 +202,24 @@
   cursor: not-allowed;
 }
 
-/* find_error_v3 — 어드민 영업 상태 dot (이모지 대체). nav biz-badge / dashboard open-status 공용. */
+/* design_fix — 어드민 영업 상태 dot. design_bundle 의 🟢 이모지 자리에 들어가는 CSS 원형.
+   nav biz-badge / dashboard open-status 공용. 명확히 보이도록 10px + 살짝 짙은 ring. */
 .biz-dot {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  margin-right: 4px;
   vertical-align: middle;
+  flex-shrink: 0;
 }
-.biz-dot.is-open    { background: var(--color-success); }
-.biz-dot.is-closed  { background: var(--color-danger); }
+.biz-dot.is-open    {
+  background: var(--color-success);
+  box-shadow: 0 0 0 1px rgba(90,140,66,0.55);
+}
+.biz-dot.is-closed  {
+  background: var(--color-danger);
+  box-shadow: 0 0 0 1px rgba(199,62,29,0.55);
+}
 
 /* find_error_v3 — open-status 안쪽 채워진 dot (.pulse 는 외곽 ripple). */
 .open-status .open-dot::before {
@@ -1624,8 +1631,17 @@
   text-align: left;
   width: 100%;
   font-family: inherit;
-  cursor: pointer;
 }
+/* design_fix — 카드 우상단 경과 시간 (디자인 번들의 인라인 ago 스타일 대체). */
+.order-card .ago {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-muted);
+}
+.order-card.warn .ago    { color: var(--color-warning); }
+.order-card.danger .ago  { color: var(--color-danger); }
+/* design_fix — meta 안 줄 (아이템 미리보기) 사이 간격. */
+.order-card .meta > div { line-height: 1.4; }
 .order-card.warn { border-color: rgba(229,155,12,0.6); }
 .order-card.danger { border-color: rgba(199,62,29,0.7); }
 .order-card .id {
@@ -1659,7 +1675,7 @@
 }
 .order-card .actions button {
   flex: 1;
-  height: 26px;
+  height: 28px;
   font-size: 11px;
   padding: 0 6px;
   border-radius: 4px;
@@ -1669,11 +1685,24 @@
   font-family: var(--font-display);
   font-weight: 700;
   cursor: pointer;
+  transition: background-color 100ms ease, border-color 100ms ease;
+}
+.order-card .actions button:hover:not(:disabled) {
+  background: var(--color-surface);
+  border-color: var(--color-muted);
+}
+.order-card .actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 .order-card .actions button.primary {
   background: var(--color-accent);
   color: var(--stamp-black);
   border-color: var(--color-accent);
+}
+.order-card .actions button.primary:hover:not(:disabled) {
+  background: var(--color-accent-pressed);
+  border-color: var(--color-accent-pressed);
 }
 
 /* ============================================================
