@@ -56,7 +56,7 @@ describe('MapPage', () => {
   it('★ 진입 시 BoothMinimapModal 자동 표시', () => {
     renderPage();
     expect(screen.getByTestId('booth-minimap-modal')).toBeInTheDocument();
-    expect(screen.getByText(/부스 약도/)).toBeInTheDocument();
+    expect(screen.getByText(/테이블 지도/)).toBeInTheDocument();
   });
 
   it('★ ?order_id=5 시 본인 테이블 5번 강조 (myTableNo=5)', () => {

@@ -81,7 +81,7 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
             height="22"
             style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }}
           />
-          부스 약도
+          테이블 지도
         </h2>
         <button
           type="button"
