@@ -202,8 +202,10 @@
   cursor: not-allowed;
 }
 
-/* design_fix — 어드민 영업 상태 dot. design_bundle 의 🟢 이모지 자리에 들어가는 CSS 원형.
-   nav biz-badge / dashboard open-status 공용. 명확히 보이도록 10px + 살짝 짙은 ring. */
+/* design_fix v5 — 어드민 영업 상태 dot. design_bundle 의 🟢 이모지 자리에 들어가는 CSS 원형.
+   nav biz-badge / dashboard open-status 공용.
+   배경이 success/danger 의 20% 틴트 위에 그려지므로 같은 hue 의 success/danger 토큰을 쓰면
+   묻혀버린다. 밝은 lime / coral 로 hard-code 하고 어두운 page bg(--color-bg) ring 으로 분리. */
 .biz-dot {
   display: inline-block;
   width: 10px;
@@ -213,12 +215,12 @@
   flex-shrink: 0;
 }
 .biz-dot.is-open    {
-  background: var(--color-success);
-  box-shadow: 0 0 0 1px rgba(90,140,66,0.55);
+  background: #B6E97A;
+  box-shadow: 0 0 0 1.5px var(--color-bg);
 }
 .biz-dot.is-closed  {
-  background: var(--color-danger);
-  box-shadow: 0 0 0 1px rgba(199,62,29,0.55);
+  background: #FF6B47;
+  box-shadow: 0 0 0 1.5px var(--color-bg);
 }
 
 /* find_error_v3 — open-status 안쪽 채워진 dot (.pulse 는 외곽 ripple). */
@@ -1594,7 +1596,8 @@
 }
 .col-head {
   padding: 10px 12px;
-  font-size: 12px;
+  /* design_fix v5 — 작은 글씨 보강: 12→13px, count 11→12px. 운영자가 멀리서도 컬럼 라벨 식별. */
+  font-size: 13px;
   font-weight: 700;
   display: flex;
   justify-content: space-between;
@@ -1607,9 +1610,10 @@
 .col-head .count {
   font-family: var(--font-mono);
   background: var(--color-bg);
-  padding: 1px 7px;
+  padding: 1px 8px;
   border-radius: var(--radius-pill);
-  font-size: 11px;
+  font-size: 12px;
+  color: var(--color-ink);
 }
 .col-head.warn { background: rgba(229,155,12,0.18); border-bottom-color: rgba(229,155,12,0.5); }
 .col-head.danger { background: rgba(199,62,29,0.18); border-bottom-color: rgba(199,62,29,0.5); }
@@ -1625,36 +1629,39 @@
   background: var(--color-bg);
   border: 1px solid var(--color-divider);
   border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 10px 12px;
+  /* design_fix v5 — 카드 본문 12→13px 상향. 본부가 멀리서도 정보 식별. */
+  font-size: 13px;
   color: var(--color-ink);
   text-align: left;
   width: 100%;
   font-family: inherit;
 }
-/* design_fix — 카드 우상단 경과 시간 (디자인 번들의 인라인 ago 스타일 대체). */
+/* design_fix v5 — 카드 우상단 경과 시간. 10px muted 너무 작아 12px 로 상향. */
 .order-card .ago {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   color: var(--color-muted);
 }
-.order-card.warn .ago    { color: var(--color-warning); }
-.order-card.danger .ago  { color: var(--color-danger); }
-/* design_fix — meta 안 줄 (아이템 미리보기) 사이 간격. */
-.order-card .meta > div { line-height: 1.4; }
+.order-card.warn .ago    { color: var(--color-warning); font-weight: 700; }
+.order-card.danger .ago  { color: var(--color-danger); font-weight: 700; }
+/* design_fix v5 — meta 안 줄 사이 간격 + 폰트 본문 톤(12px) 으로 키움. 어두운 muted X — cream-ink-with-opacity 로 가독성 확보. */
+.order-card .meta > div { line-height: 1.45; }
 .order-card.warn { border-color: rgba(229,155,12,0.6); }
 .order-card.danger { border-color: rgba(199,62,29,0.7); }
 .order-card .id {
   font-family: var(--font-mono);
   font-weight: 800;
-  font-size: 14px;
+  /* design_fix v5 — 14→15px. */
+  font-size: 15px;
   color: var(--color-accent);
 }
-.order-card .who { color: var(--color-ink); font-weight: 600; }
+.order-card .who { color: var(--color-ink); font-weight: 600; font-size: 13px; }
 .order-card .meta {
-  color: var(--color-muted);
+  /* design_fix v5 — 10px muted → 12px cream-ink-with-opacity (E8E0C8 의 80% 톤). */
+  color: rgba(232, 224, 200, 0.82);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 4px;
 }
 .order-card .amount {
@@ -1675,9 +1682,10 @@
 }
 .order-card .actions button {
   flex: 1;
-  height: 28px;
-  font-size: 11px;
-  padding: 0 6px;
+  /* design_fix v5 — 액션 버튼 높이/폰트 살짝 상향: 28→30px / 11→12px. */
+  height: 30px;
+  font-size: 12px;
+  padding: 0 8px;
   border-radius: 4px;
   border: 1px solid var(--color-divider);
   background: var(--color-elevated);
@@ -1857,7 +1865,18 @@ code.ammo {
   border-radius: 4px;
   cursor: pointer;
 }
-.bump-btn:hover { background: var(--color-elevated); color: var(--color-accent); }
+/* design_fix v5 — hover 시 배경 변경 없이 글자색만 옐로로 (호버 박스가 시각적으로 커 보이는 현상 차단). */
+.bump-btn { transition: color 100ms ease; }
+.bump-btn:hover { color: var(--color-accent); }
+/* design_fix v6 — 저장(✓)은 항상 옐로, 취소(✕)는 항상 빨강. hover 색 변동 없음. */
+.bump-btn-save,
+.bump-btn-save:hover {
+  color: var(--color-accent);
+}
+.bump-btn-danger,
+.bump-btn-danger:hover {
+  color: var(--color-danger);
+}
 .price-display {
   flex: 1;
   background: transparent;

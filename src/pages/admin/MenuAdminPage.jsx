@@ -77,8 +77,8 @@ export default function MenuAdminPage() {
                     onChange={(e) => setEditing({ id: m.id, value: e.target.value.replace(/\D/g, '').slice(0, 7) })}
                     onKeyDown={(e) => { if (e.key === 'Enter') save(m); if (e.key === 'Escape') setEditing({ id: null, value: '' }); }}
                     inputMode="numeric" style={{ width: 90, height: 32, padding: '0 8px', textAlign: 'right' }} />
-                  <button type="button" className="bump-btn" data-testid={`save-price-${m.id}`} onClick={() => save(m)} aria-label="저장">✓</button>
-                  <button type="button" className="bump-btn" data-testid={`cancel-price-${m.id}`} onClick={() => setEditing({ id: null, value: '' })} aria-label="취소">✕</button>
+                  <button type="button" className="bump-btn bump-btn-save" data-testid={`save-price-${m.id}`} onClick={() => save(m)} aria-label="저장">✓</button>
+                  <button type="button" className="bump-btn bump-btn-danger" data-testid={`cancel-price-${m.id}`} onClick={() => setEditing({ id: null, value: '' })} aria-label="취소">✕</button>
                 </div>
               ) : (
                 <button type="button" data-testid={`edit-price-${m.id}`} className="price-display"

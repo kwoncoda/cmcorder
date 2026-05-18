@@ -58,6 +58,22 @@ function formatPrice(n) {
   return `${n.toLocaleString('ko-KR')}원`;
 }
 
+// design_fix v5 — F1 카드에 이체 신고 은행 표시. bank='기타' 면 custom_bank fallback.
+function formatBankLabel(order) {
+  if (!order.bank) return null;
+  if (order.bank === '기타') return order.custom_bank || '기타';
+  return order.bank;
+}
+
+// design_fix v5 — F2 카드에 수령 위치(테이블/포장) 표시. 모든 상태에서 노출.
+function formatLocationLabel(order) {
+  if (order.delivery_type === 'takeout') return '포장';
+  if (order.delivery_type === 'dineIn') {
+    return order.table_no != null ? `테이블 ${order.table_no}` : '테이블 미지정';
+  }
+  return null;
+}
+
 // Bug 9, 10: 상태별 inline 액션 매트릭스.
 // design-bundle screens-admin.jsx 295~322 라인 + ADR-025 합법 전이 정합.
 //   ORDERED           → 취소
@@ -109,6 +125,8 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
   const priceText = formatPrice(order.total_price);
   const actions = ACTION_BY_STATUS[order.status] ?? [];
   const itemsPreview = previewItems(order.items);
+  const locationLabel = formatLocationLabel(order);
+  const bankLabel = order.status === 'TRANSFER_REPORTED' ? formatBankLabel(order) : null;
 
   const cls = [
     orderCardDesignClass(tone),
@@ -123,12 +141,14 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
         <span className="ago font-mono tabular-nums">{elapsedMin}분 경과</span>
       </div>
       <div className="who">{displayName ?? '(이름 없음)'}</div>
-      {itemsPreview && (
+      {(locationLabel || bankLabel || itemsPreview) && (
         <div className="meta">
-          {itemsPreview.head.map((it, idx) => (
+          {locationLabel && <div data-testid="order-location">{locationLabel}</div>}
+          {bankLabel && <div data-testid="order-bank">은행: {bankLabel}</div>}
+          {itemsPreview && itemsPreview.head.map((it, idx) => (
             <div key={`${it.menu_id ?? it.name}-${idx}`}>{it.name} ×{it.quantity}</div>
           ))}
-          {itemsPreview.surplus > 0 && <div>외 {itemsPreview.surplus}개</div>}
+          {itemsPreview && itemsPreview.surplus > 0 && <div>외 {itemsPreview.surplus}개</div>}
         </div>
       )}
       {priceText && (

@@ -82,7 +82,7 @@ export default function DashboardPage() {
           <h1>본부 대시보드</h1>
           <div style={{ marginLeft: 'auto' }}><BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} /></div>
         </header>
-        <div className={`start-cta ${shouldBeOpen ? 'urgent' : ''}`}>
+        <div className="start-cta urgent">
           <div className="cta-mascot"><div className="mascot mascot-sm" /></div>
           <div className="left">
             <div className="cta-eyebrow">CLOSED · 사용자 주문 차단 중</div>
