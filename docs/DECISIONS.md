@@ -1375,3 +1375,4 @@ F-A-032 (메뉴별/시간대별 그래프) + F-A-035 (ZIP 이력) → **Phase 2 
 | 2026-05-10 | docs/DESIGN_REVIEW.md 신규 작성 |
 | 2026-05-18 | ADR-033 신규 수용 (검증·테스트·dev는 docker 환경에서만 — 호스트 npm 직접 호출 금지). 2026-05-17 CLOSED 가드 정적 자산 회귀 사고가 직접 계기. Dockerfile.dev + docker-compose.dev.yml 신규. |
 | 2026-05-18 | ADR-034 신규 수용 (find_error_v3 — 쿠폰 student_id UNIQUE / admin_events / 어드민 UX 정합 / cross-env build). 실사용 6개 결함 + Codex P1 2건 통합. 1167/1167 통과. |
+| 2026-05-19 | `minimap_design` 라운드 (ADR 신설 없음, 정책 정렬). 미니맵 UI를 `public/map/table-location.webp`(2.43MB) 기반 이미지로 교체 — 임시 T1~T16 격자는 dead code로 보존하되 `totalTables` prop으로 cap. 부스 좌석 정책 **1~15**: CheckoutPage UI + 미니맵 legend + 서버 zod `min(1).max(15)` (POST /api/orders 위반 시 400 VALIDATION_ERROR `"테이블 번호는 1번부터 15번까지만 선택할 수 있어요."`). API_DRAFT §1.5 / COMPONENT_GUIDE §4.12 동기화. 신규 회귀 11건 → 1185/1185 통과. 작업 문서: `docs/tasks/2026-05-19-minimap-design-and-table-range.md`, `docs/tasks/2026-05-19-minimap-webp-and-table-no-validation.md`. |

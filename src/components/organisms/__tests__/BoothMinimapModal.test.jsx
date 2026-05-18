@@ -95,8 +95,65 @@ describe('BoothMinimapModal', () => {
         onClose={() => {}}
       />,
     );
-    expect(screen.getByAltText('부스 위치 약도')).toBeInTheDocument();
+    // alt = "테이블 위치 약도 — 내 테이블 5번" (myTableNo 표기 포함).
+    expect(screen.getByAltText(/테이블 위치 약도/)).toBeInTheDocument();
     expect(screen.queryByTestId('map-fallback-grid')).not.toBeInTheDocument();
+  });
+
+  it('★ mapImage + myTableNo 시 이미지 aria-label="내 테이블 N번"', () => {
+    render(
+      <BoothMinimapModal
+        open
+        myTableNo={5}
+        mapImage="/map/booth.png"
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText('내 테이블 5번')).toBeInTheDocument();
+  });
+
+  it('★ mapImage + myTableNo 없음 — 이미지 aria-label 없음 + alt 기본값', () => {
+    render(
+      <BoothMinimapModal
+        open
+        mapImage="/map/booth.png"
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.queryByLabelText(/내 테이블/)).not.toBeInTheDocument();
+    expect(screen.getByAltText('테이블 위치 약도')).toBeInTheDocument();
+  });
+
+  it('★ totalTables prop 이 cols*rows 보다 우선 (legend 표시 기준)', () => {
+    render(
+      <BoothMinimapModal
+        open
+        mapImage="/map/booth.png"
+        totalTables={15}
+        gridSize={{ cols: 4, rows: 4 }}
+        onClose={() => {}}
+      />,
+    );
+    // gridSize 는 16 이지만 totalTables prop 으로 15 표기.
+    expect(screen.getByText('총 15개 테이블')).toBeInTheDocument();
+    expect(screen.queryByText('총 16개 테이블')).not.toBeInTheDocument();
+  });
+
+  it('★ fallback 격자도 totalTables 로 cap — T16 미렌더 (1~15만)', () => {
+    render(
+      <BoothMinimapModal
+        open
+        totalTables={15}
+        gridSize={{ cols: 4, rows: 4 }}
+        onClose={() => {}}
+      />,
+    );
+    // 격자 fallback 모드 (mapImage 없음) — totalTables=15 → 15 셀만.
+    expect(screen.getAllByRole('gridcell')).toHaveLength(15);
+    // T1~T15 모두 노출, T16 미노출.
+    expect(screen.getByText('T1')).toBeInTheDocument();
+    expect(screen.getByText('T15')).toBeInTheDocument();
+    expect(screen.queryByText('T16')).not.toBeInTheDocument();
   });
 
   it('★ 본인 테이블 셀에 booth-table-pulse 클래스 (결정 h — 매번 재생)', () => {

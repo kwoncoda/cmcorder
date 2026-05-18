@@ -15,7 +15,7 @@ import DeliveryTypeSelector from '../../components/organisms/DeliveryTypeSelecto
 // find_error_v2 — 주문 자격(9자리)과 쿠폰 자격(컴모융 37) 분리.
 const ORDER_SID = /^\d{9}$/; const COUPON_SID = /^\d{2}\d{2}37\d{3}$/;
 const fmt = (n) => n.toLocaleString('ko-KR');
-const TABLES = [1,2,3,4,5,6,7,8,9,10,11,12];
+const TABLES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
 
 export default function CheckoutPage() {
   const items = useCartStore((s) => s.items);
@@ -85,7 +85,7 @@ export default function CheckoutPage() {
         <div className="section-label">② 수령 방법</div>
         <DeliveryTypeSelector value={delivery} onChange={setDelivery} />
         {delivery === 'dineIn' && (<div className="field" style={{ marginTop: 12 }}>
-          <Label htmlFor="tableNo" required>테이블 번호 (1~12)</Label>
+          <Label htmlFor="tableNo" required>테이블 번호 (1~15)</Label>
           <div role="radiogroup" aria-label="좌석 번호" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
             {TABLES.map((n) => (<button key={n} type="button" role="radio" aria-checked={String(n) === tableNo}
               tabIndex={String(n) === tableNo || (!tableNo && n === 1) ? 0 : -1}

@@ -517,6 +517,108 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
   });
 });
 
+// ── minimap_design — POST /api/orders table_no 범위 (1~15) ─────────────
+describe('사용자 API — POST /api/orders table_no 1~15 범위 검증', () => {
+  const orderBase = (table_no) => ({
+    items: [{ menu_id: 1, quantity: 1 }],
+    name: '홍길동',
+    student_id: '202637001',
+    is_external: false,
+    delivery_type: 'dineIn',
+    table_no,
+  });
+
+  it('★ table_no=1 → 200 (경계 하한 정상)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(1));
+    expect(res.status).toBe(200);
+    expect(res.body.table_no).toBe(1);
+  });
+
+  it('★ table_no=15 → 200 (경계 상한 정상)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(15));
+    expect(res.status).toBe(200);
+    expect(res.body.table_no).toBe(15);
+  });
+
+  it('★ table_no=8 → 200 (중간값 정상)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(8));
+    expect(res.status).toBe(200);
+  });
+
+  it('★ table_no=0 → 400 VALIDATION_ERROR', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(0));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(res.body.message).toBe(
+      '테이블 번호는 1번부터 15번까지만 선택할 수 있어요.',
+    );
+  });
+
+  it('★ table_no=16 → 400 VALIDATION_ERROR', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(16));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(res.body.message).toBe(
+      '테이블 번호는 1번부터 15번까지만 선택할 수 있어요.',
+    );
+  });
+
+  it('★ table_no=999 → 400 VALIDATION_ERROR', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(999));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ table_no=-1 → 400 VALIDATION_ERROR (음수 거부)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase(-1));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ table_no="abc" → 400 VALIDATION_ERROR (문자 거부)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).post('/api/orders').send(orderBase('abc'));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ table_no=null → 200 (포장 케이스 회귀 — 호환 유지)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        delivery_type: 'takeout',
+        table_no: null,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.table_no).toBeNull();
+  });
+
+  it('★ table_no 미지정 → 200 (optional 회귀 — 호환 유지)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        delivery_type: 'takeout',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.table_no).toBeNull();
+  });
+});
+
 describe('사용자 API — 영업 외 가드', () => {
   it('CLOSED 상태에서 POST /api/orders → 423', async () => {
     const db = new Database(':memory:');

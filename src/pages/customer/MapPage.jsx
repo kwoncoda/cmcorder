@@ -4,8 +4,12 @@
 //  - ?order_id=N 시 본인 테이블 N번 강조 (myTableNo).
 //  - 직접 진입 시 (메뉴 화면 우상단 🗺️) ?from=menu — 본인 테이블 X.
 //  - 닫기 시 history back (이전 페이지 복귀).
+//  - 메인 이미지: /map/table-location.webp (테이블 1~15번 PUBG 풍 약도).
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import BoothMinimapModal from '../../components/organisms/BoothMinimapModal.jsx';
+
+const TABLE_MAP_IMAGE = '/map/table-location.webp';
+const TOTAL_TABLES = 15;
 
 export default function MapPage() {
   const [searchParams] = useSearchParams();
@@ -25,7 +29,8 @@ export default function MapPage() {
       <BoothMinimapModal
         open
         myTableNo={myTableNo}
-        gridSize={{ cols: 4, rows: 4 }}
+        mapImage={TABLE_MAP_IMAGE}
+        totalTables={TOTAL_TABLES}
         onClose={handleClose}
       />
     </div>

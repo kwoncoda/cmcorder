@@ -809,21 +809,21 @@ ErrorLayout (마스코트 중심)
 
 **props:**
 - `myTableNo`: number (선택 — 매장 식사 + 주문 후만)
-- `mapImage`: string URL (선택 — 미수령 시 CSS 그리드 fallback)
-- `gridSize`: {cols: 4, rows: 3} (fallback용)
+- `mapImage`: string URL (선택 — 미수령 시 CSS 그리드 fallback). *2026-05-19 minimap_design: `/map/table-location.webp` 적용*.
+- `gridSize`: {cols: 4, rows: 4} (fallback용 — 기본). *2026-05-19 minimap_design: MapPage는 이미지 모드만 사용, 격자는 dead code*.
+- `totalTables`: number (선택 — legend 표기 + 격자 셀 cap 기준. 미지정 시 `cols*rows`). *2026-05-19 minimap_design 신규 — 1~15 정책*.
 
 **렌더링 분기:**
-1. `mapImage` 존재 → `<img src={mapImage}>` + `myTableNo` 위치에 형광 옐로 강조 overlay
-2. `mapImage` 미존재 → CSS 그리드 4×3 (T1~T12) + 입구 마커 + `myTableNo` 박스만 형광 옐로
+1. `mapImage` 존재 → `<img src={mapImage}>` (`width:100%; max-height:70vh; object-fit:contain`) + `aria-label="내 테이블 N번"`. *2026-05-19: 부정확한 가운데 좌표 overlay 마커는 제거. 위치 강조는 하단 legend + alt 텍스트로 일원화.*
+2. `mapImage` 미존재 → CSS 그리드 (`totalTables`개 셀, T1~T{totalTables}) + 입구 마커 + `myTableNo` 박스만 형광 옐로. `tableNo > totalTables` 셀은 렌더 X (T16 회귀 방지).
 
 **모션:**
 - 모달 진입: 200ms fade + 8px slide (`--ease-out`)
-- 본인 테이블 펄스: 1초 주기 idle (scale 1.0 ↔ 1.05) — *sessionStorage X, 매번 재생* (DESIGN §9.6 결정 h)
-- 닫기: **4가지** — *2026-05-14 결정 e 수용*
-  1. **하단 큰 "닫기" 버튼** (sticky bottom, ≥ 56px hitbox) — **모바일 한 손 조작 주 경로**
-  2. 상단 X 버튼 (우상단) — 데스크탑 보조
-  3. 외부 클릭 (모달 외 영역)
-  4. `Esc` 키
+- 본인 테이블 펄스: 1초 주기 idle (scale 1.0 ↔ 1.05) — *sessionStorage X, 매번 재생* (DESIGN §9.6 결정 h). *2026-05-19: 이미지 모드에선 펄스 미적용 (좌표 미상).*
+- 닫기: **3가지** — *2026-05-19 design_fix_v2 후속: 하단 큰 닫기 버튼 제거, 상단 X로 일원화*
+  1. 상단 X 버튼 (우상단) — *주 경로*
+  2. 외부 클릭 (모달 외 영역)
+  3. `Esc` 키
 
 **모바일 한 손 조작 (UX-1):**
 - 폭 360-430px 모바일에서 *우상단 X*는 한 손 엄지 도달 어려움
@@ -844,6 +844,11 @@ ErrorLayout (마스코트 중심)
 - CSS 그리드만으로 작동
 - 본인 테이블 강조는 그래도 작동 (테이블 번호 매칭)
 - D-1 (5/19) 이미지 수령 후 *런타임 교체* (이미지 경로 1줄 변경, 코드 X)
+
+**이미지 수령 후 적용 결과 (2026-05-19 minimap_design):**
+- 실제 자산: `public/map/table-location.webp` (2.43MB, 80~90 quality). 직전 PNG(3.32MB) 대비 27% 절감.
+- MapPage에서 `mapImage="/map/table-location.webp"` + `totalTables={15}` 전달 → 이미지 모드 상시 진입.
+- 부스 좌석 1~15번 (16번 폐기 — CheckoutPage TABLES + 서버 zod validation 모두 1~15로 정렬).
 
 ---
 
