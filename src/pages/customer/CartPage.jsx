@@ -38,7 +38,16 @@ export default function CartPage() {
         <button type="button" onClick={() => navigate('/menu')} aria-label="뒤로">
           ←
         </button>
-        <h1>🎒 인벤토리 ({totalQty}개)</h1>
+        <h1>
+          <img
+            src="/pubg-inventory.webp"
+            alt=""
+            width="24"
+            height="24"
+            style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }}
+          />
+          인벤토리 ({totalQty}개)
+        </h1>
         <span className="meta">{items.length} ITEMS</span>
       </div>
 

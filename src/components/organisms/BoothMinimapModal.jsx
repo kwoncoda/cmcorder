@@ -73,7 +73,16 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
         data-testid="modal-backdrop"
       />
       <div className="modal-head" style={{ position: 'relative', zIndex: 10 }}>
-        <h2 id="minimap-title">🗺️ 부스 약도</h2>
+        <h2 id="minimap-title">
+          <img
+            src="/pubg-map.png"
+            alt=""
+            width="22"
+            height="22"
+            style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }}
+          />
+          부스 약도
+        </h2>
         <button
           type="button"
           onClick={() => onClose?.('top-x')}
