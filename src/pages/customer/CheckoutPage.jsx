@@ -77,6 +77,9 @@ export default function CheckoutPage() {
           <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched((t) => ({ ...t, name: true }))}
             invalid={touched.name && !!errors.name} errorMessage={touched.name ? errors.name : ''} />
         </div>
+        <p style={{ fontSize: '12px', color: '#000', marginTop: '4px' }}>
+          주문 확인을 위한 개인정보 수집입니다
+        </p>
       </div>
       <div className="section">
         <div className="section-label">② 수령 방법</div>

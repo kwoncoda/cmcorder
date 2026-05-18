@@ -32,7 +32,14 @@ const StickyCartBar = forwardRef(function StickyCartBar(
         onClick={onCheckout}
         aria-label="장바구니로 이동"
       >
-        🎒 인벤토리 {totalQty}개 · {formatter.format(totalPrice)}원 보기 →
+        <img
+          src="/pubg-inventory.webp"
+          alt=""
+          width="22"
+          height="22"
+          style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 6 }}
+        />
+        인벤토리 {totalQty}개 · {formatter.format(totalPrice)}원 보기 →
       </button>
     </div>
   );

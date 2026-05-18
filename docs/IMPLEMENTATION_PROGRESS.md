@@ -77,3 +77,17 @@
 3. **PUBG 일러스트 8장 / 마스코트 5장 자산** — D-3 (5/17) 수령 예정. 미수령 시 이모지 fallback 자동 동작.
 4. **E2E Playwright 14 시나리오 자동화** — 인프라 비용 vs 일정 트레이드오프로 보류. `d1-rehearsal.md` 10 섹션 체크리스트로 수동 대체.
 5. **express-session 운영 store** — 현재 메모리 store (단일 컨테이너라 OK). 재부팅 시 세션 끊김 — D-1 리허설에서 운영자 PIN 재로그인 경로 확인.
+
+---
+
+## 디자인 보정 라운드 (`design_fix_v2`, 2026-05-18 ~ 05-19)
+
+D-day 직전 디자인 정합·UX 마찰·운영 UI 정리 3차 누적. 각 차수는 별도 작업 문서에 상세 기록. 본 라운드는 **새 ADR 신설 없이** ADR-006/020/021/024/033 보존 범위 안에서의 UI 보정·시각 정합·미사용 경로 정리.
+
+| 차수 | 일자 | 범위 | 커밋 | 작업 문서 |
+|---|---|---|---|---|
+| 1차 | 2026-05-18 | PUBG 그래픽 자산 5위치 적용 (이모지 → `<img>`: CustomerLayout 헤더 ×2, StickyCartBar, BoothMinimapModal, CartPage) + CheckoutPage 개인정보 수집 안내 문구 | `904009d` | `docs/tasks/2026-05-18-pubg-images-and-privacy-notice.md` |
+| 2차 | 2026-05-19 | 사용자 흐름 UI 5건 정리 — CompletePage back-bar+ghost 버튼 제거, StatusPage `OrderTimeline`·"현재 상태" 행 제거, TransferReportForm "다른 이름으로 이체" 분기 제거(클라+서버 매칭/응답/스키마), `use_other_name`·`other_name` DB 컬럼은 운영 회피 차원에서 유지. 사전 기획·지시·검수 3문서 작성. | `5bcd3aa` | `docs/tasks/2026-05-19-ui-trim-cleanup.md` (+ `2026-05-19-ui-trim-cleanup/01~03-*.md`) |
+| 3차 | 2026-05-19 | 메뉴 카드 인라인 빼기 보조 버튼 (`MenuCard` 의 새 `onDec` prop + `.pick-btn-group`/`.pick-btn-dec` 토큰, 카트≥1 일 때만 등장, 44px 타깃) + 어드민 페이지 노출 개발자 메모 정리 (`MenuAdminPage` 푸터 `Pattern B (ADR-020)` 블록 제거, `SettlementPage` close-guard 메시지 `(ADR-012)` 꼬리 제거). | `eedfbb7` | `docs/tasks/2026-05-19-ux-card-decrement-and-admin-cleanup.md` |
+
+**테스트 추이:** 1173 (1차 후) → 1165 (2차, 미사용 회귀 8건 정리) → 1170 (3차, 신규 5건 추가). 모든 차수에서 production 번들 빌드 정상, 운영 컨테이너 헬스체크 정상.

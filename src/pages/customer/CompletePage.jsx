@@ -60,6 +60,10 @@ export default function CompletePage() {
 
   return (
     <section data-testid="complete-page">
+      <div className="back-bar">
+        <button type="button" onClick={() => navigate('/menu')} aria-label="뒤로">←</button>
+        <h1>주문 완료</h1>
+      </div>
       <div className="dogtag-stage">
         <DogTagFrame no={order.no} total={100} date={order.operating_date} dropping pulse />
         <h1 className="winner-copy"><span>WINNER WINNER</span><br /><span>CHICKEN DINNER</span></h1>
@@ -103,13 +107,10 @@ export default function CompletePage() {
         ⚠️ <span><b>이체 후 "확인 요청" 버튼을 꼭 눌러주세요.</b><br />누르지 않으면 본부가 조리를 시작하지 못해요.</span>
       </div>
 
-      <div style={{ height: 132 }} />
-      <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40, flexDirection: 'column', gap: 6 }}>
+      <div style={{ height: 80 }} />
+      <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40 }}>
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
           이체 완료하고 확인 요청
-        </button>
-        <button type="button" className="btn btn-ghost btn-block" onClick={() => navigate(`/orders/${id}/status${tokenQuery}`)} aria-label="조리 현황 보기">
-          🍗 조리 현황 보기
         </button>
       </div>
     </section>

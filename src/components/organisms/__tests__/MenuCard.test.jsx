@@ -12,11 +12,12 @@
 //   - useFallback=false 시 <img> 렌더 (자산 수령 후)
 //   - menu prop null 시 null 렌더 (방어)
 //   - a11y (axe) — 일반 + soldOut
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, fireEvent, screen } from '@testing-library/react';
 import { axe } from 'vitest-axe';
 import { createRef } from 'react';
 import MenuCard from '../MenuCard.jsx';
+import useCartStore from '../../../store/cart.js';
 
 const SAMPLE_MENU = {
   id: 1,
@@ -27,6 +28,9 @@ const SAMPLE_MENU = {
 };
 
 describe('MenuCard', () => {
+  beforeEach(() => {
+    useCartStore.setState({ items: [] }); // cart 격리
+  });
   // ── 8 메뉴 본명 렌더 — 4 샘플 (G10 — 리스킨 X) ──
   // 전수 8개는 menus.test.js 가 보호. 본 organism 테스트는 샘플 4개로 props 매핑 확인.
   it.each([
@@ -142,6 +146,49 @@ describe('MenuCard', () => {
 
   it('a11y 위반 없음 — soldOut 상태', async () => {
     const { container } = render(<MenuCard menu={SAMPLE_MENU} soldOut useFallback />);
+    const r = await axe(container);
+    expect(r).toHaveNoViolations();
+  });
+
+  // ── 빼기 보조 버튼 (홈 카드 인라인 수량 감소) ──
+  it('★ 카트 담긴 상태에서 onDec 전달 시 빼기 버튼 표시 + 클릭 시 onDec(menu) 호출', () => {
+    useCartStore.setState({
+      items: [{ menuId: 1, name: '후라이드', basePrice: 18000, category: 'chicken', quantity: 2 }],
+    });
+    const onDec = vi.fn();
+    render(<MenuCard menu={SAMPLE_MENU} onDec={onDec} useFallback />);
+
+    // 메인 버튼은 "한 개 더 줍기" 로 라벨 분기
+    expect(screen.getByRole('button', { name: /한 개 더 줍기/ })).toBeInTheDocument();
+
+    const decBtn = screen.getByRole('button', { name: /한 개 빼기/ });
+    expect(decBtn).toBeInTheDocument();
+    fireEvent.click(decBtn);
+    expect(onDec).toHaveBeenCalledTimes(1);
+    expect(onDec).toHaveBeenCalledWith(SAMPLE_MENU);
+  });
+
+  it('★ 카트 담긴 상태 + onDec 미전달 시 빼기 버튼 미표시 (호환 가드)', () => {
+    useCartStore.setState({
+      items: [{ menuId: 1, name: '후라이드', basePrice: 18000, category: 'chicken', quantity: 1 }],
+    });
+    render(<MenuCard menu={SAMPLE_MENU} useFallback />);
+    expect(screen.queryByRole('button', { name: /한 개 빼기/ })).not.toBeInTheDocument();
+  });
+
+  it('★ 카트 담긴 상태 + soldOut 시 빼기 버튼 미표시', () => {
+    useCartStore.setState({
+      items: [{ menuId: 1, name: '후라이드', basePrice: 18000, category: 'chicken', quantity: 1 }],
+    });
+    render(<MenuCard menu={SAMPLE_MENU} soldOut onDec={vi.fn()} useFallback />);
+    expect(screen.queryByRole('button', { name: /한 개 빼기/ })).not.toBeInTheDocument();
+  });
+
+  it('a11y 위반 없음 — 카트 담긴 상태 (axe)', async () => {
+    useCartStore.setState({
+      items: [{ menuId: 1, name: '후라이드', basePrice: 18000, category: 'chicken', quantity: 2 }],
+    });
+    const { container } = render(<MenuCard menu={SAMPLE_MENU} onDec={vi.fn()} useFallback />);
     const r = await axe(container);
     expect(r).toHaveNoViolations();
   });

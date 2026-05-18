@@ -186,17 +186,4 @@ describe('order-repo — updateTransferInfo', () => {
     expect(after.transferred_at).toBeTruthy();
   });
 
-  it('use_other_name + other_name 보존', () => {
-    const db = freshDb();
-    const o = createOrder(db, sampleMeta());
-    const after = updateTransferInfo(db, o.id, {
-      depositor_name: '김철수',
-      bank: '국민',
-      amount: 18000,
-      use_other_name: true,
-      other_name: '대리인 박',
-    });
-    expect(after.use_other_name).toBe(1);
-    expect(after.other_name).toBe('대리인 박');
-  });
 });

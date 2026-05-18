@@ -91,7 +91,7 @@ export default function CustomerLayout() {
               className="icon-btn"
               data-testid="header-map-link"
             >
-              🗺️
+              <img src="/pubg-map.png" alt="" width="28" height="28" style={{ display: 'block' }} />
             </Link>
             <Link
               to="/cart"
@@ -99,7 +99,7 @@ export default function CustomerLayout() {
               className="icon-btn"
               data-testid="header-cart-link"
             >
-              🎒
+              <img src="/pubg-inventory.webp" alt="" width="28" height="28" style={{ display: 'block' }} />
               {totalQty > 0 && <span className="count-badge">{totalQty}</span>}
             </Link>
           </div>

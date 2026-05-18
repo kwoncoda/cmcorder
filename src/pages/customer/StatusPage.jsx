@@ -10,10 +10,8 @@ import { apiFetch } from '../../api/client.js';
 import { OrderSchema } from '../../api/schemas.js';
 import { API } from '../../api/routes.js';
 import { useOrderToken } from '../../hooks/useOrderToken.js';
-import OrderTimeline from '../../components/organisms/OrderTimeline.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
-import StatusChip from '../../components/molecules/StatusChip.jsx';
 import MascotState from '../../components/molecules/MascotState.jsx';
 import DogTagFrame from '../../components/molecules/DogTagFrame.jsx';
 
@@ -74,7 +72,6 @@ export default function StatusPage() {
           ℹ️ {flashMessage}
         </div>
       )}
-      <OrderTimeline current={currentStatus} showMiniview={false} />
       <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 16px' }}>
         <MascotState state={mascotState} size="md" useFallback={false} />
       </div>
@@ -94,18 +91,15 @@ export default function StatusPage() {
       {currentStatus === 'HOLD' && (
         <div className="warn-banner danger" role="alert"><span><b>이체 확인이 보류되었어요.</b><br />부스 운영진에게 문의해 주세요.</span></div>
       )}
-      <div style={{ height: 132 }} />
-      <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40, flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', fontSize: 12, color: 'var(--color-muted)', padding: '0 4px' }}>
-          <span>현재 상태</span><StatusChip status={currentStatus} />
-        </div>
-        {currentStatus === 'ORDERED' && (
+      {currentStatus === 'ORDERED' && <div style={{ height: 80 }} />}
+      {currentStatus === 'ORDERED' && (
+        <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40 }}>
           <button type="button" className="btn btn-primary btn-lg btn-block" data-testid="status-page-ordered-cta" onClick={() => navigate(`/orders/${id}/transfer${tokenQuery}`)}>
             이체 완료 요청
           </button>
-        )}
-        {/* P2-1: HOLD는 서버 정책상 사용자 재요청 차단 — CTA 제거. 위 warn-banner 안내로 처리. */}
-      </div>
+        </div>
+      )}
+      {/* P2-1: HOLD는 서버 정책상 사용자 재요청 차단 — warn-banner 안내로 처리. */}
     </section>
   );
 }

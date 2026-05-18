@@ -244,18 +244,8 @@ describe('StatusPage', () => {
     expect(screen.queryByTestId('sse-disconnected')).not.toBeInTheDocument();
   });
 
-  // ── OrderTimeline 통합 (UX §5.1 보강) ──────────────────────────
-  it('★ OrderTimeline 5단계 progressbar 표시', () => {
-    renderPage();
-    const progressbar = screen.getByRole('progressbar');
-    expect(progressbar).toBeInTheDocument();
-    expect(progressbar).toHaveAttribute('aria-valuemax', '5');
-  });
-
-  it('★ OrderTimeline 미니뷰 미렌더 (find_error_v2) — aria-label 단계별 진입 시각 없음', () => {
-    renderPage();
-    expect(screen.queryByLabelText('단계별 진입 시각')).not.toBeInTheDocument();
-  });
+  // design_fix v7 (2026-05-19) — StatusPage에서 OrderTimeline 제거됨.
+  // OrderTimeline 컴포넌트 자체 테스트는 components/organisms/__tests__/OrderTimeline.test.jsx 유지.
 
   // ── SSE snapshot 우선 ───────────────────────────────────────
   it('★ SSE snapshot 우선 — useApi 데이터 위에 덮어쓰기', () => {

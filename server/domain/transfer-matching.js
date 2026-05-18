@@ -2,7 +2,7 @@
 // Task 6.4 — 이체 매칭 (4요소: 이름·은행·금액·시각 ±5분).
 //
 // candidates는 orders 테이블에서 status='TRANSFER_REPORTED' 행을 미리 가져온 배열.
-// - 이름: depositor_name OR (use_other_name=1 시 other_name)
+// - 이름: depositor_name 단일 매칭 (design_fix v7 — "다른 이름 이체" 경로 제거, 2026-05-19)
 // - 은행: bank OR custom_bank (기타)
 // - 금액: 정확 일치
 // - 시각: ±5분 (300_000ms)
@@ -28,10 +28,8 @@ export function matchTransfer(
   const targetName = depositorName?.trim();
 
   return candidates.filter((c) => {
-    // 이름 — depositor_name 또는 other_name(use_other_name=1 시)
-    const candidateName = c.use_other_name
-      ? c.other_name?.trim()
-      : c.depositor_name?.trim();
+    // 이름 — depositor_name 단일 (design_fix v7).
+    const candidateName = c.depositor_name?.trim();
     const sameName = candidateName === targetName;
 
     // 은행 — bank 또는 custom_bank (기타 은행)

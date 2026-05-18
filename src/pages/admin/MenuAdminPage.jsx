@@ -98,9 +98,6 @@ export default function MenuAdminPage() {
           </div>
         ))}
       </div>
-      <div className="admin-foot-tip">
-        ※ <code>POST /admin/api/menus/:id</code> — Pattern B (ADR-020): 가격 계산은 서버 권위, 클라이언트는 표시만.
-      </div>
     </Wrap>
   );
 }

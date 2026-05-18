@@ -211,7 +211,7 @@ export function updateOrderStatus(db, id, newStatus, extraFields = {}, opts = {}
  *
  * @param {import('better-sqlite3').Database} db
  * @param {number} id
- * @param {object} info — depositor_name · bank · custom_bank? · use_other_name? · other_name? · amount
+ * @param {object} info — depositor_name · bank · custom_bank? · amount
  * @param {{ actor?: string }} [opts] — actor 제공 시 order_events에 TRANSFER_REPORTED 이벤트 INSERT.
  */
 export function updateTransferInfo(db, id, info, opts = {}) {
@@ -220,7 +220,7 @@ export function updateTransferInfo(db, id, info, opts = {}) {
     db.prepare(
       `UPDATE orders SET
          depositor_name = ?, bank = ?, custom_bank = ?,
-         use_other_name = ?, other_name = ?, amount = ?,
+         amount = ?,
          status = 'TRANSFER_REPORTED', transferred_at = datetime('now'),
          updated_at = datetime('now')
        WHERE id = ?`,
@@ -228,8 +228,6 @@ export function updateTransferInfo(db, id, info, opts = {}) {
       info.depositor_name,
       info.bank,
       info.custom_bank ?? null,
-      info.use_other_name ? 1 : 0,
-      info.other_name ?? null,
       info.amount,
       id,
     );
