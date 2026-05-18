@@ -176,7 +176,9 @@ const OrderInput = z.object({
     qty: z.number().int().min(1).max(20)
   })).min(1).max(20),
   pickup: z.enum(['dine_in', 'takeout']),
-  table_no: z.number().int().positive().optional(),
+  // 2026-05-19 minimap_design: 부스 좌석 1~15. 위반 시 400 VALIDATION_ERROR
+  //   메시지 "테이블 번호는 1번부터 15번까지만 선택할 수 있어요."
+  table_no: z.number().int().min(1).max(15).nullable().optional(),
   student_id: z.string().regex(/^\d{9}$/).optional(),
   name: z.string().min(1).max(20),
   is_external: z.boolean().default(false),

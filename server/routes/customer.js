@@ -43,7 +43,14 @@ const CreateOrderSchema = z
     name: z.string().min(1, '이름이 필요합니다'),
     is_external: z.boolean().optional(),
     delivery_type: z.enum(['dineIn', 'takeout']).optional(),
-    table_no: z.number().int().nullable().optional(),
+    // minimap_design — 부스 좌석 1~15번만 허용. null/undefined 는 포장 케이스.
+    table_no: z
+      .number()
+      .int()
+      .min(1, '테이블 번호는 1번부터 15번까지만 선택할 수 있어요.')
+      .max(15, '테이블 번호는 1번부터 15번까지만 선택할 수 있어요.')
+      .nullable()
+      .optional(),
     coupon: z.object({ used: z.boolean() }).nullable().optional(),
   })
   .superRefine((val, ctx) => {

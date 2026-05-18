@@ -1,10 +1,12 @@
-// Task 4.8 — MapPage 통합 테스트 (6 케이스).
+// Task 4.8 — MapPage 통합 테스트.
 //
 // 회귀 보호:
-//  - 진입 시 BoothMinimapModal open (자동 표시)
-//  - ?order_id=5 시 본인 테이블 강조 (myTableNo=5)
-//  - 쿼리 없을 시 myTableNo=undefined
+//  - 진입 시 BoothMinimapModal open (자동 표시, 메인 이미지 /map/table-location.webp)
+//  - ?order_id=5 시 본인 테이블 강조 (이미지 aria-label "내 테이블 5번")
+//  - 쿼리 없을 시 myTableNo=undefined ("내 테이블" aria-label 없음)
 //  - 닫기 클릭 시 navigate(-1) (history back)
+//  - 임시 T1~T16 격자 보드 노출 X (이미지 기반 UI 교체)
+//  - "총 15개 테이블" legend (minimap_design 정책)
 //  - a11y (axe)
 //  - 페이지 ≤120줄 (§3.5 1조)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -59,15 +61,30 @@ describe('MapPage', () => {
     expect(screen.getByText(/테이블 지도/)).toBeInTheDocument();
   });
 
-  it('★ ?order_id=5 시 본인 테이블 5번 강조 (myTableNo=5)', () => {
+  it('★ 메인 이미지 /map/table-location.webp 렌더 (격자 fallback 미노출)', () => {
+    renderPage(['/menu', '/map']);
+    const img = screen.getByAltText('테이블 위치 약도');
+    expect(img).toBeInTheDocument();
+    expect(img.getAttribute('src')).toBe('/map/table-location.webp');
+    // 임시 T1~T16 격자 보드는 더이상 렌더되면 안 된다.
+    expect(screen.queryByTestId('map-fallback-grid')).not.toBeInTheDocument();
+    expect(screen.queryByText('T16')).not.toBeInTheDocument();
+  });
+
+  it('★ "총 15개 테이블" legend 노출 (minimap_design 정책)', () => {
+    renderPage(['/menu', '/map']);
+    expect(screen.getByText('총 15개 테이블')).toBeInTheDocument();
+  });
+
+  it('★ ?order_id=5 시 본인 테이블 5번 강조 (이미지 aria-label)', () => {
     renderPage(['/menu', '/map?order_id=5']);
-    // 그리드 fallback 모드 — 5번 셀에 "내 테이블 5번" aria-label.
+    // 이미지 모드 — 메인 이미지에 "내 테이블 5번" aria-label.
     expect(screen.getByLabelText('내 테이블 5번')).toBeInTheDocument();
   });
 
   it('★ 쿼리 없을 시 myTableNo=undefined — "내 테이블" aria-label 없음', () => {
     renderPage(['/menu', '/map']);
-    // 1~16번 일반 셀만 — "내 테이블 N번" aria-label 미존재.
+    // 이미지 모드 + myTableNo 없음 — "내 테이블 N번" aria-label 미부여.
     expect(screen.queryByLabelText(/내 테이블/)).not.toBeInTheDocument();
   });
 

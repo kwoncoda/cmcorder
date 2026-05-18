@@ -8,6 +8,7 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
     myTableNo,
     mapImage,
     gridSize = { cols: 4, rows: 4 },
+    totalTables: totalTablesProp,
     onClose,
     className = '',
     ...rest
@@ -52,7 +53,7 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
   if (!open) return null;
   const cols = gridSize.cols ?? 4;
   const rows = gridSize.rows ?? 4;
-  const totalTables = cols * rows;
+  const totalTables = totalTablesProp ?? cols * rows;
 
   return (
     <div
@@ -96,25 +97,24 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
       </div>
       <div className="modal-body" style={{ position: 'relative', zIndex: 10 }}>
         {mapImage ? (
-          <div style={{ position: 'relative' }}>
-            <img src={mapImage} alt="부스 위치 약도" style={{ maxWidth: '100%', height: 'auto' }} width="640" height="480" loading="lazy" />
-            {myTableNo && (
-              <div
-                className="booth-table-pulse"
-                style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)' }}
-                aria-label={`내 테이블 ${myTableNo}번`}
-              >
-                <div style={{
-                  width: 48, height: 48, borderRadius: '50%',
-                  background: 'rgba(244,210,0,0.3)',
-                  border: '2px solid var(--color-accent)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'var(--stamp-black)', fontWeight: 700,
-                }}>
-                  {myTableNo}
-                </div>
-              </div>
-            )}
+          <div
+            data-testid="map-image-wrap"
+            style={{
+              display: 'flex', justifyContent: 'center', alignItems: 'center',
+              background: 'var(--stamp-black, #000)',
+              borderRadius: 8, overflow: 'hidden',
+            }}
+          >
+            <img
+              src={mapImage}
+              alt={myTableNo ? `테이블 위치 약도 — 내 테이블 ${myTableNo}번` : '테이블 위치 약도'}
+              aria-label={myTableNo ? `내 테이블 ${myTableNo}번` : undefined}
+              style={{
+                display: 'block', width: '100%', height: 'auto',
+                maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain',
+              }}
+              loading="lazy"
+            />
           </div>
         ) : (
           <div className="minimap">
@@ -136,6 +136,7 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
                 <div key={`row-${rowIdx}`} role="row" className="contents">
                   {Array.from({ length: cols }, (_, colIdx) => {
                     const tableNo = rowIdx * cols + colIdx + 1;
+                    if (tableNo > totalTables) return null;
                     const isMine = tableNo === myTableNo;
                     return (
                       <div
@@ -157,9 +158,7 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
         <div className="minimap-legend">
           <div>내 테이블: <strong>{myTableNo ? `#${myTableNo}` : '— (포장 또는 일반)'}</strong></div>
           <div style={{ color: 'var(--color-muted)', fontSize: 12 }}>
-            {myTableNo
-              ? '형광 옐로 박스가 본인 자리예요.'
-              : `총 ${totalTables}개 테이블`}
+            {`총 ${totalTables}개 테이블`}
           </div>
         </div>
       </div>
