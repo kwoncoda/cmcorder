@@ -81,7 +81,7 @@ export default function StatusPage() {
       {currentStatus === 'READY' && (
         <div className="ready-banner" role="alert">
           <div className="big">#{order.no ?? id}번<br />수령 가능해요!</div>
-          <div className="sub">부스에서 호명을 들어주세요.<br />도그태그를 보여주세요.</div>
+          <div className="sub">부스에서 호명을 들어주세요.</div>
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 16px 16px' }}>
