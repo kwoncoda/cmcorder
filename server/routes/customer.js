@@ -65,8 +65,6 @@ const TransferReportSchema = z.object({
   bank: z.string().min(1),
   customBank: z.string().optional(),
   depositorName: z.string().min(1),
-  useOtherName: z.boolean().optional(),
-  otherName: z.string().optional(),
   amount: z.number().int().positive(),
 });
 
@@ -254,8 +252,6 @@ export function customerRoutes(db) {
           depositor_name: input.depositorName,
           bank: input.bank,
           custom_bank: input.customBank,
-          use_other_name: input.useOtherName,
-          other_name: input.otherName,
           amount: input.amount,
         },
         // find_error_v2 — TRANSFER_REPORTED 이벤트 INSERT (트랜잭션 안).

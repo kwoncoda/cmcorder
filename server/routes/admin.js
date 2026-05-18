@@ -94,15 +94,16 @@ const TS_FIELDS = [
 ];
 
 // Bug 8 — admin 응답 SQLite shape → JSON normalized shape.
-// is_external/use_other_name는 SQLite 0|1을 boolean으로, 그 외는 그대로 전달.
+// is_external는 SQLite 0|1을 boolean으로, 그 외는 그대로 전달.
 // Bug 7 — timestamp 필드는 ISO 8601 Z 형식으로 변환.
 // customer 측 serializeOrder와 같은 패턴을 유지해 클라 OrderSchema(zod)가 통과하도록 한다.
+// design_fix v7 (2026-05-19): use_other_name/other_name 필드 응답에서 제거 (운영상 미사용).
 function serializeAdminOrder(o) {
   if (!o) return o;
+  const { use_other_name: _uon, other_name: _on, ...rest } = o;
   const out = {
-    ...o,
+    ...rest,
     is_external: !!o.is_external,
-    use_other_name: o.use_other_name == null ? null : !!o.use_other_name,
   };
   for (const f of TS_FIELDS) {
     if (out[f] != null) out[f] = toIsoUtc(out[f]);

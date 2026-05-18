@@ -9,8 +9,6 @@ const baseCandidate = {
   depositor_name: '홍길동',
   bank: '신한',
   custom_bank: null,
-  use_other_name: 0,
-  other_name: null,
   amount: 18000,
   transferred_at: baseTime,
 };
@@ -93,25 +91,6 @@ describe('transfer-matching — 4요소', () => {
       [baseCandidate],
     );
     expect(r).toHaveLength(0);
-  });
-
-  it('★ use_other_name=1일 때 other_name으로 매칭', () => {
-    const candidate = {
-      ...baseCandidate,
-      depositor_name: '본명',
-      use_other_name: 1,
-      other_name: '입금자',
-    };
-    const r = matchTransfer(
-      {
-        depositorName: '입금자',
-        bank: '신한',
-        amount: 18000,
-        transferredAt: baseTime,
-      },
-      [candidate],
-    );
-    expect(r).toHaveLength(1);
   });
 
   it('★ custom_bank로 매칭 (기타 은행)', () => {

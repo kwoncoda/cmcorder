@@ -8,20 +8,15 @@
 // - 검증: 단순 — Phase 3에서 zod 스키마로 교체. 본 단계는 빈값·양수 검증만.
 // - touched state — onBlur 시 표시. 제출 시 모든 필드 touched 처리 후 에러 노출.
 // - amount 입력: 숫자 외 문자 자동 제거 (천 단위 콤마·"원" 등 자유 입력 허용).
-// - "다른 이름 이체" — useOtherName=true 시 추가 otherName Input 조건부 활성.
-//   체크박스만으로 절반 처리, 다른 이름 입력은 *조건부* 노출 (Cognitive load 감소).
 // - 은행=기타 → customBank Input 조건부 활성 (드물게 사용 — 6대 은행이 99%).
-// - design_fix v5 → v6 (2026-05-18, Codex P1 회귀 복원):
-//   v5 에서 디자인 단순화 차원에서 "다른 이름으로 이체" 체크박스를 제거했으나
-//   서버는 `use_other_name` / `other_name` 매칭 기능 (server/domain/transfer-matching.js)
-//   을 그대로 유지하고 있어 다른 명의 이체 신고 경로가 프런트에서 차단됨. v6 에서 복원.
+// - design_fix v7 (2026-05-19): 운영상 미사용 경로 ("다른 이름 이체") 최종 제거.
+//   클라이언트 체크박스/조건부 필드 + 서버 transfer-matching.js use_other_name 분기까지 정리.
 // - 카드 형광 옐로 텍스트 X (AI 슬롭 #26) — 폼 영역은 본문 톤.
 // - forwardRef — 호출자가 form DOM 직접 접근 가능 (focus 제어 등).
 import { forwardRef, useState } from 'react';
 import Label from '../atoms/Label.jsx';
 import Input from '../atoms/Input.jsx';
 import Select from '../atoms/Select.jsx';
-import Checkbox from '../atoms/Checkbox.jsx';
 import Button from '../atoms/Button.jsx';
 
 // 한국 6대 은행 + 기타 (모듈 최상위 — §3.5 6조).
@@ -57,13 +52,10 @@ const TransferReportForm = forwardRef(function TransferReportForm(
   const [bank, setBank] = useState('');
   const [customBank, setCustomBank] = useState('');
   const [depositorName, setDepositorName] = useState('');
-  const [useOtherName, setUseOtherName] = useState(false);
-  const [otherName, setOtherName] = useState('');
   const [amount, setAmount] = useState(String(expectedAmount));
   const [touched, setTouched] = useState({});
 
   const showCustomBank = bank === '기타';
-  const showOtherName = useOtherName;
 
   // 검증 — 단순 (Phase 3에서 zod로 교체 예정).
   const errors = {
@@ -73,18 +65,15 @@ const TransferReportForm = forwardRef(function TransferReportForm(
       ? '은행명을 입력하세요'
       : '',
     depositorName: !depositorName.trim() ? '입금자 이름을 입력하세요' : '',
-    otherName: showOtherName && !otherName.trim() ? '다른 이름을 입력하세요' : '',
     amount: !/^\d+$/.test(amount) || Number(amount) <= 0 ? '금액은 양수여야 합니다' : '',
   };
-  const isValid =
-    !errors.bank && !errors.depositorName && !errors.otherName && !errors.amount;
+  const isValid = !errors.bank && !errors.depositorName && !errors.amount;
 
   const markAllTouched = () =>
     setTouched({
       bank: true,
       customBank: true,
       depositorName: true,
-      otherName: true,
       amount: true,
     });
 
@@ -96,8 +85,6 @@ const TransferReportForm = forwardRef(function TransferReportForm(
       bank,
       customBank: showCustomBank ? customBank : undefined,
       depositorName,
-      useOtherName,
-      otherName: showOtherName ? otherName : undefined,
       amount: Number(amount),
     });
   };
@@ -163,28 +150,6 @@ const TransferReportForm = forwardRef(function TransferReportForm(
           errorMessage={touched.depositorName ? errors.depositorName : ''}
         />
       </div>
-
-      <Checkbox
-        id="useOtherName"
-        checked={useOtherName}
-        onChange={(e) => setUseOtherName(e.target.checked)}
-        label="다른 이름으로 이체했어요"
-      />
-
-      {showOtherName && (
-        <div>
-          <Label htmlFor="otherName" required>이체한 사람 이름</Label>
-          <Input
-            id="otherName"
-            type="text"
-            value={otherName}
-            onChange={(e) => setOtherName(e.target.value)}
-            onBlur={() => setTouched((t) => ({ ...t, otherName: true }))}
-            invalid={touched.otherName && !!errors.otherName}
-            errorMessage={touched.otherName ? errors.otherName : ''}
-          />
-        </div>
-      )}
 
       <div>
         <Label htmlFor="amount" required>입금 금액 (원)</Label>
