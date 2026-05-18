@@ -460,15 +460,21 @@ ErrorLayout (마스코트 중심)
 **상태 변형:**
 | 상태 | 시각 |
 |---|---|
-| `default` | 기본 |
+| `default` | 기본. 단일 `＋ 줍기` 버튼 |
 | `recommended` | 도장 RECOMMENDED 좌상단 |
 | `sold-out` | 카드 흐림 (opacity 0.6) + SOLD OUT 도장 + 버튼 disabled |
-| `selected` | (카트 추가 후) 카운트 표시 + 버튼 "카트 ✓" |
+| `in-cart` (카트 ≥ 1) | 메인 버튼 `✓ 인벤토리 N` + `onDec` 전달 시 `.pick-btn-group` 안에 빼기 보조 버튼(`.pick-btn-dec`, `−`, 44px) 등장 — 2026-05-19 design_fix_v2 3차 |
+
+**빼기 보조 버튼 (2026-05-19 design_fix_v2 3차):**
+- 카트에 1개 이상 담긴 순간 메인 버튼 옆에 `−` 빼기 버튼이 등장. `onDec(menu)` 콜백 호출 → `MenuPage.handleDec` 가 `useCartStore.getState()` 패턴(구독 X, §3.5 2조)으로 `changeQty`/`removeItem` 처리. quantity = 1 에서 누르면 자동 제거 (CartItem `−` 버튼과 동일 로직).
+- `onDec` prop 미전달 또는 `sold-out` 시 미표시 — 기존 호출처 호환.
+- 인벤토리 페이지 진입 없이 카드 위에서 직접 수량 조정 가능. 메인/빼기 시각 톤(`var(--color-success)`) 통일로 "담긴 상태" 인지.
 
 **접근성:**
 - 카드 전체가 `<article>` 시맨틱
 - 도장은 `<img alt>` 명시
 - "카트 담기" 버튼은 별도 (전체 카드 클릭 X)
+- 메인 버튼 `aria-label` 은 카운트 분기 (`{name} 줍기` / `{name} 한 개 더 줍기` / `{name} 품절`). 빼기 버튼 `aria-label` = `{name} 한 개 빼기`. `−` 텍스트는 `aria-hidden`.
 
 ---
 
@@ -1087,16 +1093,20 @@ ErrorLayout (마스코트 중심)
 
 ---
 
-## 10. 변경 이력 (2026-05-13/14)
+## 10. 변경 이력 (2026-05-13 ~ 05-19)
 
 | 컴포넌트 | 변경 |
 |---|---|
 | §3.1 StampBadge | SVG `feTurbulence` → CSS stamp 기본 (rotate + Black Ops One + border + box-shadow). 2026-05-13 C 수용 |
 | §4.1 MenuCard | CTA "카트 담기" → "**줍기**" + 카드 배경 흙색(#C8B894) PUBG 인벤토리 톤. G11 |
+| §4.1 MenuCard | 카트 ≥ 1 시 `.pick-btn-group` 안에 빼기 보조 버튼(`.pick-btn-dec`, 44px, `onDec` prop) 추가 — 인벤토리 페이지 없이 카드에서 직접 수량 감소. design_fix_v2 3차 (2026-05-19) |
 | §4.2 CartItem | 화면 헤더 "장바구니" → "**인벤토리**". G11 |
 | §4.4 MascotState | 5종 유지 결정 (B 거부) + fallback 정책 명시. C-9 영업 외 안내 사용처 추가 |
 | §4.9 BusinessStateBadge | 신규 (G13) |
 | §4.10 StartBusinessCTA | 신규 (G13) |
 | §4.11 ClosedScreen | 신규 (G13 C-9 화면) |
 | §4.12 BoothMinimapModal | 신규 (G12 C-7 화면) |
+| Layout/Sticky/Cart 시각 자산 | 이모지(🗺️·🎒) → PUBG 그래픽 `<img>` 5위치 치환 + CheckoutPage 개인정보 수집 안내. design_fix_v2 1차 (2026-05-18) |
+| TransferReportForm·StatusPage·CompletePage | "다른 이름으로 이체" 분기·`OrderTimeline`·sticky 라벨 행·ghost 버튼 제거. 사용자 흐름 트림. design_fix_v2 2차 (2026-05-19) |
+| MenuAdminPage·SettlementPage | 사용자 노출 개발자 메모(`Pattern B (ADR-020)` 푸터, close-guard 꼬리 `(ADR-012)`) 제거. design_fix_v2 3차 (2026-05-19) |
 | §9 미정 → §9·§10 갱신 | 도장·카모 CSS 결정 / 카탈로그 페이지 후속 X (G14) / 신규 4 컴포넌트 명시 |
