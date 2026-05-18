@@ -148,6 +148,23 @@ describe('MenuPage', () => {
     expect(useCartStore.getState().items).toHaveLength(1);
   });
 
+  it('★ MenuCard 빼기 버튼 클릭 시 수량 감소 + 1→0 시 카트에서 제거', () => {
+    useMenuData.mockReturnValue({
+      menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+    });
+    renderPage();
+    // 2번 줍기 → quantity 2
+    fireEvent.click(screen.getAllByRole('button', { name: /줍기/ })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: /줍기/ })[0]);
+    expect(useCartStore.getState().items[0].quantity).toBe(2);
+    // 빼기 → quantity 1
+    fireEvent.click(screen.getAllByRole('button', { name: /한 개 빼기/ })[0]);
+    expect(useCartStore.getState().items[0].quantity).toBe(1);
+    // 한 번 더 빼기 → 카트에서 제거
+    fireEvent.click(screen.getAllByRole('button', { name: /한 개 빼기/ })[0]);
+    expect(useCartStore.getState().items).toHaveLength(0);
+  });
+
   it('★ StickyCartBar — totalQty=0 시 미렌더', () => {
     useMenuData.mockReturnValue({
       menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),

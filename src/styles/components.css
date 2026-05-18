@@ -434,6 +434,27 @@
   background: var(--color-success);
   color: #fff;
 }
+.menu-card .pick-btn-group {
+  margin-top: 8px;
+  display: flex;
+  gap: 4px;
+}
+.menu-card .pick-btn-group .pick-btn { margin-top: 0; flex: 1; }
+.menu-card .pick-btn-dec {
+  flex: 0 0 44px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-success);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.menu-card .pick-btn-dec:active { transform: scale(0.96); }
 
 /* category tabs */
 .cat-tabs {

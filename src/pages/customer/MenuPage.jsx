@@ -27,6 +27,14 @@ export default function MenuPage() {
   const navigate = useNavigate();
   const addItem = useCartStore((s) => s.addItem);
 
+  // 빼기 — store.getState() 이벤트-콜백 패턴 (구독 X, 리렌더 0). §3.5 2조.
+  const handleDec = (menu) => {
+    const { items, changeQty, removeItem } = useCartStore.getState();
+    const cur = items.find((i) => i.menuId === menu.id);
+    if (!cur || cur.quantity <= 1) removeItem(menu.id);
+    else changeQty(menu.id, cur.quantity - 1);
+  };
+
   // ★ useMemo 는 early return *위* 에 — React Hook 순서 규칙. menus 는 useMenuData 가
   //   `menuQuery.data ?? []` 로 항상 배열을 보장하므로 isLoading=true 시에도 안전.
   const filteredMenus = useMemo(() => {
@@ -56,7 +64,7 @@ export default function MenuPage() {
           onAction={category !== 'all' ? () => setCategory('all') : undefined}
         />
       ) : (
-        <MenuList menus={filteredMenus} onAdd={(menu) => addItem(menu)} />
+        <MenuList menus={filteredMenus} onAdd={(menu) => addItem(menu)} onDec={handleDec} />
       )}
       <StickyCartBar onCheckout={() => navigate('/cart')} />
     </section>

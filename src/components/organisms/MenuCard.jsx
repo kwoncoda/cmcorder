@@ -23,6 +23,7 @@ const MenuCard = forwardRef(function MenuCard(
   {
     menu,
     onAdd,
+    onDec,
     recommended = false,
     soldOut = false,
     useFallback = true,
@@ -49,6 +50,11 @@ const MenuCard = forwardRef(function MenuCard(
     onAdd?.(menu);
   };
 
+  const handleDec = () => {
+    if (isSoldOut) return;
+    onDec?.(menu);
+  };
+
   // .menu-card 가 토큰 기반 디자인, opacity-50 은 회귀 테스트 호환.
   const cardClass = [
     'menu-card',
@@ -65,6 +71,12 @@ const MenuCard = forwardRef(function MenuCard(
     : inCartQty > 0
     ? `✓ 인벤토리 ${inCartQty}`
     : '＋ 줍기';
+  const mainAriaLabel = isSoldOut
+    ? `${menu.name} 품절`
+    : inCartQty > 0
+    ? `${menu.name} 한 개 더 줍기`
+    : `${menu.name} 줍기`;
+  const showDec = inCartQty > 0 && !isSoldOut && typeof onDec === 'function';
 
   return (
     <article
@@ -115,16 +127,28 @@ const MenuCard = forwardRef(function MenuCard(
         <h3 className="menu-name">{menu.name}</h3>
         {menu.sub && <div className="menu-sub">{menu.sub}</div>}
         <PriceTag value={menu.basePrice} className="menu-price" />
-        <button
-          type="button"
-          className="pick-btn"
-          disabled={isSoldOut}
-          data-incart={inCartQty > 0 || undefined}
-          onClick={handleAdd}
-          aria-label={`${menu.name} ${isSoldOut ? '품절' : '줍기'}`}
-        >
-          {pickLabel}
-        </button>
+        <div className="pick-btn-group">
+          <button
+            type="button"
+            className="pick-btn"
+            disabled={isSoldOut}
+            data-incart={inCartQty > 0 || undefined}
+            onClick={handleAdd}
+            aria-label={mainAriaLabel}
+          >
+            {pickLabel}
+          </button>
+          {showDec && (
+            <button
+              type="button"
+              className="pick-btn-dec"
+              onClick={handleDec}
+              aria-label={`${menu.name} 한 개 빼기`}
+            >
+              <span aria-hidden="true">−</span>
+            </button>
+          )}
+        </div>
       </div>
     </article>
   );

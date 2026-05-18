@@ -4,7 +4,7 @@ import { forwardRef } from 'react';
 import MenuCard from './MenuCard.jsx';
 
 const MenuList = forwardRef(function MenuList(
-  { menus = [], onAdd, className = '', ...rest },
+  { menus = [], onAdd, onDec, className = '', ...rest },
   ref,
 ) {
   return (
@@ -21,6 +21,7 @@ const MenuList = forwardRef(function MenuList(
             menu={m}
             useFallback={!m.image}
             onAdd={onAdd}
+            onDec={onDec}
             soldOut={m.soldOut}
             recommended={m.recommended}
           />

@@ -104,7 +104,7 @@ export default function SettlementPage() {
       </div>
 
       {!isAggregate && settlement.in_progress_count > 0 && !settlement.is_closed && (
-        <p role="alert" className="text-warning text-sm" data-testid="close-guard">진행 중 주문 {settlement.in_progress_count}건이 있어 마감할 수 없어요 (ADR-012).</p>
+        <p role="alert" className="text-warning text-sm" data-testid="close-guard">진행 중 주문 {settlement.in_progress_count}건이 있어 마감할 수 없어요.</p>
       )}
       {closeError && <p role="alert" className="text-danger text-sm" data-testid="close-error">{closeError}</p>}
 
