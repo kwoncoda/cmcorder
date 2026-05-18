@@ -4,8 +4,7 @@
 // 회귀 보호 항목:
 //   - open=false 시 렌더 X (null 반환)
 //   - role=dialog + aria-modal=true + aria-labelledby (모달 a11y 기본)
-//   - 4 닫기 방식 (결정 e — 4가지 모두):
-//       하단 큰 닫기 버튼 → onClose('bottom-close')
+//   - 3 닫기 방식 (하단 큰 닫기 버튼은 2026-05-19 design_fix_v2 후속에서 제거):
 //       상단 X 버튼       → onClose('top-x')
 //       backdrop 클릭     → onClose('backdrop')
 //       Esc 키            → onClose('escape')
@@ -42,13 +41,6 @@ describe('BoothMinimapModal', () => {
     expect(dialog).toHaveAttribute('aria-labelledby', 'minimap-title');
   });
 
-  it('★ 하단 큰 닫기 버튼 클릭 시 onClose("bottom-close") (결정 e)', () => {
-    const onClose = vi.fn();
-    render(<BoothMinimapModal open myTableNo={5} onClose={onClose} />);
-    fireEvent.click(screen.getByTestId('modal-close-bottom'));
-    expect(onClose).toHaveBeenCalledWith('bottom-close');
-  });
-
   it('상단 X 버튼 클릭 시 onClose("top-x")', () => {
     const onClose = vi.fn();
     render(<BoothMinimapModal open myTableNo={5} onClose={onClose} />);
@@ -64,13 +56,12 @@ describe('BoothMinimapModal', () => {
     expect(onClose).toHaveBeenCalledWith('backdrop');
   });
 
-  it('★ 콘텐츠 영역(footer) 클릭은 backdrop 닫기 발동 X (리뷰 fix I-2)', () => {
+  it('★ 콘텐츠 영역(modal-head) 클릭은 backdrop 닫기 발동 X (리뷰 fix I-2)', () => {
     const onClose = vi.fn();
     render(<BoothMinimapModal open myTableNo={5} onClose={onClose} />);
-    // footer (콘텐츠 컨테이너 내부) 클릭은 backdrop 으로 새지 않아야 한다.
-    // 하단 닫기 버튼의 부모 footer 영역을 클릭.
-    const footer = screen.getByTestId('modal-close-bottom').closest('footer');
-    fireEvent.click(footer);
+    // 모달 콘텐츠 영역 클릭은 backdrop 으로 새지 않아야 한다.
+    const head = screen.getByText(/테이블 지도/).closest('.modal-head');
+    fireEvent.click(head);
     // backdrop reason 으로 호출되지 않아야 함 (다른 reason 은 무관).
     expect(onClose).not.toHaveBeenCalledWith('backdrop');
   });
@@ -134,9 +125,9 @@ describe('BoothMinimapModal', () => {
     expect(otherCell.className).not.toMatch(/booth-table-pulse/);
   });
 
-  it('★ 모달 open 시 하단 닫기 버튼에 포커스 (포커스 트랩 기본)', () => {
+  it('★ 모달 open 시 상단 X 버튼에 포커스 (포커스 트랩 기본)', () => {
     render(<BoothMinimapModal open myTableNo={5} onClose={() => {}} />);
-    expect(screen.getByTestId('modal-close-bottom')).toHaveFocus();
+    expect(screen.getByTestId('modal-close-top')).toHaveFocus();
   });
 
   it('★ 모달 close 시 이전 포커스 복귀 (cleanup)', () => {
@@ -188,7 +179,7 @@ describe('BoothMinimapModal', () => {
     }
     const { rerender } = render(<Parent open={true} />);
     // 최초 마운트: 닫기 버튼 포커스 + body overflow=hidden.
-    expect(screen.getByTestId('modal-close-bottom')).toHaveFocus();
+    expect(screen.getByTestId('modal-close-top')).toHaveFocus();
     expect(document.body.style.overflow).toBe('hidden');
 
     // 다른 요소로 포커스 이동 — effect 가 재실행되면 다시 닫기 버튼으로 끌려감.

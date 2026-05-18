@@ -73,7 +73,7 @@ describe('MapPage', () => {
 
   it('★ 닫기 버튼 클릭 시 navigate(-1) — 이전 페이지(/menu)로 이동', () => {
     renderPage(['/menu', '/map']);
-    fireEvent.click(screen.getByTestId('modal-close-bottom'));
+    fireEvent.click(screen.getByTestId('modal-close-top'));
     expect(screen.getByTestId('menu-page-stub')).toBeInTheDocument();
   });
 

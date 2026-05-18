@@ -1,5 +1,5 @@
 // BoothMinimapModal — design-bundle .modal-backdrop + .minimap + .entrance + .table.mine 정합.
-// 4가지 닫기 (bottom-close · top-x · backdrop · escape) 유지. testid 보존.
+// 3가지 닫기 (top-x · backdrop · escape). open 시 자동 포커스 = 상단 X 버튼.
 import { useEffect, useRef, forwardRef } from 'react';
 
 const BoothMinimapModal = forwardRef(function BoothMinimapModal(
@@ -84,6 +84,7 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
           테이블 지도
         </h2>
         <button
+          ref={closeBtnRef}
           type="button"
           onClick={() => onClose?.('top-x')}
           aria-label="모달 닫기"
@@ -162,17 +163,6 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
           </div>
         </div>
       </div>
-      <footer className="modal-foot" style={{ position: 'relative', zIndex: 10 }}>
-        <button
-          ref={closeBtnRef}
-          type="button"
-          className="btn btn-primary btn-lg btn-block"
-          onClick={() => onClose?.('bottom-close')}
-          data-testid="modal-close-bottom"
-        >
-          닫기
-        </button>
-      </footer>
     </div>
   );
 });
