@@ -46,7 +46,7 @@ const ClosedScreen = forwardRef(function ClosedScreen(
         className="schedule"
         data-testid="operating-schedule"
       >
-        <h2 className="label">📅 운영 일정</h2>
+        <h2 className="label">운영 일정</h2>
         <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
           {OPERATING_SCHEDULE.map((s) => (
             <li

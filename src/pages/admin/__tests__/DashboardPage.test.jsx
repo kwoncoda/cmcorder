@@ -110,6 +110,13 @@ describe('DashboardPage', () => {
     expect(startCta.querySelector('[data-testid="start-business-cta"]')).not.toBeNull();
   });
 
+  it('★ design_fix v5 — CLOSED 시 .start-cta 에 항상 urgent 클래스 (design_bundle 정합)', () => {
+    // shouldBeOpen 계산 결과와 무관하게 CLOSED 분기에선 urgent 클래스가 적용돼야 한다.
+    useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
+    const { container } = renderPage();
+    expect(container.querySelector('.start-cta.urgent')).not.toBeNull();
+  });
+
   it('★ "장사 시작" 클릭 시 API 호출 + status=OPEN 전이', async () => {
     apiFetch.mockResolvedValueOnce({ ok: true });
     useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });

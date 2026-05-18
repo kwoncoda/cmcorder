@@ -172,13 +172,15 @@ describe('CheckoutPage', () => {
     expect(screen.queryByText(/컴모융\(\*\*\*\*37\*\*\*\)/)).not.toBeInTheDocument();
   });
 
-  it('★ find_error_v3 — 쿠폰 자격 불충족 시 통합 안내 문구 노출', () => {
+  it('★ design_fix — 쿠폰 영역 helper 문구 제거 (라벨만 노출)', () => {
     renderPage();
-    // 학번이 비-37 9자리 → 통합 안내 ('학번 9자리 + 이름 입력 시 활성화됩니다.').
+    // design_bundle ScreenCheckout 정합: 쿠폰 영역에는 라벨 외 보조 안내 문구를 표시하지 않는다.
+    // 옛 통합 안내('학번 9자리 + 이름 입력 시 활성화됩니다.') 와 활성 시 안내('학번 확인 완료 ...') 모두 미노출.
     fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202647001' } });
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
     fireEvent.blur(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }));
-    expect(screen.getByText(/학번 9자리 \+ 이름 입력 시 활성화됩니다/)).toBeInTheDocument();
+    expect(screen.queryByText(/학번 9자리 \+ 이름 입력 시 활성화됩니다/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/학번 확인 완료/)).not.toBeInTheDocument();
   });
 
   // ── 폼 제출 흐름 ─────────────────────────────────────────────

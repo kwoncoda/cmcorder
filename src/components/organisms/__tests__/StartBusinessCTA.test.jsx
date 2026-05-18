@@ -66,11 +66,15 @@ describe('StartBusinessCTA', () => {
     expect(wrapper?.className ?? '').toMatch(/justify-center|items-center/);
   });
 
-  it('★ shouldBeOpen=true 시 버튼은 full-width (block 적용 유지)', () => {
+  it('★ design_fix — shouldBeOpen=true 시 버튼은 full-width 가 아님 (design_bundle 고정 패딩 .start-cta.urgent .btn-primary 형식)', () => {
     render(<StartBusinessCTA status="CLOSED" shouldBeOpen={true} />);
     const btn = screen.getByTestId('start-business-cta');
-    // primary 변형은 긴급 CTA — w-full 유지.
-    expect(btn.className).toMatch(/(^|\s)w-full(\s|$)/);
+    // design_bundle .start-cta.urgent .btn-primary 는 height: 56px / padding: 0 28px 의 고정 폭.
+    // block=true 의 w-full 은 가로를 잡아먹어 카드 좌측의 cta-mascot · left 와 균형이 무너지므로 미적용.
+    expect(btn.className).not.toMatch(/(^|\s)w-full(\s|$)/);
+    // 대신 size lg 의 min-h-[56px] 와 btn-primary 리터럴 클래스가 부여돼 있어야 한다.
+    expect(btn.className).toMatch(/min-h-\[56px\]/);
+    expect(btn.className).toMatch(/(^|\s)btn-primary(\s|$)/);
   });
 
   it('★ 두 변형 모두 onStart 콜백 정상 작동', () => {

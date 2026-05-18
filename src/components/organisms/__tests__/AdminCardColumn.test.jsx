@@ -489,25 +489,73 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     expect(onAction).toHaveBeenCalledWith(17, 'PAID');
   });
 
-  // ── find_error_v3 — 취소/보류 위험 액션은 btn-danger-outline 톤 다운 ──
-  it('★ find_error_v3 — ORDERED 카드 "취소" 버튼이 btn-danger-outline 클래스 (.btn-danger 미사용)', () => {
+  // ── design_fix v5 — F1/F2 카드에 은행/테이블 위치 표시 ──
+  it('★ design_fix v5 — delivery_type=dineIn 카드에 "테이블 N" 노출', () => {
+    const orders = [mkOrder({ id: 17, no: 17, delivery_type: 'dineIn', table_no: 5 })];
+    render(
+      <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(within(screen.getByTestId('admin-order-card-17')).getByTestId('order-location'))
+      .toHaveTextContent('테이블 5');
+  });
+
+  it('★ design_fix v5 — delivery_type=takeout 카드에 "포장" 노출', () => {
+    const orders = [mkOrder({ id: 18, no: 18, delivery_type: 'takeout', table_no: null })];
+    render(
+      <AdminCardColumn title="x" status="ORDERED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(within(screen.getByTestId('admin-order-card-18')).getByTestId('order-location'))
+      .toHaveTextContent('포장');
+  });
+
+  it('★ design_fix v5 — TRANSFER_REPORTED 카드에만 "은행: <name>" 노출 (다른 상태는 미노출)', () => {
+    const orders = [
+      mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED', bank: '카카오' }),
+      mkOrder({ id: 18, no: 18, status: 'TRANSFER_REPORTED', bank: '기타', custom_bank: '새마을금고' }),
+    ];
+    render(
+      <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(within(screen.getByTestId('admin-order-card-17')).getByTestId('order-bank'))
+      .toHaveTextContent('은행: 카카오');
+    expect(within(screen.getByTestId('admin-order-card-18')).getByTestId('order-bank'))
+      .toHaveTextContent('은행: 새마을금고');
+  });
+
+  it('★ design_fix v5 — TRANSFER_REPORTED 가 아닌 카드 (ORDERED) 에는 은행 라인 미노출', () => {
+    const orders = [mkOrder({ id: 17, no: 17, status: 'ORDERED', bank: '카카오' })];
+    render(
+      <AdminCardColumn title="x" status="ORDERED" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(within(screen.getByTestId('admin-order-card-17')).queryByTestId('order-bank'))
+      .toBeNull();
+  });
+
+  // ── design_fix — 카드 액션 버튼은 design_bundle .order-card .actions button 톤 ──
+  // 위험 액션(취소/보류) 은 전역 btn-danger* 변형을 쓰지 않고 카드 액션 기본 톤(elevated bg + ink text) 만 사용.
+  // primary(확인/조리 시작 등) 만 .primary 클래스로 옐로 강조 (.order-card .actions button.primary CSS).
+  it('★ design_fix — ORDERED 카드 "취소" 버튼은 btn-danger* 클래스 미사용 (.order-card .actions 기본 톤)', () => {
     const orders = [mkOrder({ id: 17, no: 17, status: 'ORDERED' })];
     render(
       <AdminCardColumn title="x" status="ORDERED" orders={orders} tick={BASE_TICK} />,
     );
     const card = screen.getByTestId('admin-order-card-17');
     const btn = within(card).getByRole('button', { name: '취소' });
-    expect(btn).toHaveClass('btn-danger-outline');
     expect(btn).not.toHaveClass('btn-danger');
+    expect(btn).not.toHaveClass('btn-danger-outline');
+    expect(btn).not.toHaveClass('primary');
   });
 
-  it('★ find_error_v3 — TRANSFER_REPORTED "보류" 버튼이 btn-danger-outline (확인은 btn-primary 유지)', () => {
+  it('★ design_fix — TRANSFER_REPORTED "보류"는 기본 톤, "확인"은 .primary (옐로 강조)', () => {
     const orders = [mkOrder({ id: 17, no: 17, status: 'TRANSFER_REPORTED' })];
     render(
       <AdminCardColumn title="x" status="TRANSFER_REPORTED" orders={orders} tick={BASE_TICK} />,
     );
     const card = screen.getByTestId('admin-order-card-17');
-    expect(within(card).getByRole('button', { name: '보류' })).toHaveClass('btn-danger-outline');
-    expect(within(card).getByRole('button', { name: '확인' })).toHaveClass('btn-primary');
+    const holdBtn = within(card).getByRole('button', { name: '보류' });
+    expect(holdBtn).not.toHaveClass('btn-danger-outline');
+    expect(holdBtn).not.toHaveClass('primary');
+    const confirmBtn = within(card).getByRole('button', { name: '확인' });
+    expect(confirmBtn).toHaveClass('primary');
   });
 });

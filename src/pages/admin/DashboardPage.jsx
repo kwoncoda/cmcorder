@@ -78,14 +78,17 @@ export default function DashboardPage() {
   if (status !== 'OPEN') {
     return (
       <section data-testid="admin-dashboard-page" className="admin-page">
-        <div className={`start-cta ${shouldBeOpen ? 'urgent' : ''}`}>
+        <header className="admin-page-head">
+          <h1>본부 대시보드</h1>
+          <div style={{ marginLeft: 'auto' }}><BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} /></div>
+        </header>
+        <div className="start-cta urgent">
           <div className="cta-mascot"><div className="mascot mascot-sm" /></div>
           <div className="left">
             <div className="cta-eyebrow">CLOSED · 사용자 주문 차단 중</div>
             <h2>장사 시작</h2><p>버튼을 누르면 사용자 주문이 즉시 활성화됩니다.</p>
           </div>
           <StartBusinessCTA status={status} shouldBeOpen={shouldBeOpen} loading={starting} error={startError} onStart={handleStartBusiness} />
-          <BusinessStateBadge status={status} shouldBeOpen={shouldBeOpen} />
         </div>
         {board}
         <KeyboardHelpModal open={showHelp} onClose={() => setShowHelp(false)} />

@@ -61,13 +61,16 @@ describe('TransferReportForm', () => {
     expect(screen.queryByLabelText(/은행명/)).not.toBeInTheDocument();
   });
 
-  it('"다른 이름으로 이체" 체크 시 otherName Input 활성', () => {
+  // design_fix v6 (Codex P1 복원) — useOtherName/otherName 경로가 서버 매칭 도메인
+  // (server/domain/transfer-matching.js) 과 정합. 프런트 차단으로 인한 회귀를 막기 위해 복구.
+  it('★ design_fix v6 — "다른 이름으로 이체" 체크 시 otherName Input 노출', () => {
     render(<TransferReportForm orderId={17} expectedAmount={18000} />);
+    expect(screen.queryByLabelText(/이체한 사람 이름/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText(/다른 이름으로 이체/));
     expect(screen.getByLabelText(/이체한 사람 이름/)).toBeInTheDocument();
   });
 
-  it('"다른 이름으로 이체" 미체크 시 otherName Input 미렌더', () => {
+  it('★ design_fix v6 — 미체크 시 otherName Input 미렌더 (cognitive load 최소화)', () => {
     render(<TransferReportForm orderId={17} expectedAmount={18000} />);
     expect(screen.queryByLabelText(/이체한 사람 이름/)).not.toBeInTheDocument();
   });
@@ -89,7 +92,7 @@ describe('TransferReportForm', () => {
     expect(alerts.some((el) => el.textContent === '입금자 이름을 입력하세요')).toBe(true);
   });
 
-  it('정상 제출 시 onSubmit({bank, depositorName, amount, useOtherName:false}) 호출', () => {
+  it('정상 제출 시 onSubmit({bank, depositorName, amount, useOtherName:false}) 호출 (기본 주문자명 이체)', () => {
     const onSubmit = vi.fn();
     render(<TransferReportForm orderId={17} expectedAmount={18000} onSubmit={onSubmit} />);
     fireEvent.change(screen.getByLabelText(/^은행/), { target: { value: '국민' } });
@@ -108,7 +111,9 @@ describe('TransferReportForm', () => {
     );
   });
 
-  it('useOtherName=true 시 otherName 포함 제출', () => {
+  // design_fix v6 (Codex P1 복원) — server/domain/transfer-matching.js 의 use_other_name=1 분기
+  // 가 그대로 살아있으므로 프런트도 동일하게 전송해야 본부 매칭이 정상 작동.
+  it('★ design_fix v6 — useOtherName=true 시 payload 에 otherName 포함', () => {
     const onSubmit = vi.fn();
     render(<TransferReportForm orderId={17} expectedAmount={18000} onSubmit={onSubmit} />);
     fireEvent.change(screen.getByLabelText(/^은행/), { target: { value: '국민' } });
@@ -126,6 +131,20 @@ describe('TransferReportForm', () => {
         otherName: '김철수',
       }),
     );
+  });
+
+  it('★ design_fix v6 — useOtherName 체크 + otherName 빈 값이면 제출 차단 + 안내', () => {
+    const onSubmit = vi.fn();
+    render(<TransferReportForm orderId={17} expectedAmount={18000} onSubmit={onSubmit} />);
+    fireEvent.change(screen.getByLabelText(/^은행/), { target: { value: '국민' } });
+    fireEvent.change(screen.getByLabelText(/입금자 이름/), {
+      target: { value: '홍길동' },
+    });
+    fireEvent.click(screen.getByLabelText(/다른 이름으로 이체/));
+    // otherName 입력 X → 제출 시 errors.otherName 발화.
+    fireEvent.submit(screen.getByLabelText('이체 완료 요청 폼'));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText('다른 이름을 입력하세요')).toBeInTheDocument();
   });
 
   it('은행=기타 + customBank 입력 시 customBank 포함 제출', () => {

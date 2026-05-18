@@ -11,6 +11,10 @@
 // - "다른 이름 이체" — useOtherName=true 시 추가 otherName Input 조건부 활성.
 //   체크박스만으로 절반 처리, 다른 이름 입력은 *조건부* 노출 (Cognitive load 감소).
 // - 은행=기타 → customBank Input 조건부 활성 (드물게 사용 — 6대 은행이 99%).
+// - design_fix v5 → v6 (2026-05-18, Codex P1 회귀 복원):
+//   v5 에서 디자인 단순화 차원에서 "다른 이름으로 이체" 체크박스를 제거했으나
+//   서버는 `use_other_name` / `other_name` 매칭 기능 (server/domain/transfer-matching.js)
+//   을 그대로 유지하고 있어 다른 명의 이체 신고 경로가 프런트에서 차단됨. v6 에서 복원.
 // - 카드 형광 옐로 텍스트 X (AI 슬롭 #26) — 폼 영역은 본문 톤.
 // - forwardRef — 호출자가 form DOM 직접 접근 가능 (focus 제어 등).
 import { forwardRef, useState } from 'react';

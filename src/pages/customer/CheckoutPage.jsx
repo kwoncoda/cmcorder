@@ -99,9 +99,6 @@ export default function CheckoutPage() {
         <div style={{ opacity: couponEligible ? 1 : 0.55, pointerEvents: couponEligible ? 'auto' : 'none' }}>
           <Checkbox id="useCoupon" checked={coupon} onChange={(e) => setCoupon(e.target.checked)} label="컴모융 학생 1,000원 할인" disabled={!couponEligible} />
         </div>
-        <p className="hint" style={{ fontSize: 11, color: 'var(--color-muted)', fontFamily: 'var(--font-mono)', margin: '4px 0 0' }}>
-          {couponEligible ? '✓ 학번 확인 완료 — 1,000원 할인 적용 가능' : '※ 학번 9자리 + 이름 입력 시 활성화됩니다.'}
-        </p>
       </div>)}
       <div className="receipt">
         {items.map((it) => (
