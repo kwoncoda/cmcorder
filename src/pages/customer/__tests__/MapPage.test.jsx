@@ -6,7 +6,7 @@
 //  - 쿼리 없을 시 myTableNo=undefined ("내 테이블" aria-label 없음)
 //  - 닫기 클릭 시 navigate(-1) (history back)
 //  - 임시 T1~T16 격자 보드 노출 X (이미지 기반 UI 교체)
-//  - "총 15개 테이블" legend (minimap_design 정책)
+//  - design_fix_v3: minimap-legend (내 테이블 / 총 N개 테이블) 미노출
 //  - a11y (axe)
 //  - 페이지 ≤120줄 (§3.5 1조)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -71,9 +71,10 @@ describe('MapPage', () => {
     expect(screen.queryByText('T16')).not.toBeInTheDocument();
   });
 
-  it('★ "총 15개 테이블" legend 노출 (minimap_design 정책)', () => {
+  it('★ design_fix_v3 — legend 문구 ("내 테이블" / "총 N개 테이블") 미노출', () => {
     renderPage(['/menu', '/map']);
-    expect(screen.getByText('총 15개 테이블')).toBeInTheDocument();
+    expect(screen.queryByText(/총 \d+개 테이블/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/내 테이블:/)).not.toBeInTheDocument();
   });
 
   it('★ ?order_id=5 시 본인 테이블 5번 강조 (이미지 aria-label)', () => {

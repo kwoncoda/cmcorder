@@ -262,6 +262,70 @@ describe('CheckoutPage', () => {
     );
   });
 
+  it('★ design_fix_v3 round2 — ALREADY_USED 응답 시 화면 가운데 모달 팝업(role=alertdialog) 노출', async () => {
+    apiFetch
+      .mockResolvedValueOnce(ALL_AVAILABLE)
+      .mockResolvedValueOnce(ALL_AVAILABLE)
+      .mockRejectedValueOnce(new ApiError('이미 쿠폰을 사용한 학번이에요.', { status: 400, code: 'ALREADY_USED' }));
+    renderPage();
+    fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637123' } });
+    fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+    fireEvent.change(screen.getByLabelText(/테이블/), { target: { value: '9' } });
+    fireEvent.click(screen.getByLabelText(/컴모융 학생 1,000원 할인/));
+    fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
+    // 모달 (가운데 정렬 + 마스코트 + 메시지 + 안내 + 쿠폰 해제 + 닫기 두 버튼) 노출
+    await waitFor(() => expect(screen.getByTestId('checkout-coupon-blocked')).toBeInTheDocument());
+    const dialog = screen.getByTestId('checkout-coupon-blocked');
+    expect(dialog).toHaveAttribute('role', 'alertdialog');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog.className).toMatch(/\bfixed\b/);
+    expect(dialog.className).toMatch(/\binset-0\b/);
+    expect(screen.getByText('이미 쿠폰을 사용한 학번이에요.')).toBeInTheDocument();
+    expect(screen.getByText(/쿠폰 사용을 해제하면 같은 학번으로 일반 주문은 가능해요/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '쿠폰 사용 해제' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '닫기' })).toBeInTheDocument();
+    // 인라인 빨간 텍스트 (작은 한 줄)는 안 보여야 함
+    expect(screen.queryByTestId('error-state-inline')).toBeNull();
+  });
+
+  it('★ design_fix_v3 round2 — ALREADY_USED 모달 "쿠폰 사용 해제" 클릭 → 쿠폰 체크 해제 + 모달 사라짐', async () => {
+    apiFetch
+      .mockResolvedValueOnce(ALL_AVAILABLE)
+      .mockResolvedValueOnce(ALL_AVAILABLE)
+      .mockRejectedValueOnce(new ApiError('이미 쿠폰을 사용한 학번이에요.', { status: 400, code: 'ALREADY_USED' }));
+    renderPage();
+    fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637123' } });
+    fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+    fireEvent.change(screen.getByLabelText(/테이블/), { target: { value: '9' } });
+    const couponCb = screen.getByLabelText(/컴모융 학생 1,000원 할인/);
+    fireEvent.click(couponCb);
+    expect(couponCb.checked).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
+    await waitFor(() => expect(screen.getByTestId('checkout-coupon-blocked')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '쿠폰 사용 해제' }));
+    expect(couponCb.checked).toBe(false);
+    expect(screen.queryByTestId('checkout-coupon-blocked')).toBeNull();
+  });
+
+  it('★ design_fix_v3 round2 — ALREADY_USED 모달 "닫기" 클릭 → 모달 닫힘 (쿠폰 체크는 유지)', async () => {
+    apiFetch
+      .mockResolvedValueOnce(ALL_AVAILABLE)
+      .mockResolvedValueOnce(ALL_AVAILABLE)
+      .mockRejectedValueOnce(new ApiError('이미 쿠폰을 사용한 학번이에요.', { status: 400, code: 'ALREADY_USED' }));
+    renderPage();
+    fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637123' } });
+    fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+    fireEvent.change(screen.getByLabelText(/테이블/), { target: { value: '9' } });
+    const couponCb = screen.getByLabelText(/컴모융 학생 1,000원 할인/);
+    fireEvent.click(couponCb);
+    fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
+    await waitFor(() => expect(screen.getByTestId('checkout-coupon-blocked')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: '닫기' }));
+    expect(screen.queryByTestId('checkout-coupon-blocked')).toBeNull();
+    // 닫기는 쿠폰 체크 상태 유지 — 사용자가 직접 해제할지 선택
+    expect(couponCb.checked).toBe(true);
+  });
+
   it('★ 외부인 모드 제출 — student_id null + is_external true 페이로드', async () => {
     apiFetch.mockResolvedValue({ id: 99 });
     renderPage();
