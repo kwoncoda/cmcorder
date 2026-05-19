@@ -109,3 +109,22 @@ DINING/SETTLED 상태 신설 + 테이블 점유 가드 + 어드민 잠금 페이
 | SA-6 | 로깅 검증 + 마이그레이션 006 신설 + 테스트 3건 추가 + docs 동기화 | `table_lock` | `docs/tasks/2026-05-19-table-occupancy.md` |
 
 **테스트 추이 (table_lock):** 1308 (SA-5 종료) → 1311 (SA-6, READY→DINING→SETTLED 로깅 회귀 3건 추가). production 번들 빌드 정상. 운영 컨테이너 migration 006-table-lock 적용 후 `/api/tables/availability` 200 정상.
+
+---
+
+## table_lock Codex P1/P2 보완 라운드 (2026-05-19)
+
+`codereview/codex_table_lock_review.md`(1차) → `codereview/codex_table_lock_p1_fix_review.md`(2차) 두 차례 리뷰 반영.
+
+| 라운드 | 담당 | 핵심 |
+|---|---|---|
+| P1-1 | 프론트 schema/UI | `OrderStatusSchema`에 DINING/SETTLED 추가 + `OrderSchema.dining_at/settled_at` + StatusChip 매핑 + OrderTimeline 5단계 done |
+| P1-2 | 정산/스냅샷 | `IN_PROGRESS_STATES`에 DINING 추가 + `COMPLETED_STATES = ['SETTLED', 'DONE']`로 매출 집계 (레거시 DONE 호환) |
+| P1-3 | bootstrap 006 | 기존 DB의 `orders.status` CHECK 갱신 — orders table rebuild 패턴 (`orders_new` + INSERT SELECT + DROP + RENAME), idempotent |
+| P2-#1 | dineIn 검증 | `delivery_type` undefined도 dineIn으로 간주 → table_no 필수 강화 |
+| P2-#2 | 006 schema 검사 | `_migrations` 마크와 별개로 schema 확인. 불완전 006 좀비 DB 자동 보정 |
+| P2-#3 | ISO 변환 | `dining_at`, `settled_at`을 admin/customer serializer TS_FIELDS에 포함 |
+
+**테스트 추이 (Codex 보완):** 1311 (1차) → 1339 (P1) → 1343 (P2). 신규 회귀 +21건. 기존 페이로드 53+개에 `delivery_type: 'takeout'` 보강 (테스트 의도 보존, 기능 변화 0). lint 0 error / 3 기존 warning. production build 정상.
+
+작업 문서: `docs/tasks/2026-05-19-table-occupancy-codex-fixes.md`.
