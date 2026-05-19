@@ -124,19 +124,21 @@ describe('BoothMinimapModal', () => {
     expect(screen.getByAltText('테이블 위치 약도')).toBeInTheDocument();
   });
 
-  it('★ totalTables prop 이 cols*rows 보다 우선 (legend 표시 기준)', () => {
+  it('★ design_fix_v3 — minimap-legend 미노출 (내 테이블 / 총 N개 테이블 문구 삭제)', () => {
     render(
       <BoothMinimapModal
         open
+        myTableNo={5}
         mapImage="/map/booth.png"
         totalTables={15}
         gridSize={{ cols: 4, rows: 4 }}
         onClose={() => {}}
       />,
     );
-    // gridSize 는 16 이지만 totalTables prop 으로 15 표기.
-    expect(screen.getByText('총 15개 테이블')).toBeInTheDocument();
-    expect(screen.queryByText('총 16개 테이블')).not.toBeInTheDocument();
+    // 사용자 요청: "내 테이블: -(포장 또는 일반)" / "총 N개 테이블" 두 legend 문구 모두 삭제.
+    expect(screen.queryByText(/총 \d+개 테이블/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/내 테이블:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/포장 또는 일반/)).not.toBeInTheDocument();
   });
 
   it('★ fallback 격자도 totalTables 로 cap — T16 미렌더 (1~15만)', () => {

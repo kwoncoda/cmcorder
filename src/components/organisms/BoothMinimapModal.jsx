@@ -155,12 +155,6 @@ const BoothMinimapModal = forwardRef(function BoothMinimapModal(
             <div className="entrance">🚪 ENTRANCE</div>
           </div>
         )}
-        <div className="minimap-legend">
-          <div>내 테이블: <strong>{myTableNo ? `#${myTableNo}` : '— (포장 또는 일반)'}</strong></div>
-          <div style={{ color: 'var(--color-muted)', fontSize: 12 }}>
-            {`총 ${totalTables}개 테이블`}
-          </div>
-        </div>
       </div>
     </div>
   );

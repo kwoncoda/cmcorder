@@ -10,7 +10,7 @@ import { useTablesAvailability } from '../../hooks/useTablesAvailability.js';
 import Label from '../../components/atoms/Label.jsx';
 import Input from '../../components/atoms/Input.jsx';
 import Checkbox from '../../components/atoms/Checkbox.jsx';
-import ErrorState from '../../components/state/ErrorState.jsx';
+import CheckoutSubmitError from '../../components/molecules/CheckoutSubmitError.jsx';
 import DeliveryTypeSelector from '../../components/organisms/DeliveryTypeSelector.jsx';
 
 // find_error_v2 — 주문 자격(9자리)과 쿠폰 자격(컴모융 37) 분리.
@@ -41,7 +41,7 @@ export default function CheckoutPage() {
   const valid = !errors.sid && !errors.name && !errors.tableNo && items.length > 0;
 
   const handleTableClick = (n) => {
-    if (unavailableTables.has(n)) { setSubmitError(TABLE_NOT_AVAILABLE_MESSAGE); return; }
+    if (unavailableTables.has(n)) { setSubmitError({ message: TABLE_NOT_AVAILABLE_MESSAGE }); return; }
     setSubmitError(null); setTableNo(String(n)); setTouched((t) => ({ ...t, tableNo: true }));
   };
 
@@ -51,7 +51,7 @@ export default function CheckoutPage() {
     try {
       const fresh = await refresh();
       if (fresh && delivery === 'dineIn' && tableNo && unavailSet(fresh).has(Number(tableNo))) {
-        setSubmitError(TABLE_NOT_AVAILABLE_MESSAGE); setBusy(false); return;
+        setSubmitError({ message: TABLE_NOT_AVAILABLE_MESSAGE }); setBusy(false); return;
       }
       const order = await apiFetch(API.ORDERS, { method: 'POST', body: {
         items: items.map((i) => ({ menu_id: i.menuId, quantity: i.quantity })),
@@ -64,7 +64,7 @@ export default function CheckoutPage() {
       navigate(`/orders/${order.id}/complete${order.access_token ? `?token=${encodeURIComponent(order.access_token)}` : ''}`);
     } catch (err) {
       if (err instanceof BusinessClosedError) throw err;
-      setSubmitError(err instanceof ApiError ? err.message : '주문 접수에 실패했어요.');
+      setSubmitError(err instanceof ApiError ? { message: err.message, code: err.code } : { message: '주문 접수에 실패했어요.' });
     } finally { setBusy(false); }
   };
 
@@ -111,7 +111,7 @@ export default function CheckoutPage() {
         {discount > 0 && (<div className="line"><span className="label">쿠폰 할인</span><span className="price price-discount">−{fmt(discount)}원</span></div>)}
         <div className="line total"><span className="label">합계</span><span className="price price-lg" style={{ color: 'var(--color-accent)' }}>{fmt(total)}원</span></div>
       </div>
-      {submitError && <ErrorState variant="inline-field" title={submitError} />}
+      <CheckoutSubmitError error={submitError} onClearCoupon={() => { setCoupon(false); setSubmitError(null); }} onClose={() => setSubmitError(null)} />
       <div style={{ height: 96 }} />
       <div className="sticky-bar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 40 }}>
         <button type="submit" className="btn btn-primary btn-lg btn-block" disabled={busy} aria-label="주문 접수">{busy ? '접수 중…' : `📋 주문 접수 · ${fmt(total)}원`}</button>
