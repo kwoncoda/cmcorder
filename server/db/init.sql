@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS orders (
   no INTEGER NOT NULL,
   operating_date TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'ORDERED' CHECK(status IN (
-    'ORDERED','TRANSFER_REPORTED','PAID','COOKING','READY','DONE','HOLD','CANCELED'
+    'ORDERED','TRANSFER_REPORTED','PAID','COOKING','READY','DINING','DONE','SETTLED','HOLD','CANCELED'
   )),
   student_id TEXT,
   name TEXT NOT NULL,
@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS orders (
   cooking_at TEXT,
   ready_at TEXT,
   done_at TEXT,
+  dining_at TEXT,
+  settled_at TEXT,
   hold_reason TEXT,
   canceled_reason TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -146,6 +148,21 @@ CREATE TABLE IF NOT EXISTS backups (
   size_bytes INTEGER,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ─── 테이블 잠금 (table_lock 브랜치 — Subagent 1) ─────────────────────────
+-- reason 컬럼 없음 (Q4 확정 — 단순 잠금/해제 토글).
+-- UNIQUE(table_no): 테이블당 1행, UPSERT 패턴 사용.
+CREATE TABLE IF NOT EXISTS table_locks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_no INTEGER NOT NULL CHECK(table_no BETWEEN 1 AND 15),
+  locked INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0,1)),
+  locked_at TEXT,
+  unlocked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(table_no)
+);
+CREATE INDEX IF NOT EXISTS idx_table_locks_locked ON table_locks(locked);
 
 -- ─── 주문 이벤트 감사 로그 (find_error_v2 — 관리자 내역 탭) ──
 -- 주문 상태 변경만 추적. 메뉴/로그인/시스템 이벤트는 범위 외.

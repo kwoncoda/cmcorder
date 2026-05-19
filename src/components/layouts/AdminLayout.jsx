@@ -12,13 +12,14 @@ import { BusinessStateSchema } from '../../api/schemas.js';
 import useBusinessStateStore from '../../store/businessState.js';
 import { displayActor } from '../../utils/admin-display.js';
 
-// 5종 nav — find_error_v3: 이체확인 제거 (대시보드 TRANSFER_REPORTED 컬럼이 대체).
+// 6종 nav — Subagent 4: 테이블 잠금 탭 추가 (쿠폰 오른쪽 끝).
 const ITEMS = [
-  { to: '/admin/dashboard',  label: '본부',     testid: 'admin-nav-dashboard' },
-  { to: '/admin/menus',      label: '메뉴',     testid: 'admin-nav-menus' },
-  { to: '/admin/history',    label: '내역',     testid: 'admin-nav-history' },
-  { to: '/admin/settlement', label: '정산',     testid: 'admin-nav-settlement' },
-  { to: '/admin/coupons',    label: '쿠폰',     testid: 'admin-nav-coupons' },
+  { to: '/admin/dashboard',  label: '본부',       testid: 'admin-nav-dashboard' },
+  { to: '/admin/menus',      label: '메뉴',       testid: 'admin-nav-menus' },
+  { to: '/admin/history',    label: '내역',       testid: 'admin-nav-history' },
+  { to: '/admin/settlement', label: '정산',       testid: 'admin-nav-settlement' },
+  { to: '/admin/coupons',    label: '쿠폰',       testid: 'admin-nav-coupons' },
+  { to: '/admin/tables',     label: '테이블 잠금', testid: 'admin-nav-tables' },
 ];
 
 function formatNow() {

@@ -30,9 +30,14 @@ const OrderTimeline = forwardRef(function OrderTimeline(
   },
   ref,
 ) {
+  // table_lock: READY 이후의 후속 상태(DINING/SETTLED/DONE)는 5단계 진행이 끝난 것으로 본다.
+  //   - DINING: 식사 중. 5단계 전부 done 처리 + 별도 안내는 StatusPage가 담당.
+  //   - SETTLED: 사이클 종료. 5단계 done.
+  //   - DONE: 레거시. 5단계 done.
   let doneCount;
-  if (current === 'DONE') doneCount = STEPS.length;
-  else {
+  if (current === 'DONE' || current === 'DINING' || current === 'SETTLED') {
+    doneCount = STEPS.length;
+  } else {
     const idx = STEPS.findIndex((s) => s.key === current);
     doneCount = idx < 0 ? 0 : idx;
   }

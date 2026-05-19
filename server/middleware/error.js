@@ -45,5 +45,12 @@ export function errorHandler(err, req, res, _next) {
       message: err.message,
     });
   }
+  if (err?.name === 'TableNotAvailableError') {
+    const status = err.reason === 'out_of_range' ? 400 : 409;
+    return res.status(status).json({
+      error: 'TABLE_NOT_AVAILABLE',
+      message: err.message,
+    });
+  }
   return res.status(500).json({ error: 'INTERNAL_ERROR' });
 }

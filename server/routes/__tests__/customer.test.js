@@ -67,6 +67,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
         name: '홍길동',
         student_id: '202637001',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.no).toBe(1);
@@ -86,6 +87,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
         student_id: '202637001',
         total_price: 999, // 무시되어야
         items_priced: [{ menu_id: 1, base_price: 1, quantity: 1 }], // 무시
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.total_price).toBe(18000);
@@ -99,6 +101,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '외부 손님',
         is_external: true,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.is_external).toBe(true);
@@ -124,6 +127,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
         items: [{ menu_id: 9999, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('PRICING_ERROR');
@@ -133,7 +137,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
     const app = createApp({ db: freshDb() });
     const res = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     expect(res.status).toBe(200);
     // SQLite datetime('now')는 'YYYY-MM-DD HH:MM:SS' (UTC, marker 없음) 출력.
     // serializeOrder가 ISO 8601 Z 형식으로 변환해야 브라우저(KST)가 540분 오차 없이 해석.
@@ -153,6 +157,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     // 18000 - 1000 = 17000 (정액 ADR-019)
@@ -177,6 +182,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     const dup = await request(app)
       .post('/api/orders')
@@ -186,6 +192,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(dup.status).toBe(400);
     expect(dup.body.error).toBe('ALREADY_USED');
@@ -203,6 +210,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(first.status).toBe(200);
 
@@ -215,6 +223,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(dup.status).toBe(400);
     expect(dup.body.error).toBe('ALREADY_USED');
@@ -233,6 +242,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(couponOrder.status).toBe(200);
     expect(couponOrder.body.total_price).toBe(17000); // 1,000원 할인
@@ -245,6 +255,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '김철수',
         student_id: '202637001',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(plain.status).toBe(200);
     expect(plain.body.total_price).toBe(18000); // 할인 없음
@@ -258,6 +269,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: false },
+        delivery_type: 'takeout',
       });
     expect(plainSameName.status).toBe(200);
     expect(plainSameName.body.total_price).toBe(18000);
@@ -274,6 +286,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     const dup = await request(app)
       .post('/api/orders')
@@ -283,6 +296,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(dup.status).toBe(400);
 
@@ -308,6 +322,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '외부 손님',
         is_external: true,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('COUPON_REQUIRES_STUDENT');
@@ -329,6 +344,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: null,
         is_external: true,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('COUPON_REQUIRES_STUDENT');
@@ -345,6 +361,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '12345', // 9자리 미만
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
@@ -361,6 +378,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202612001', // 학과 코드 12 (다른 학과)
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('INVALID_FORMAT');
@@ -376,6 +394,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '외부 손님',
         is_external: true,
         coupon: { used: false },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.total_price).toBe(18000); // 할인 X
@@ -392,6 +411,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '홍길동',
         student_id: '202111123',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.total_price).toBe(18000);
@@ -408,6 +428,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         student_id: '202111123',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('INVALID_FORMAT');
@@ -424,6 +445,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '홍길동',
         student_id: '20211112',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
@@ -438,6 +460,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '홍길동',
         student_id: '20211a123',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
@@ -452,6 +475,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '외부 손님',
         student_id: null,
         is_external: true,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.is_external).toBe(true);
@@ -466,6 +490,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
@@ -481,6 +506,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '홍길동',
         student_id: '',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
@@ -496,6 +522,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '홍길동',
         student_id: null,
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('VALIDATION_ERROR');
@@ -511,6 +538,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         name: '홍길동',
         student_id: '202111123',
         is_external: false,
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
     expect(res.body.is_external).toBe(false);
@@ -617,6 +645,93 @@ describe('사용자 API — POST /api/orders table_no 1~15 범위 검증', () =>
     expect(res.status).toBe(200);
     expect(res.body.table_no).toBeNull();
   });
+
+  // ── table_lock 라운드 P2-1 (Codex 리뷰 2026-05-19) ────────────────
+  // delivery_type='dineIn' 명시 + table_no 누락 → 400 거부.
+  // API 직접 호출 보호선 (프론트 CheckoutPage는 항상 table_no 같이 보냄).
+  it('★ P2-1 — delivery_type=dineIn + table_no 미지정 → 400 VALIDATION_ERROR', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        delivery_type: 'dineIn',
+        // table_no 누락
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect(res.body.message).toBe('매장 식사 주문은 테이블 번호를 선택해주세요.');
+  });
+
+  it('★ P2-1 — delivery_type=dineIn + table_no=null → 400 VALIDATION_ERROR', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        delivery_type: 'dineIn',
+        table_no: null,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ P2-1 — delivery_type=takeout + table_no=null → 200 (포장 회귀)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '외부 손님',
+        is_external: true,
+        delivery_type: 'takeout',
+        table_no: null,
+      });
+    expect(res.status).toBe(200);
+  });
+
+  it('★ P2-1 — delivery_type=dineIn + table_no=1 → 200 (정상 회귀)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        delivery_type: 'dineIn',
+        table_no: 1,
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.table_no).toBe(1);
+  });
+
+  // ── P2-#3 (Codex 재리뷰 2026-05-19) — dining_at/settled_at ISO 직렬화 ────
+  it('★ P2-#3 — serializeOrder 응답에 dining_at, settled_at 포함 (초기 null)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        is_external: false,
+        delivery_type: 'dineIn',
+        table_no: 2,
+      });
+    expect(res.status).toBe(200);
+    // 응답에 두 키가 존재하고 (null) 다른 타임스탬프 필드와 같은 형식.
+    expect(res.body).toHaveProperty('dining_at');
+    expect(res.body).toHaveProperty('settled_at');
+    expect(res.body.dining_at).toBeNull();
+    expect(res.body.settled_at).toBeNull();
+  });
 });
 
 describe('사용자 API — 영업 외 가드', () => {
@@ -663,6 +778,7 @@ describe('사용자 API — GET /api/orders/:id', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     expect(create.status).toBe(200);
     // P0-4: POST 응답에 access_token 포함
@@ -701,6 +817,7 @@ describe('사용자 API — GET /api/orders/:id', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const get = await request(app)
       .get(`/api/orders/${create.body.id}?token=wrong-token-value`);
@@ -716,6 +833,7 @@ describe('사용자 API — GET /api/orders/:id', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '외부 손님',
         is_external: true,
+        delivery_type: 'takeout',
       });
     expect(create.status).toBe(200);
     expect(typeof create.body.access_token).toBe('string');
@@ -731,10 +849,10 @@ describe('사용자 API — GET /api/orders/:id', () => {
     const app = createApp({ db: freshDb() });
     const a = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A', student_id: '202637001', delivery_type: 'takeout' });
     const b = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B', student_id: '202637002' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B', student_id: '202637002', delivery_type: 'takeout' });
     expect(a.body.id).not.toBe(b.body.id);
 
     // A 의 token으로 B 의 주문 조회 시도
@@ -761,6 +879,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
 
     const report = await request(app)
@@ -783,6 +902,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
 
     const report = await request(app)
@@ -796,7 +916,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
 
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report`)
@@ -809,7 +929,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
 
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=wrong-token`)
@@ -822,10 +942,10 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db: freshDb() });
     const a = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'A', student_id: '202637001', delivery_type: 'takeout' });
     const b = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B', student_id: '202637002' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: 'B', student_id: '202637002', delivery_type: 'takeout' });
 
     // A의 token으로 B 주문에 transfer-report 시도 → 403, B 주문 상태 변경 X
     const cross = await request(app)
@@ -855,7 +975,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db: freshDb() });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
@@ -871,7 +991,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
 
     // 첫 신고 — 정상 200
     const first = await request(app)
@@ -896,7 +1016,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
 
     await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
@@ -930,7 +1050,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     // 테스트 fixture — DB SQL로 상태 강제 (도메인 검증 우회는 의도된 setup).
     db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(state, create.body.id);
 
@@ -955,7 +1075,7 @@ describe('order_events 자동 로깅 — POST /api/orders', () => {
     const app = createApp({ db });
     const res = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     expect(res.status).toBe(200);
     const events = db
       .prepare('SELECT * FROM order_events WHERE order_id = ?')
@@ -978,6 +1098,7 @@ describe('order_events 자동 로깅 — POST /api/orders', () => {
         name: '외부 손님',
         is_external: true,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     expect(res.status).toBe(400);
     const count = db.prepare('SELECT COUNT(*) AS c FROM order_events').get().c;
@@ -991,7 +1112,7 @@ describe('order_events 자동 로깅 — POST /api/orders/:id/transfer-report', 
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
@@ -1013,7 +1134,7 @@ describe('order_events 자동 로깅 — POST /api/orders/:id/transfer-report', 
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
       .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
@@ -1026,5 +1147,116 @@ describe('order_events 자동 로깅 — POST /api/orders/:id/transfer-report', 
       .prepare("SELECT COUNT(*) AS c FROM order_events WHERE order_id = ? AND event_type = 'TRANSFER_REPORTED'")
       .get(create.body.id).c;
     expect(trCount).toBe(1);
+  });
+});
+
+// ── table_lock 브랜치 Subagent 1 — POST /api/orders availability 가드 ──────
+describe('사용자 API — POST /api/orders 테이블 availability 가드', () => {
+  function insertPaidOrder(db, table_no) {
+    db.prepare(
+      `INSERT INTO orders (no, operating_date, status, name, student_id, delivery_type, table_no, total_price)
+       VALUES (1, '2026-05-20', 'PAID', '먼저온손님', '202637001', 'dineIn', ?, 18000)`,
+    ).run(table_no);
+  }
+
+  const orderFor = (table_no) => ({
+    items: [{ menu_id: 1, quantity: 1 }],
+    name: '나중손님',
+    student_id: '202637002',
+    is_external: false,
+    delivery_type: 'dineIn',
+    table_no,
+  });
+
+  it('5번 PAID 점유 상태 → POST {table_no:5} → 409 TABLE_NOT_AVAILABLE', async () => {
+    const db = freshDb();
+    insertPaidOrder(db, 5);
+    const app = createApp({ db });
+    const res = await request(app).post('/api/orders').send(orderFor(5));
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('TABLE_NOT_AVAILABLE');
+    expect(res.body.message).toBe(
+      '현재 선택하신 테이블은 이용 중이거나 준비 중입니다. 번거로우시겠지만 다른 테이블로 이동해 주세요.',
+    );
+  });
+
+  it('5번 잠금 상태 → POST {table_no:5} → 409 TABLE_NOT_AVAILABLE (동일 메시지)', async () => {
+    const db = freshDb();
+    // table_locks에 직접 잠금 삽입
+    db.prepare(
+      `INSERT INTO table_locks (table_no, locked, locked_at) VALUES (5, 1, datetime('now'))`,
+    ).run();
+    const app = createApp({ db });
+    const res = await request(app).post('/api/orders').send(orderFor(5));
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('TABLE_NOT_AVAILABLE');
+    expect(res.body.message).toBe(
+      '현재 선택하신 테이블은 이용 중이거나 준비 중입니다. 번거로우시겠지만 다른 테이블로 이동해 주세요.',
+    );
+  });
+
+  it('5번 SETTLED 주문 후 → POST {table_no:5} → 200 (재선택 가능)', async () => {
+    const db = freshDb();
+    // SETTLED 주문 삽입
+    db.prepare(
+      `INSERT INTO orders (no, operating_date, status, name, student_id, delivery_type, table_no, total_price)
+       VALUES (1, '2026-05-20', 'SETTLED', '먼저온손님', '202637001', 'dineIn', 5, 18000)`,
+    ).run();
+    const app = createApp({ db });
+    const res = await request(app).post('/api/orders').send(orderFor(5));
+    expect(res.status).toBe(200);
+  });
+
+  it('포장 주문 (delivery_type=takeout, table_no=null) → 점유 검증 우회 → 200', async () => {
+    const db = freshDb();
+    insertPaidOrder(db, 5); // 5번 점유 중이지만 포장은 무관
+    const app = createApp({ db });
+    const res = await request(app).post('/api/orders').send({
+      items: [{ menu_id: 1, quantity: 1 }],
+      name: '포장손님',
+      is_external: true,
+      delivery_type: 'takeout',
+      table_no: null,
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+// ── table_lock 브랜치 Subagent 1 — GET /api/tables/availability ─────────
+describe('사용자 API — GET /api/tables/availability', () => {
+  it('200 응답 + 길이 15', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/api/tables/availability');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(15);
+  });
+
+  it('각 row는 {table_no, status} 만 포함 — order_no/dining_at/locked_at 없음', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/api/tables/availability');
+    expect(res.status).toBe(200);
+    res.body.forEach((row) => {
+      expect(row).toHaveProperty('table_no');
+      expect(row).toHaveProperty('status');
+      expect(row).not.toHaveProperty('order_no');
+      expect(row).not.toHaveProperty('dining_at');
+      expect(row).not.toHaveProperty('locked_at');
+    });
+    expect(res.body[0].table_no).toBe(1);
+    expect(res.body[0].status).toBe('available');
+  });
+
+  it('5번 PAID 후 응답: 5번 occupied, order_no 없음', async () => {
+    const db = freshDb();
+    db.prepare(
+      `INSERT INTO orders (no, operating_date, status, name, student_id, delivery_type, table_no, total_price)
+       VALUES (1, '2026-05-20', 'PAID', '손님', '202637001', 'dineIn', 5, 18000)`,
+    ).run();
+    const app = createApp({ db });
+    const res = await request(app).get('/api/tables/availability');
+    expect(res.status).toBe(200);
+    const row5 = res.body.find((r) => r.table_no === 5);
+    expect(row5.status).toBe('occupied');
+    expect(row5.order_no).toBeUndefined();
   });
 });

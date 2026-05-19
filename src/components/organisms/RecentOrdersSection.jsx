@@ -17,10 +17,12 @@ import { apiFetch } from '../../api/client.js';
 import { API } from '../../api/routes.js';
 import StatusChip from '../molecules/StatusChip.jsx';
 
-const TERMINAL = new Set(['DONE', 'CANCELED']);
+// 사용자 진행 중 카드에서 숨길 상태. 도메인 터미널(SETTLED/CANCELED)보다 넓다 —
+// DINING/DONE 도 사용자에게는 종결처럼 보여야 하므로 포함.
+const TERMINAL = new Set(['DINING', 'DONE', 'SETTLED', 'CANCELED']);
 
 // 단일 주문 카드 — mount 1회 status fetch.
-// terminal(DONE/CANCELED): store에서 즉시 제거하여 다음 마운트에서도 사라짐.
+// terminal(DINING/DONE/SETTLED/CANCELED): store에서 즉시 제거하여 다음 마운트에서도 사라짐.
 // fetch 실패: 카드 *유지* + 안내 문구 + 클릭은 status 페이지로 — 사용자가 재시도 가능.
 function RecentOrderCard({ entry, onOpen }) {
   const [status, setStatus] = useState(null);

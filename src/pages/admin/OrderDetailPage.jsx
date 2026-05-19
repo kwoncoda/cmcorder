@@ -1,5 +1,4 @@
-// A-3 주문 상세 — 6 액션 + OrderTimeline + 상태 전이.
-// ADR-025: 합법 전이는 *백엔드* 가 검증. 페이지는 status 기반 UI 가용성만 표시.
+// A-3 주문 상세 — 7 액션 + OrderTimeline. ADR-025: 합법 전이는 *백엔드* 가 검증.
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApi } from '../../hooks/useApi.js';
@@ -14,14 +13,15 @@ import Button from '../../components/atoms/Button.jsx';
 import LoadingState from '../../components/state/LoadingState.jsx';
 import ErrorState from '../../components/state/ErrorState.jsx';
 
-// 6 액션 → 다음 상태 매핑 (백엔드가 합법성 최종 검증). HOLD → PAID는 ADR-025 합법 — 보류 후 재대조 사용.
+// 7 액션 → 다음 상태 매핑 (백엔드가 합법성 최종 검증). HOLD → PAID는 ADR-025 합법 — 보류 후 재대조 사용.
 const ACTIONS = [
-  { key: 'confirm_transfer', label: '이체 확인', to: 'PAID',     from: ['TRANSFER_REPORTED','HOLD'] },
-  { key: 'hold',             label: '보류',      to: 'HOLD',     from: ['TRANSFER_REPORTED'] },
-  { key: 'cancel',           label: '취소',      to: 'CANCELED', from: ['ORDERED','TRANSFER_REPORTED','PAID','HOLD'] },
-  { key: 'start_cooking',    label: '조리 시작', to: 'COOKING',  from: ['PAID'] },
-  { key: 'finish_cooking',   label: '조리 완료', to: 'READY',    from: ['COOKING'] },
-  { key: 'deliver',          label: '전달 완료', to: 'DONE',     from: ['READY'] },
+  { key: 'confirm_transfer', label: '이체 확인',       to: 'PAID',     from: ['TRANSFER_REPORTED','HOLD'] },
+  { key: 'hold',             label: '보류',            to: 'HOLD',     from: ['TRANSFER_REPORTED'] },
+  { key: 'cancel',           label: '취소',            to: 'CANCELED', from: ['ORDERED','TRANSFER_REPORTED','PAID','HOLD'] },
+  { key: 'start_cooking',    label: '조리 시작',       to: 'COOKING',  from: ['PAID'] },
+  { key: 'finish_cooking',   label: '조리 완료',       to: 'READY',    from: ['COOKING'] },
+  { key: 'deliver',          label: '전달 완료',       to: 'DINING',   from: ['READY'] },
+  { key: 'settle_table',     label: '테이블 준비 완료', to: 'SETTLED',  from: ['DINING'] },
 ];
 
 export default function OrderDetailPage() {

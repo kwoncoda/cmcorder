@@ -20,13 +20,16 @@ export const MenuSchema = z.object({
 
 export const MenuListSchema = z.array(MenuSchema);
 
-// ── 주문 상태 (8개 — USER_FLOW §7.4) ──────────────────────────
+// ── 주문 상태 (10개 — USER_FLOW §7.4 + table_lock 라운드 2026-05-19) ────
+// table_lock: 신규 흐름 READY → DINING → SETTLED. DONE은 dead status (레거시 보존).
 export const OrderStatusSchema = z.enum([
   'ORDERED',
   'TRANSFER_REPORTED',
   'PAID',
   'COOKING',
   'READY',
+  'DINING',
+  'SETTLED',
   'DONE',
   'HOLD',
   'CANCELED',
@@ -53,6 +56,8 @@ export const OrderSchema = z.object({
   paid_at: z.string().nullable().optional(),
   cooking_at: z.string().nullable().optional(),
   ready_at: z.string().nullable().optional(),
+  dining_at: z.string().nullable().optional(),
+  settled_at: z.string().nullable().optional(),
   done_at: z.string().nullable().optional(),
   depositor_name: z.string().nullable().optional(),
   is_external: z.boolean().optional(),

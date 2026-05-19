@@ -32,6 +32,8 @@ import {
 } from '../domain/settlement.js';
 import { transition } from '../domain/order-state.js';
 import { createSettlementZip } from '../jobs/auto-snapshot.js';
+import { lockTable, unlockTable } from '../repositories/table-locks-repo.js';
+import { getAdminTablesView } from '../domain/table-availability.js';
 
 const LoginSchema = z.object({
   pin: z.string().regex(/^\d{6}$/, 'PIN은 6자리 숫자여야 합니다'),
@@ -90,6 +92,9 @@ const TS_FIELDS = [
   'paid_at',
   'cooking_at',
   'ready_at',
+  // table_lock 라운드 (P2 재리뷰 보완 2026-05-19): 새 timestamp 필드도 ISO 변환.
+  'dining_at',
+  'settled_at',
   'done_at',
 ];
 
@@ -498,6 +503,76 @@ export function adminRoutes(db) {
       res.send(buffer);
     } catch (err) {
       next(err);
+    }
+  });
+
+  // ── GET /admin/api/tables (테이블 잠금 페이지용 — Subagent 4) ──
+  router.get('/admin/api/tables', (_req, res) => {
+    const operating_date = getBusinessState(db).operating_date;
+    res.json(getAdminTablesView(db, { operating_date }));
+  });
+
+  // ── POST /admin/api/tables/:tableNo/lock ──
+  router.post('/admin/api/tables/:tableNo/lock', (req, res, next) => {
+    try {
+      const raw = Number(req.params.tableNo);
+      if (!Number.isInteger(raw) || raw < 1 || raw > 15 || Number.isNaN(raw)) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: '테이블 번호는 1번부터 15번까지만 입력할 수 있어요.',
+        });
+      }
+      const tableNo = raw;
+      const operating_date = getBusinessState(db).operating_date;
+      db.transaction(() => {
+        lockTable(db, tableNo);
+        logAdminEvent(db, {
+          category: 'system',
+          event_type: 'TABLE_LOCK',
+          action_name: '테이블 잠금',
+          actor: 'admin',
+          operating_date,
+          target_id: tableNo,
+          target_name: `테이블 ${tableNo}번`,
+        });
+      })();
+      const rows = getAdminTablesView(db, { operating_date });
+      const row = rows.find((r) => r.table_no === tableNo) ?? { table_no: tableNo, status: 'locked' };
+      return res.json({ ...row, locked: true });
+    } catch (err) {
+      return next(err);
+    }
+  });
+
+  // ── POST /admin/api/tables/:tableNo/unlock ──
+  router.post('/admin/api/tables/:tableNo/unlock', (req, res, next) => {
+    try {
+      const raw = Number(req.params.tableNo);
+      if (!Number.isInteger(raw) || raw < 1 || raw > 15 || Number.isNaN(raw)) {
+        return res.status(400).json({
+          error: 'VALIDATION_ERROR',
+          message: '테이블 번호는 1번부터 15번까지만 입력할 수 있어요.',
+        });
+      }
+      const tableNo = raw;
+      const operating_date = getBusinessState(db).operating_date;
+      db.transaction(() => {
+        unlockTable(db, tableNo);
+        logAdminEvent(db, {
+          category: 'system',
+          event_type: 'TABLE_UNLOCK',
+          action_name: '테이블 잠금 해제',
+          actor: 'admin',
+          operating_date,
+          target_id: tableNo,
+          target_name: `테이블 ${tableNo}번`,
+        });
+      })();
+      const rows = getAdminTablesView(db, { operating_date });
+      const row = rows.find((r) => r.table_no === tableNo) ?? { table_no: tableNo, status: 'available' };
+      return res.json({ ...row, locked: false });
+    } catch (err) {
+      return next(err);
     }
   });
 

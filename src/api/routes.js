@@ -31,4 +31,10 @@ export const API = {
   // find_error_v2 — 관리자 내역(history) + 쿠폰(coupons) 탭 복원.
   ADMIN_HISTORY: '/admin/api/history',
   ADMIN_COUPONS_USAGE: '/admin/api/coupons/usage',
+  // Subagent 1 — 사용자용 테이블 가용성
+  TABLES_AVAILABILITY: '/api/tables/availability',
+  // Subagent 4 — 어드민 테이블 잠금
+  ADMIN_TABLES: '/admin/api/tables',
+  ADMIN_TABLE_LOCK: (n) => `/admin/api/tables/${n}/lock`,
+  ADMIN_TABLE_UNLOCK: (n) => `/admin/api/tables/${n}/unlock`,
 };

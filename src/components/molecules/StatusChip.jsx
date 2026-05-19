@@ -8,14 +8,17 @@
 //   false:           이모지 숨김 (어드민 화면에서 사용)
 import { forwardRef } from 'react';
 
-// 8 상태별 라벨·이모지·색 매핑 (모듈 최상위 — §3.5 6조).
+// 10 상태별 라벨·이모지·색 매핑 (모듈 최상위 — §3.5 6조).
 // cls: 완전 Tailwind 클래스 문자열 (purge 안전).
 // 카드 영역(밝은 흙색 배경)에선 text-card-ink, 본문 영역에선 text-ink 사용.
 // 색 매칭 — DESIGN §5.4 + tokens.css 시맨틱 토큰:
 //   ORDERED   → info (파랑 — 진행 시작 신호)
 //   TRANSFER  → warning (주황 — 사용자 행동 필요)
-//   PAID/DONE → success (녹색 — 긍정 완료)
+//   PAID      → success (녹색 — 긍정 진행)
 //   COOKING/READY → accent (형광 옐로 — 호명·완료 신호)
+//   DINING    → success (녹색 — 식사 진행)
+//   SETTLED   → success (녹색 — 사이클 완료)
+//   DONE      → success (녹색 — 레거시 호환; 새 흐름에서는 진입 X)
 //   HOLD      → warning (주황 — 주의)
 //   CANCELED  → danger (빨강 — 부정 종료)
 const STATUS_CONFIG = {
@@ -24,6 +27,8 @@ const STATUS_CONFIG = {
   PAID:              { label: '조리 시작',    icon: '✓',  cls: 'bg-success text-ink' },
   COOKING:           { label: '조리 중',      icon: '🔥', cls: 'bg-accent text-card-ink' },
   READY:             { label: '수령 대기',    icon: '✅', cls: 'bg-accent text-card-ink' },
+  DINING:            { label: '식사 중',      icon: '🍽️', cls: 'bg-success text-ink' },
+  SETTLED:           { label: '정리 완료',    icon: '🎉', cls: 'bg-success text-ink' },
   DONE:              { label: '수령 완료',    icon: '🎉', cls: 'bg-success text-ink' },
   HOLD:              { label: '보류',         icon: '⚠️', cls: 'bg-warning text-card-ink' },
   CANCELED:          { label: '취소',         icon: '❌', cls: 'bg-danger text-ink' },

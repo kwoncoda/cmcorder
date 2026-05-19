@@ -75,19 +75,29 @@ describe('MenuSchema', () => {
 });
 
 describe('OrderStatusSchema', () => {
-  it('8개 상태 모두 통과', () => {
+  it('10개 상태 모두 통과 (table_lock: DINING, SETTLED 포함)', () => {
     [
       'ORDERED',
       'TRANSFER_REPORTED',
       'PAID',
       'COOKING',
       'READY',
+      'DINING',
+      'SETTLED',
       'DONE',
       'HOLD',
       'CANCELED',
     ].forEach((status) => {
       expect(OrderStatusSchema.safeParse(status).success).toBe(true);
     });
+  });
+
+  it('★ table_lock — DINING 허용 (P1-1 회귀)', () => {
+    expect(OrderStatusSchema.safeParse('DINING').success).toBe(true);
+  });
+
+  it('★ table_lock — SETTLED 허용 (P1-1 회귀)', () => {
+    expect(OrderStatusSchema.safeParse('SETTLED').success).toBe(true);
   });
 
   it('알 수 없는 상태 거부', () => {
@@ -149,6 +159,50 @@ describe('OrderSchema', () => {
         status: 'ORDERED',
         items: [],
         total_price: 0,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('★ table_lock — status=DINING + dining_at 통과 (P1-1 회귀)', () => {
+    expect(
+      OrderSchema.safeParse({
+        id: 1,
+        no: 100,
+        operating_date: '2026-05-20',
+        status: 'DINING',
+        items: [{ menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1 }],
+        total_price: 18000,
+        dining_at: '2026-05-20T07:30:00Z',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('★ table_lock — status=SETTLED + settled_at 통과 (P1-1 회귀)', () => {
+    expect(
+      OrderSchema.safeParse({
+        id: 1,
+        no: 100,
+        operating_date: '2026-05-20',
+        status: 'SETTLED',
+        items: [{ menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1 }],
+        total_price: 18000,
+        dining_at: '2026-05-20T07:30:00Z',
+        settled_at: '2026-05-20T08:00:00Z',
+      }).success,
+    ).toBe(true);
+  });
+
+  it('★ table_lock — dining_at/settled_at null 허용', () => {
+    expect(
+      OrderSchema.safeParse({
+        id: 1,
+        no: 100,
+        operating_date: '2026-05-20',
+        status: 'READY',
+        items: [{ menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1 }],
+        total_price: 18000,
+        dining_at: null,
+        settled_at: null,
       }).success,
     ).toBe(true);
   });

@@ -39,6 +39,16 @@ function elapsedTone(minutes) {
   return 'border-divider';
 }
 
+// 식사 중(DINING) 경과 시간별 border tone — 식사는 더 긴 기준 적용.
+//   60분 이상 → danger (빨강 — 자리 교체 필요)
+//   30분 이상 → warning (주황 — 주의)
+//   30분 미만 → divider (기본)
+function diningElapsedTone(minutes) {
+  if (minutes >= 60) return 'border-danger';
+  if (minutes >= 30) return 'border-warning';
+  return 'border-divider';
+}
+
 // find_error_v3 — design-bundle .order-card.warn / .order-card.danger 톤 매핑.
 // elapsedTone 의 결과(Tailwind 클래스)에 대응하는 design-bundle CSS 클래스.
 function orderCardDesignClass(tone) {
@@ -80,7 +90,8 @@ function formatLocationLabel(order) {
 //   TRANSFER_REPORTED → 확인 / 보류
 //   PAID              → 조리 시작
 //   COOKING           → 조리 완료
-//   READY             → 전달 완료
+//   READY             → 전달 완료 (→ DINING)
+//   DINING            → 테이블 준비 완료 (→ SETTLED)
 //   HOLD              → 이체 확인 / 취소  (find_error_v2: 재확인 → 이체 확인 으로 라벨 변경)
 const ACTION_BY_STATUS = {
   ORDERED: [{ label: '취소', to: 'CANCELED', variant: 'danger' }],
@@ -90,7 +101,8 @@ const ACTION_BY_STATUS = {
   ],
   PAID: [{ label: '조리 시작', to: 'COOKING', variant: 'primary' }],
   COOKING: [{ label: '조리 완료', to: 'READY', variant: 'primary' }],
-  READY: [{ label: '전달 완료', to: 'DONE', variant: 'primary' }],
+  READY:  [{ label: '전달 완료',        to: 'DINING',  variant: 'primary' }],
+  DINING: [{ label: '테이블 준비 완료', to: 'SETTLED', variant: 'primary' }],
   HOLD: [
     { label: '이체 확인', to: 'PAID', variant: 'primary' },
     { label: '취소', to: 'CANCELED', variant: 'danger' },
@@ -116,11 +128,12 @@ function previewItems(items) {
 //   - StatusChip 카드 내부 제거: 컬럼 헤더가 이미 상태를 나타냄.
 //   - tone 클래스(border-divider/warning/danger) 는 기존 회귀 테스트 호환 위해 유지.
 function OrderCard({ order, tick, onAction, isPending = false }) {
+  const baselineAt = order.status === 'DINING' ? order.dining_at : order.transferred_at;
   const elapsedMin = useMemo(
-    () => calcElapsedMinutes(order.transferred_at, new Date(tick)),
-    [order.transferred_at, tick],
+    () => calcElapsedMinutes(baselineAt, new Date(tick)),
+    [baselineAt, tick],
   );
-  const tone = elapsedTone(elapsedMin);
+  const tone = order.status === 'DINING' ? diningElapsedTone(elapsedMin) : elapsedTone(elapsedMin);
   const displayName = pickName(order);
   const priceText = formatPrice(order.total_price);
   const actions = ACTION_BY_STATUS[order.status] ?? [];

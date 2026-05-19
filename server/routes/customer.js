@@ -26,6 +26,10 @@ import { consumeCoupon, CouponError } from '../domain/coupon.js';
 import { getPopularMenus } from '../domain/popularity.js';
 import { getBusinessState } from '../domain/business-state.js';
 import { transition } from '../domain/order-state.js';
+import {
+  getAvailability,
+  assertTableAvailable,
+} from '../domain/table-availability.js';
 
 // find_error_v2 — 주문 자격은 9자리 숫자 (학과 무관), 쿠폰 자격은 도메인(coupon.js)에서 37 검증.
 const ORDER_STUDENT_ID_PATTERN = /^\d{9}$/;
@@ -65,6 +69,20 @@ const CreateOrderSchema = z
           message: '학번은 숫자 9자리로 입력해주세요.',
         });
       }
+    }
+
+    // table_lock 라운드 P2-1 (Codex 재리뷰 2026-05-19) — 매장 식사는 table_no 필수.
+    // delivery_type이 undefined여도 서버 기본값이 'dineIn'이므로 미지정 = 매장 식사로 본다.
+    // 포장(takeout)만 table_no null/미지정 허용.
+    // (기존 프론트 CheckoutPage는 항상 delivery_type 명시 → 정상 흐름 영향 X.
+    //  API 직접 호출 시 매장 주문에 table_no 누락 케이스 차단.)
+    const isDineIn = val.delivery_type === 'dineIn' || val.delivery_type === undefined;
+    if (isDineIn && (val.table_no === null || val.table_no === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['table_no'],
+        message: '매장 식사 주문은 테이블 번호를 선택해주세요.',
+      });
     }
   });
 
@@ -119,11 +137,28 @@ export function customerRoutes(db) {
     res.json(getBusinessState(db));
   });
 
+  // ── GET /api/tables/availability (table_lock 브랜치 — Subagent 1) ──
+  // 사용자용: order_no/dining_at/locked_at 미포함 (Q2 확정).
+  // CLOSED 상태에서도 응답 가능 (GET_PASSTHROUGH_PATHS 화이트리스트 포함).
+  router.get('/api/tables/availability', (_req, res) => {
+    const { operating_date } = getBusinessState(db);
+    res.json(getAvailability(db, { operating_date }));
+  });
+
   // ── POST /api/orders (ADR-020 Pattern B + P0-3 쿠폰 위변조 방어) ──
   router.post('/api/orders', (req, res, next) => {
     try {
       const input = CreateOrderSchema.parse(req.body);
       const operating_date = getBusinessState(db).operating_date;
+
+      // table_lock — 테이블 사용 가능 여부 검증 (dineIn + table_no 있을 때만).
+      // zod 통과 후 / db.transaction 시작 전.
+      if (
+        (input.delivery_type ?? 'dineIn') === 'dineIn' &&
+        input.table_no != null
+      ) {
+        assertTableAvailable(db, { operating_date, table_no: input.table_no });
+      }
 
       // P0-3 (Codex 리뷰) — 쿠폰 위변조 방어.
       // pricing.js는 coupon.used만 보고 1,000원 할인하므로, 학번/외부인 검증을
@@ -307,6 +342,10 @@ function serializeOrder(o) {
     paid_at: toIsoUtc(o.paid_at),
     cooking_at: toIsoUtc(o.cooking_at),
     ready_at: toIsoUtc(o.ready_at),
+    // table_lock 라운드 (P2 재리뷰 보완 2026-05-19): 새 timestamp 필드도 ISO 변환 + 응답 포함.
+    // 프론트 elapsedMinutes 계산 + OrderSchema(dining_at/settled_at nullable optional) 정합.
+    dining_at: toIsoUtc(o.dining_at),
+    settled_at: toIsoUtc(o.settled_at),
     done_at: toIsoUtc(o.done_at),
   };
 }

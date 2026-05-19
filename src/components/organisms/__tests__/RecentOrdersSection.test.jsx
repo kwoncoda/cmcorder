@@ -136,6 +136,39 @@ describe('RecentOrdersSection (Bug 13)', () => {
     await waitFor(() => expect(screen.queryByTestId('recent-orders-section')).not.toBeInTheDocument());
   });
 
+  // ── table_lock: TERMINAL 확장 (DINING / SETTLED) ──────────────
+  it('★ DINING 상태 — 카드 숨김 + store에서 자동 제거', async () => {
+    apiFetch.mockResolvedValue({ status: 'DINING' });
+    useRecentOrdersStore.setState({
+      orders: [{ id: 40, no: 40, token: 'tkn', operating_date: '2026-05-20', savedAt: Date.now() }],
+    });
+    renderSection();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('recent-order-card-40')).not.toBeInTheDocument());
+    await waitFor(() => expect(useRecentOrdersStore.getState().orders.find((o) => o.id === 40)).toBeUndefined());
+  });
+
+  it('★ SETTLED 상태 — 카드 숨김 + store에서 자동 제거', async () => {
+    apiFetch.mockResolvedValue({ status: 'SETTLED' });
+    useRecentOrdersStore.setState({
+      orders: [{ id: 41, no: 41, token: 'tkn', operating_date: '2026-05-20', savedAt: Date.now() }],
+    });
+    renderSection();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByTestId('recent-order-card-41')).not.toBeInTheDocument());
+    await waitFor(() => expect(useRecentOrdersStore.getState().orders.find((o) => o.id === 41)).toBeUndefined());
+  });
+
+  it('★ READY 상태 — 카드 유지 (DINING/SETTLED 숨김이 READY에 영향 X)', async () => {
+    apiFetch.mockResolvedValue({ status: 'READY' });
+    useRecentOrdersStore.setState({
+      orders: [{ id: 42, no: 42, token: 'tkn', operating_date: '2026-05-20', savedAt: Date.now() }],
+    });
+    renderSection();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(screen.getByTestId('recent-order-card-42')).toBeInTheDocument();
+  });
+
   it('★ P2-3 — 마운트 시 pruneStale 호출로 TTL 지난 항목 사전 제거', async () => {
     const THREE_DAYS = 3 * 24 * 60 * 60 * 1000;
     apiFetch.mockResolvedValue({ status: 'COOKING' });

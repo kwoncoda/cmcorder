@@ -18,14 +18,22 @@ export class SettlementError extends Error {
   }
 }
 
+// table_lock 라운드 (2026-05-19): DINING도 진행 중 상태로 본다.
+// 식사 중 주문이 남아 있으면 정산 마감 차단 (ADR-012 회귀).
 const IN_PROGRESS_STATES = [
   'ORDERED',
   'TRANSFER_REPORTED',
   'PAID',
   'COOKING',
   'READY',
+  'DINING',
   'HOLD',
 ];
+
+// table_lock 라운드: 완료 매출 집계는 SETTLED 우선 + 레거시 DONE 호환.
+// 새 흐름은 READY → DINING → SETTLED 이므로 SETTLED가 정상 완료 상태.
+// DONE은 dead status이지만 legacy 데이터가 있을 경우를 위해 포함.
+const COMPLETED_STATES = ['SETTLED', 'DONE'];
 
 /**
  * 정산 마감 가능 여부 (ADR-012).
@@ -50,12 +58,14 @@ const COUPON_DISCOUNT_PER = 1000;
  * P1-3: 쿠폰 사용 건수 + 총 할인액 포함.
  */
 export function getSettlementSummary(db, operating_date) {
+  // table_lock: 완료 집계는 SETTLED + 레거시 DONE.
+  const completedPlaceholders = COMPLETED_STATES.map(() => '?').join(',');
   const totals = db
     .prepare(
       `SELECT COUNT(*) AS total_orders, COALESCE(SUM(total_price), 0) AS total_amount
-       FROM orders WHERE operating_date = ? AND status = 'DONE'`,
+       FROM orders WHERE operating_date = ? AND status IN (${completedPlaceholders})`,
     )
-    .get(operating_date);
+    .get(operating_date, ...COMPLETED_STATES);
 
   const placeholders = IN_PROGRESS_STATES.map(() => '?').join(',');
   const inProgress = db

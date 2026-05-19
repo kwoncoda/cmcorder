@@ -140,11 +140,12 @@ function rowsToCsv(headers, rows) {
 }
 
 function exportOrdersCsv(db) {
+  // table_lock 라운드 (2026-05-19): dining_at/settled_at 컬럼 포함 — 회계 추적용.
   const headers = [
     'id', 'no', 'operating_date', 'status', 'name', 'student_id', 'is_external',
     'delivery_type', 'table_no', 'total_price', 'depositor_name', 'bank',
     'amount', 'created_at', 'transferred_at', 'paid_at', 'cooking_at',
-    'ready_at', 'done_at',
+    'ready_at', 'dining_at', 'settled_at', 'done_at',
   ];
   const rows = db.prepare(`SELECT ${headers.join(', ')} FROM orders ORDER BY operating_date, no`).all();
   return rowsToCsv(headers, rows);
@@ -191,6 +192,8 @@ function serializeDb(db) {
 
 /**
  * 정산 요약 — summary.json 생성용.
+ * table_lock 라운드 (2026-05-19): 완료 집계는 SETTLED 우선 + 레거시 DONE 호환.
+ * 새 흐름은 READY → DINING → SETTLED 이므로 SETTLED가 정상 완료 상태.
  */
 function exportSummary(db) {
   return {
@@ -198,11 +201,11 @@ function exportSummary(db) {
       .prepare('SELECT operating_date FROM business_state WHERE id=1')
       .get()?.operating_date,
     total_orders: db
-      .prepare("SELECT COUNT(*) AS c FROM orders WHERE status = 'DONE'")
+      .prepare("SELECT COUNT(*) AS c FROM orders WHERE status IN ('SETTLED','DONE')")
       .get().c,
     total_amount: db
       .prepare(
-        "SELECT COALESCE(SUM(total_price), 0) AS s FROM orders WHERE status = 'DONE'",
+        "SELECT COALESCE(SUM(total_price), 0) AS s FROM orders WHERE status IN ('SETTLED','DONE')",
       )
       .get().s,
     generated_at: new Date().toISOString(),

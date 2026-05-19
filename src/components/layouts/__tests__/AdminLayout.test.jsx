@@ -27,6 +27,7 @@ function renderAt(path) {
           <Route path="/admin/settlement" element={<TestPage />} />
           <Route path="/admin/coupons" element={<TestPage />} />
           <Route path="/admin/transfers" element={<TestPage />} />
+          <Route path="/admin/tables" element={<TestPage />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -45,13 +46,15 @@ beforeEach(() => {
 });
 
 describe('AdminLayout — find_error_v3 nav · actor 라벨', () => {
-  it('★ 5개 nav 항목 렌더 (본부·메뉴·내역·정산·쿠폰)', () => {
+  it('★ 6개 nav 항목 렌더 (본부·메뉴·내역·정산·쿠폰·테이블 잠금)', () => {
     renderAt('/admin/dashboard');
     expect(screen.getByTestId('admin-nav-dashboard')).toBeInTheDocument();
     expect(screen.getByTestId('admin-nav-menus')).toBeInTheDocument();
     expect(screen.getByTestId('admin-nav-history')).toBeInTheDocument();
     expect(screen.getByTestId('admin-nav-settlement')).toBeInTheDocument();
     expect(screen.getByTestId('admin-nav-coupons')).toBeInTheDocument();
+    expect(screen.getByTestId('admin-nav-tables')).toBeInTheDocument();
+    expect(screen.getByTestId('admin-nav-tables').textContent).toBe('테이블 잠금');
   });
 
   it("★ '이체확인' nav 항목 제거 — admin-nav-transfers testid 부재", () => {

@@ -145,4 +145,34 @@ describe('OrderDetailPage', () => {
     const lines = content.split('\n').length;
     expect(lines).toBeLessThanOrEqual(120);
   });
+
+  it('★ READY 상태일 때 "전달 완료"(→DINING) 버튼 표시, to: DONE 아님', async () => {
+    apiFetch.mockResolvedValue({ ...SAMPLE_PAID, status: 'READY', ready_at: '17:34' });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('action-deliver')).toBeInTheDocument();
+    });
+    // "전달 완료" 버튼이 DINING 으로 전이하는지 검증 — 클릭 후 body 확인.
+    apiFetch.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ...SAMPLE_PAID, status: 'READY' });
+    fireEvent.click(screen.getByTestId('action-deliver'));
+    await waitFor(() => {
+      const calls = apiFetch.mock.calls.filter((c) => c[0].includes('/transition'));
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      expect(calls[0][1].body).toEqual({ action: 'deliver', to: 'DINING' });
+    });
+  });
+
+  it('★ DINING 상태일 때 "테이블 준비 완료"(→SETTLED) 버튼 표시', async () => {
+    apiFetch.mockResolvedValue({
+      ...SAMPLE_PAID,
+      status: 'DINING',
+      ready_at: '17:34',
+      dining_at: '17:35',
+    });
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('action-settle_table')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('action-cancel')).not.toBeInTheDocument();
+  });
 });

@@ -12,11 +12,12 @@
 //  - 서버 에러 시 ErrorState inline 렌더
 //  - 페이지 ≤120줄 — §3.5 1조
 //  - a11y
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+//  - Subagent 5: 테이블 가용성 UI (점유/식사/잠금 셀 disabled, 메시지 표시)
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { axe } from 'vitest-axe';
-import CheckoutPage from '../CheckoutPage.jsx';
+import CheckoutPage, { TABLE_NOT_AVAILABLE_MESSAGE } from '../CheckoutPage.jsx';
 import useCartStore from '../../../store/cart.js';
 
 // apiFetch mock — 서버 호출 격리.
@@ -30,6 +31,9 @@ vi.mock('../../../api/client.js', async () => {
 import { apiFetch, ApiError } from '../../../api/client.js';
 
 const ITEM = { menuId: 1, name: '후라이드', basePrice: 18000, quantity: 1, category: 'chicken' };
+
+// 모든 테이블 available — availability mount fetch 기본값
+const ALL_AVAILABLE = Array.from({ length: 15 }, (_, i) => ({ table_no: i + 1, status: 'available' }));
 
 function renderPage(initialPath = '/checkout') {
   return render(
@@ -45,9 +49,15 @@ function renderPage(initialPath = '/checkout') {
   );
 }
 
+// POST /api/orders 호출 여부 확인 헬퍼 (availability fetch와 구분)
+const wasPostCalled = () =>
+  apiFetch.mock.calls.some(([, opts]) => opts?.method === 'POST');
+
 beforeEach(() => {
   useCartStore.setState({ items: [ITEM] });
   vi.clearAllMocks();
+  // 기본: 모든 테이블 available (availability mount fetch가 올바른 배열 반환)
+  apiFetch.mockResolvedValue(ALL_AVAILABLE);
 });
 
 describe('CheckoutPage', () => {
@@ -184,7 +194,8 @@ describe('CheckoutPage', () => {
   });
 
   // ── 폼 제출 흐름 ─────────────────────────────────────────────
-  it('★ 폼 검증 통과 시 apiFetch 호출 + clearCart + navigate', async () => {
+  it('★ 폼 검증 통과 시 apiFetch(POST) 호출 + clearCart + navigate', async () => {
+    // apiFetch: 1st = availability(mount), 2nd = availability(refresh), 3rd = POST
     apiFetch.mockResolvedValue({ id: 42 });
     renderPage();
 
@@ -194,21 +205,20 @@ describe('CheckoutPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
 
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    await waitFor(() => expect(wasPostCalled()).toBe(true));
     await waitFor(() =>
       expect(screen.getByTestId('complete-page-stub')).toBeInTheDocument(),
     );
     expect(useCartStore.getState().items).toHaveLength(0);
   });
 
-  it('★ 폼 검증 실패 시 제출 차단 (apiFetch 미호출)', async () => {
-    apiFetch.mockResolvedValue({ id: 42 });
+  it('★ 폼 검증 실패 시 제출 차단 (POST 미호출)', async () => {
     renderPage();
     // 비어 있는 상태에서 제출
     fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
     // 검증 에러 표시 (find_error_v2: 학번 9자리 메시지)
     expect(screen.getByText(/학번은 숫자 9자리로 입력해주세요/)).toBeInTheDocument();
-    expect(apiFetch).not.toHaveBeenCalled();
+    expect(wasPostCalled()).toBe(false);
   });
 
   it('★ find_error_v2 — 9자리 비-37 학번도 제출 성공 (coupon: null)', async () => {
@@ -218,26 +228,30 @@ describe('CheckoutPage', () => {
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
     fireEvent.change(screen.getByLabelText(/테이블/), { target: { value: '5' } });
     fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, opts] = apiFetch.mock.calls[0];
-    expect(opts.body.student_id).toBe('202111123');
-    expect(opts.body.coupon).toBeNull();
+    await waitFor(() => expect(wasPostCalled()).toBe(true));
+    const postCall = apiFetch.mock.calls.find(([, opts]) => opts?.method === 'POST');
+    expect(postCall[1].body.student_id).toBe('202111123');
+    expect(postCall[1].body.coupon).toBeNull();
   });
 
-  it('★ 빈 카트 + 모든 필드 정상 시에도 제출 차단', () => {
+  it('★ 빈 카트 + 모든 필드 정상 시에도 제출 차단', async () => {
     useCartStore.setState({ items: [] });
     renderPage();
     fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637001' } });
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
     fireEvent.change(screen.getByLabelText(/테이블/), { target: { value: '9' } });
     fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
-    expect(apiFetch).not.toHaveBeenCalled();
+    // 제출 직전 refresh()가 await되는 async submit 이후에도 POST 호출 X
+    await new Promise((r) => setTimeout(r, 50));
+    expect(wasPostCalled()).toBe(false);
   });
 
   it('★ 서버 에러(ApiError) 시 ErrorState inline 렌더', async () => {
-    apiFetch.mockRejectedValue(
-      new ApiError('메뉴가 매진되었습니다', { status: 409, code: 'MENU_SOLD_OUT' }),
-    );
+    // availability: OK, refresh: OK, POST: 에러
+    apiFetch
+      .mockResolvedValueOnce(ALL_AVAILABLE)  // mount availability
+      .mockResolvedValueOnce(ALL_AVAILABLE)  // pre-submit refresh
+      .mockRejectedValueOnce(new ApiError('메뉴가 매진되었습니다', { status: 409, code: 'MENU_SOLD_OUT' }));
     renderPage();
     fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637001' } });
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
@@ -255,10 +269,129 @@ describe('CheckoutPage', () => {
     fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '외부인' } });
     fireEvent.change(screen.getByLabelText(/테이블/), { target: { value: '3' } });
     fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
-    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
-    const [, opts] = apiFetch.mock.calls[0];
-    expect(opts.body.is_external).toBe(true);
-    expect(opts.body.student_id).toBeNull();
+    await waitFor(() => expect(wasPostCalled()).toBe(true));
+    const postCall = apiFetch.mock.calls.find(([, opts]) => opts?.method === 'POST');
+    expect(postCall[1].body.is_external).toBe(true);
+    expect(postCall[1].body.student_id).toBeNull();
+  });
+
+  // ── Subagent 5 — 테이블 가용성 UI ───────────────────────────
+  describe('테이블 가용성', () => {
+    // 테이블 radiogroup 스코프 헬퍼 (DeliveryTypeSelector의 radio 2개와 구분)
+    const tableGroup = () => screen.getByRole('radiogroup', { name: /좌석 번호/ });
+    const tableBtn = (n) => within(tableGroup()).getAllByRole('radio').find((b) => b.textContent === String(n));
+
+    const mkAvailability = (overrides = []) => {
+      const base = Array.from({ length: 15 }, (_, i) => ({ table_no: i + 1, status: 'available' }));
+      for (const { table_no, status } of overrides) {
+        const idx = base.findIndex((t) => t.table_no === table_no);
+        if (idx >= 0) base[idx] = { table_no, status };
+      }
+      return base;
+    };
+
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('5번 occupied → 5번 셀 aria-disabled="true"', async () => {
+      apiFetch.mockResolvedValue(mkAvailability([{ table_no: 5, status: 'occupied' }]));
+      renderPage();
+      await waitFor(() => expect(tableBtn(5)).toHaveAttribute('aria-disabled', 'true'));
+    });
+
+    it('7번 dining → 7번 셀 aria-disabled="true"', async () => {
+      apiFetch.mockResolvedValue(mkAvailability([{ table_no: 7, status: 'dining' }]));
+      renderPage();
+      await waitFor(() => expect(tableBtn(7)).toHaveAttribute('aria-disabled', 'true'));
+    });
+
+    it('10번 locked → 10번 셀 aria-disabled="true"', async () => {
+      apiFetch.mockResolvedValue(mkAvailability([{ table_no: 10, status: 'locked' }]));
+      renderPage();
+      await waitFor(() => expect(tableBtn(10)).toHaveAttribute('aria-disabled', 'true'));
+    });
+
+    it('사용 가능 셀 클릭 → tableNo 선택됨', async () => {
+      renderPage();
+      const btn = tableBtn(3);
+      fireEvent.click(btn);
+      expect(btn).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('사용 불가 셀 클릭 → tableNo 미선택 + 에러 메시지 표시', async () => {
+      apiFetch.mockResolvedValue(mkAvailability([{ table_no: 5, status: 'occupied' }]));
+      renderPage();
+      await waitFor(() => expect(tableBtn(5)).toHaveAttribute('aria-disabled', 'true'));
+      fireEvent.click(tableBtn(5));
+      expect(tableBtn(5)).not.toHaveAttribute('aria-checked', 'true');
+      expect(screen.getByText(TABLE_NOT_AVAILABLE_MESSAGE)).toBeInTheDocument();
+    });
+
+    it('availability 5xx → 모든 셀 enable (graceful fallback)', async () => {
+      apiFetch.mockRejectedValue(new Error('서버 오류'));
+      renderPage();
+      // hook 에러 처리 완료까지 대기 — isReady = true 후 aria-disabled 없음
+      await waitFor(() => {
+        const btns = within(tableGroup()).getAllByRole('radio');
+        btns.forEach((btn) => expect(btn).not.toHaveAttribute('aria-disabled'));
+      });
+    });
+
+    it('마운트 시 availability API 1회 호출, 30초 후에도 1회 (no polling)', async () => {
+      vi.useFakeTimers();
+      renderPage();
+      // 마이크로태스크 플러시 (mock resolved → useApi state 업데이트)
+      await vi.runAllTicks();
+      const countBefore = apiFetch.mock.calls.filter(([url]) => url === '/api/tables/availability').length;
+      vi.advanceTimersByTime(30000);
+      await vi.runAllTicks();
+      const countAfter = apiFetch.mock.calls.filter(([url]) => url === '/api/tables/availability').length;
+      // mount 이후 추가 호출 없음 (no polling)
+      expect(countAfter).toBe(countBefore);
+      expect(countAfter).toBeGreaterThanOrEqual(1);
+    });
+
+    it('제출 시 두 번째 availability fetch 호출 (mount + pre-submit 총 2회)', async () => {
+      apiFetch.mockResolvedValue({ id: 10 });
+      renderPage();
+      // 마운트 availability fetch 완료 대기
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/tables/availability', expect.any(Object)));
+      fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637001' } });
+      fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+      fireEvent.click(tableBtn(3));
+      fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
+      await waitFor(() => expect(wasPostCalled()).toBe(true));
+      const availCalls = apiFetch.mock.calls.filter(([url]) => url === '/api/tables/availability');
+      expect(availCalls).toHaveLength(2); // mount + pre-submit
+    });
+
+    it('제출 직전 fetch에서 선택 테이블 occupied 발견 → POST 호출 X + 에러 메시지', async () => {
+      // mount: available, refresh: 5번 occupied
+      apiFetch
+        .mockResolvedValueOnce(ALL_AVAILABLE)  // mount availability
+        .mockResolvedValueOnce(mkAvailability([{ table_no: 5, status: 'occupied' }])); // pre-submit refresh
+      renderPage();
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/tables/availability', expect.any(Object)));
+      fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637001' } });
+      fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+      fireEvent.click(tableBtn(5));
+      fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
+      await waitFor(() => expect(screen.getByText(TABLE_NOT_AVAILABLE_MESSAGE)).toBeInTheDocument());
+      expect(wasPostCalled()).toBe(false);
+    });
+
+    it('409 TABLE_NOT_AVAILABLE 응답 시 에러 메시지 표시', async () => {
+      apiFetch
+        .mockResolvedValueOnce(ALL_AVAILABLE)  // mount
+        .mockResolvedValueOnce(ALL_AVAILABLE)  // pre-submit refresh
+        .mockRejectedValueOnce(new ApiError(TABLE_NOT_AVAILABLE_MESSAGE, { status: 409, code: 'TABLE_NOT_AVAILABLE' }));
+      renderPage();
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledWith('/api/tables/availability', expect.any(Object)));
+      fireEvent.change(screen.getByLabelText('학번', { exact: false, selector: 'input#studentId' }), { target: { value: '202637001' } });
+      fireEvent.change(screen.getByLabelText(/이름/), { target: { value: '홍길동' } });
+      fireEvent.click(tableBtn(3));
+      fireEvent.click(screen.getByRole('button', { name: '주문 접수' }));
+      await waitFor(() => expect(screen.getByText(TABLE_NOT_AVAILABLE_MESSAGE)).toBeInTheDocument());
+    });
   });
 
   // ── 회귀 — 페이지 줄수 + a11y ────────────────────────────────
