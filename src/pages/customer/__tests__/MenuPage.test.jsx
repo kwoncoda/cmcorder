@@ -193,4 +193,41 @@ describe('MenuPage', () => {
     const lines = content.split('\n').length;
     expect(lines).toBeLessThanOrEqual(120);
   });
+
+  // design_fix_v4 Task 1 — 홈 카테고리 바 위 TableMapCTA 삽입 검증.
+  describe('design_fix_v4 — TableMapCTA 통합', () => {
+    it('★ home-table-map-cta 가 메뉴 페이지에 렌더된다', () => {
+      useMenuData.mockReturnValue({
+        menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+      });
+      renderPage();
+      expect(screen.getByTestId('home-table-map-cta')).toBeInTheDocument();
+    });
+
+    it('★ CTA 는 RecentOrdersSection 다음, CategoryTabs *앞* 위치 (DOM 순서)', () => {
+      useMenuData.mockReturnValue({
+        menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+      });
+      renderPage();
+      const page = screen.getByTestId('menu-page');
+      const cta = screen.getByTestId('home-table-map-cta');
+      const tabs = screen.getByTestId('category-tabs');
+      // 메뉴 페이지 안에 둘 다 존재
+      expect(page.contains(cta)).toBe(true);
+      expect(page.contains(tabs)).toBe(true);
+      // DOM 위치 — CTA 가 tabs 앞에 와야 함.
+      const pos = cta.compareDocumentPosition(tabs);
+      // Node.DOCUMENT_POSITION_FOLLOWING = 4 → tabs 가 cta 뒤에 있음.
+      expect(pos & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('★ CTA 클릭 시 /map 으로 이동 (href 검증)', () => {
+      useMenuData.mockReturnValue({
+        menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+      });
+      renderPage();
+      const cta = screen.getByTestId('home-table-map-cta');
+      expect(cta).toHaveAttribute('href', '/map');
+    });
+  });
 });

@@ -12,6 +12,7 @@ import CategoryTabs from '../../components/organisms/CategoryTabs.jsx';
 import MenuList from '../../components/organisms/MenuList.jsx';
 import StickyCartBar from '../../components/organisms/StickyCartBar.jsx';
 import RecentOrdersSection from '../../components/organisms/RecentOrdersSection.jsx';
+import TableMapCTA from '../../components/organisms/TableMapCTA.jsx';
 
 const CATEGORIES = [
   { value: 'all',         label: '전체' },
@@ -53,6 +54,7 @@ export default function MenuPage() {
   return (
     <section data-testid="menu-page" style={{ paddingBottom: 96 }}>
       <RecentOrdersSection />
+      <TableMapCTA />
       <CategoryTabs categories={CATEGORIES} value={category} onChange={setCategory} />
       {category === 'all' && <RecommendedBanner menus={popular} />}
       {filteredMenus.length === 0 ? (
