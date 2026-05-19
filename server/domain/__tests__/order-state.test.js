@@ -132,6 +132,9 @@ describe('order-state — design_fix_v4 takeout 분기', () => {
     // 즉, takeout 옵션이 PAID→COOKING 같은 일반 전이를 막거나 추가하지 않는다.
     expect(canTransition('PAID', 'COOKING', { deliveryType: 'takeout' })).toBe(true);
     expect(canTransition('COOKING', 'READY', { deliveryType: 'takeout' })).toBe(true);
+    // P3 권고 (code reviewer): takeout READY → CANCELED 도 fall-through 합법
+    // — 포장이라도 READY 단계에서 *취소될 수 있어야* 한다. 명시 회귀 보호.
+    expect(canTransition('READY', 'CANCELED', { deliveryType: 'takeout' })).toBe(true);
     // 불법은 여전히 불법.
     expect(canTransition('ORDERED', 'PAID', { deliveryType: 'takeout' })).toBe(false);
   });
