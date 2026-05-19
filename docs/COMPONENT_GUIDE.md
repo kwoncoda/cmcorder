@@ -422,6 +422,25 @@ ErrorLayout (마스코트 중심)
 
 **사용:** 메뉴 카드, 카트 항목, 주문 상세.
 
+### 3.8 `CheckoutSubmitError` ★ design_fix_v3 신규 — *2026-05-19*
+
+**역할:** 주문 제출(`POST /api/orders`) 에러 노출 분기 molecule. `submitError = { message, code? }` 객체를 받아 *code 에 따라* 다른 시각 톤으로 노출.
+
+**분기:**
+- `error.code === 'ALREADY_USED'` (쿠폰 중복) → **화면 가운데 모달 팝업** (사설 `CouponBlockedModal`)
+  - 마크업: `role="alertdialog"` + `aria-modal="true"` + `aria-labelledby` + `aria-describedby` + `data-testid="checkout-coupon-blocked"`
+  - 위치: `fixed inset-0 z-50 flex items-center justify-center p-md` (모바일·데스크탑 동일하게 화면 가운데)
+  - 카드 내용: 마스코트 😢 → 메시지(h2 `font-display font-bold text-lg`) → 안내(p `text-sm text-muted` — `쿠폰 사용을 해제하면 같은 학번으로 일반 주문은 가능해요.`) → `쿠폰 사용 해제` primary + `닫기` ghost 두 버튼
+  - 매너: ① 열림 시 `쿠폰 사용 해제` 버튼 자동 포커스, ② Escape 키 닫기, ③ backdrop(`data-testid="coupon-blocked-backdrop"`) 클릭 닫기, ④ body `overflow=hidden` 스크롤 잠금. ⑤ 언마운트 시 이전 포커스·overflow 복귀
+  - 버튼 동작 분리: `쿠폰 사용 해제` → 쿠폰 체크 해제 + 모달 닫힘 (`onClearCoupon`) · `닫기` → 모달만 닫힘, 쿠폰 체크 유지 (`onClose`)
+- 그 외 코드 (`TABLE_NOT_AVAILABLE` / `MENU_SOLD_OUT` / 네트워크 등) → 기존 `ErrorState variant="inline-field"` — 폼 아래 한 줄 빨간 텍스트
+
+**배경:** R1 에서 `ErrorState variant="card"` 로 노출했으나 sticky bar/긴 영수증 아래라 모바일 발견이 늦다는 사용자 피드백 → R2 에서 가운데 모달 팝업으로 격상.
+
+**props:** `error`, `onClearCoupon`, `onClose`.
+
+**회귀:** `src/components/molecules/__tests__/CheckoutSubmitError.test.jsx` 12 케이스 + `src/pages/customer/__tests__/CheckoutPage.test.jsx` ALREADY_USED 모달 3 케이스.
+
 ---
 
 ## 4. Organisms (블록 컴포넌트)
@@ -786,32 +805,29 @@ ErrorLayout (마스코트 중심)
 
 **역할:** 부스 약도 + 테이블 번호·위치 + 본인 테이블 강조 풀스크린 모달. 메뉴(C-1)·주문 완료(C-4) 화면 우상단 🗺️ 아이콘 진입.
 
-**구조 (`SCREEN_STRUCTURE.md` §3.13 참조) — *2026-05-14 결정 e: 상단 X + 하단 큰 닫기*:**
+**구조 (`SCREEN_STRUCTURE.md` §3.13 참조) — *2026-05-14 결정 e + design_fix_v2 후속(하단 닫기 제거) + design_fix_v3(legend 두 줄 삭제)*:**
 ```
 ┌─────────────────────────────────────┐
-│ 🗺️ 부스 미니맵            [×]        │ ← 상단 우상단 X (부 옵션)
+│ 🗺️ 테이블 지도          [×]         │ ← 상단 우상단 X (유일 닫기 경로 + Esc/backdrop)
 ├─────────────────────────────────────┤
 │  ┌─────────────────────────────┐   │
-│  │   [부스 약도 PNG/JPG 또는    ]   │
+│  │   [부스 약도 .webp 또는      ]   │
 │  │    CSS 그리드 fallback]     │   │
 │  │                            │   │
 │  │  T1   T2   T3   T4         │   │
-│  │  T5   T6  [T7]  T8         │ ★ 본인 테이블 (형광 옐로 펄스)
+│  │  T5   T6  [T7]  T8         │ ★ 본인 테이블 (형광 옐로 펄스, 격자 fallback 모드)
 │  │  T9  T10  T11  T12         │   │
 │  │       [입구 🚪]              │   │
 │  └─────────────────────────────┘   │
-│  내 테이블: #7                       │
-│  수령: 매장 식사                     │
-├─────────────────────────────────────┤
-│         [ 닫기 ] (sticky)           │ ← ★ 하단 큰 닫기 버튼 (한 손 도달)
 └─────────────────────────────────────┘
 ```
+> *2026-05-19 design_fix_v3*: 하단 legend(`내 테이블: #N` / `총 N개 테이블` 두 줄)는 사용자 요청으로 삭제. 본인 테이블 정보는 이미지 `aria-label="내 테이블 N번"` + 격자 fallback 셀의 형광 옐로 펄스로 충분.
 
 **props:**
 - `myTableNo`: number (선택 — 매장 식사 + 주문 후만)
 - `mapImage`: string URL (선택 — 미수령 시 CSS 그리드 fallback). *2026-05-19 minimap_design: `/map/table-location.webp` 적용*.
 - `gridSize`: {cols: 4, rows: 4} (fallback용 — 기본). *2026-05-19 minimap_design: MapPage는 이미지 모드만 사용, 격자는 dead code*.
-- `totalTables`: number (선택 — legend 표기 + 격자 셀 cap 기준. 미지정 시 `cols*rows`). *2026-05-19 minimap_design 신규 — 1~15 정책*.
+- `totalTables`: number (선택 — 격자 셀 cap 기준. 미지정 시 `cols*rows`). *2026-05-19 minimap_design 신규 — 1~15 정책. design_fix_v3 에서 legend 삭제 후로는 fallback 격자 cap 전용*.
 
 **렌더링 분기:**
 1. `mapImage` 존재 → `<img src={mapImage}>` (`width:100%; max-height:70vh; object-fit:contain`) + `aria-label="내 테이블 N번"`. *2026-05-19: 부정확한 가운데 좌표 overlay 마커는 제거. 위치 강조는 하단 legend + alt 텍스트로 일원화.*
@@ -1114,4 +1130,6 @@ ErrorLayout (마스코트 중심)
 | Layout/Sticky/Cart 시각 자산 | 이모지(🗺️·🎒) → PUBG 그래픽 `<img>` 5위치 치환 + CheckoutPage 개인정보 수집 안내. design_fix_v2 1차 (2026-05-18) |
 | TransferReportForm·StatusPage·CompletePage | "다른 이름으로 이체" 분기·`OrderTimeline`·sticky 라벨 행·ghost 버튼 제거. 사용자 흐름 트림. design_fix_v2 2차 (2026-05-19) |
 | MenuAdminPage·SettlementPage | 사용자 노출 개발자 메모(`Pattern B (ADR-020)` 푸터, close-guard 꼬리 `(ADR-012)`) 제거. design_fix_v2 3차 (2026-05-19) |
+| §4.12 BoothMinimapModal | 하단 `.minimap-legend` 두 줄(`내 테이블: -(포장 또는 일반)` / `총 N개 테이블`) 삭제. `totalTables` prop 은 fallback 격자 cap 전용으로 잔존. design_fix_v3 (2026-05-19) |
+| §3.8 CheckoutSubmitError | 신규. `ALREADY_USED` 는 화면 가운데 `role="alertdialog"` 모달 팝업 (마스코트 + `쿠폰 사용 해제` / `닫기` 두 버튼 + Escape · backdrop · 자동 포커스 · 스크롤 잠금). 다른 code 는 기존 inline-field. design_fix_v3 (2026-05-19) |
 | §9 미정 → §9·§10 갱신 | 도장·카모 CSS 결정 / 카탈로그 페이지 후속 X (G14) / 신규 4 컴포넌트 명시 |

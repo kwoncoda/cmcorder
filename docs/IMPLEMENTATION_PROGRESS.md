@@ -128,3 +128,16 @@ DINING/SETTLED 상태 신설 + 테이블 점유 가드 + 어드민 잠금 페이
 **테스트 추이 (Codex 보완):** 1311 (1차) → 1339 (P1) → 1343 (P2). 신규 회귀 +21건. 기존 페이로드 53+개에 `delivery_type: 'takeout'` 보강 (테스트 의도 보존, 기능 변화 0). lint 0 error / 3 기존 warning. production build 정상.
 
 작업 문서: `docs/tasks/2026-05-19-table-occupancy-codex-fixes.md`.
+
+---
+
+## design_fix_v3 라운드 (`design_fix_v3`, 2026-05-19)
+
+D-1 리허설 직전 사용자 두 건 요청 — 미니맵 legend 문구 두 줄 삭제 + ALREADY_USED 에러를 화면 가운데 모달 팝업으로 격상. **새 ADR 신설 없이** ADR-019/021/034 (쿠폰 정책) 보존 범위 안에서 UX 노출 형태만 변경.
+
+| 차수 | 일자 | 범위 | 커밋 | 작업 문서 |
+|---|---|---|---|---|
+| R1 (카드) | 2026-05-19 | ① `BoothMinimapModal.jsx` `.minimap-legend` div 7줄 삭제 (`내 테이블: -(포장 또는 일반)` / `총 N개 테이블`). `totalTables` prop 은 fallback 격자 cap 용도로 계속 유효. ② `ALREADY_USED` 에러를 폼 아래 inline-field → `ErrorState variant="card"` (마스코트 + 안내 + `쿠폰 사용 해제` CTA). 신규 `src/components/molecules/CheckoutSubmitError.jsx` 추가. | `98f2b1f` | `docs/tasks/2026-05-19-minimap-legend-and-coupon-blocked-card.md` |
+| R2 (모달) | 2026-05-19 | R1 카드가 sticky bar/긴 영수증 아래라 모바일에서 발견이 늦다는 사용자 피드백 — 화면 가운데 `role="alertdialog"` 모달 팝업으로 전환. 마스코트 + 메시지 + 안내 + `쿠폰 사용 해제` / `닫기` 두 버튼 + Escape · backdrop 닫기 + body 스크롤 잠금 + 자동 포커스 + cleanup. `submitError` state 를 `{ message, code? }` 객체로 격상하되 `CheckoutPage.jsx ≤ 120줄` 유지. | `98f2b1f` | 같은 문서 R2 섹션 |
+
+**테스트 추이:** 1343 (P2 직후) → 1351 (R1: molecule 6 + 통합 2) → **1358** (R2: molecule 6 추가 + 통합 1 추가). production 번들 305.10 kB (gzip 95.01 kB, R1 대비 +1.56 kB). 운영 경로(서버 middleware / 정적 자산 / nginx) 미변경 → 4 단계 사이드체크 트리거 안 함.
