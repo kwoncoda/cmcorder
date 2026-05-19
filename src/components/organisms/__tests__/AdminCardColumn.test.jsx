@@ -561,9 +561,10 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
   });
 
   // ── READY → DINING 전이 버튼 회귀 ──
-  it('★ READY 카드 버튼 라벨 "전달 완료" + to: "DINING" 호출 (DONE 아님)', () => {
+  // design_fix_v4 (2026-05-19): dineIn 만 DINING 으로 전이. delivery_type 명시.
+  it('★ dineIn READY 카드 버튼 라벨 "전달 완료" + to: "DINING" 호출 (DONE 아님)', () => {
     const onAction = vi.fn();
-    const orders = [mkOrder({ id: 17, no: 17, status: 'READY' })];
+    const orders = [mkOrder({ id: 17, no: 17, status: 'READY', delivery_type: 'dineIn', table_no: 3 })];
     render(
       <AdminCardColumn title="x" status="READY" orders={orders} tick={BASE_TICK} onAction={onAction} />,
     );
@@ -572,6 +573,35 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     expect(btn).toBeInTheDocument();
     fireEvent.click(btn);
     expect(onAction).toHaveBeenCalledWith(17, 'DINING');
+  });
+
+  // ── design_fix_v4 — takeout READY → SETTLED 직접 전이 ─────────────────────
+  // 포장은 DINING 단계 없이 READY → SETTLED 로 바로 전이.
+  // 운영자 라벨은 dineIn/takeout 둘 다 "전달 완료" 로 통일 — 인지 부담 최소.
+  it('★ design_fix_v4 — takeout READY 카드 버튼 라벨 "전달 완료" + to: "SETTLED" 호출', () => {
+    const onAction = vi.fn();
+    const orders = [mkOrder({ id: 18, no: 18, status: 'READY', delivery_type: 'takeout', table_no: null })];
+    render(
+      <AdminCardColumn title="x" status="READY" orders={orders} tick={BASE_TICK} onAction={onAction} />,
+    );
+    const card = screen.getByTestId('admin-order-card-18');
+    const btn = within(card).getByRole('button', { name: '전달 완료' });
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    // takeout 은 DINING 건너뛰고 SETTLED 로 직접.
+    expect(onAction).toHaveBeenCalledWith(18, 'SETTLED');
+  });
+
+  it('★ design_fix_v4 — delivery_type 누락(undefined) 시 dineIn 기본 → DINING (backwards-compat)', () => {
+    const onAction = vi.fn();
+    // delivery_type 명시 X 인 레거시 데이터/테스트 픽스처 회귀 보호.
+    const orders = [mkOrder({ id: 19, no: 19, status: 'READY' })];
+    render(
+      <AdminCardColumn title="x" status="READY" orders={orders} tick={BASE_TICK} onAction={onAction} />,
+    );
+    const card = screen.getByTestId('admin-order-card-19');
+    fireEvent.click(within(card).getByRole('button', { name: '전달 완료' }));
+    expect(onAction).toHaveBeenCalledWith(19, 'DINING');
   });
 
   // ── DINING 컬럼 ──

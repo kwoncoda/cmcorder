@@ -90,7 +90,7 @@ function formatLocationLabel(order) {
 //   TRANSFER_REPORTED → 확인 / 보류
 //   PAID              → 조리 시작
 //   COOKING           → 조리 완료
-//   READY             → 전달 완료 (→ DINING)
+//   READY             → 전달 완료 (dineIn → DINING / takeout → SETTLED, 아래 getActionsForOrder 분기)
 //   DINING            → 테이블 준비 완료 (→ SETTLED)
 //   HOLD              → 이체 확인 / 취소  (find_error_v2: 재확인 → 이체 확인 으로 라벨 변경)
 const ACTION_BY_STATUS = {
@@ -108,6 +108,17 @@ const ACTION_BY_STATUS = {
     { label: '취소', to: 'CANCELED', variant: 'danger' },
   ],
 };
+
+// design_fix_v4 (2026-05-19): order 별 액션 결정.
+//   - takeout READY 카드는 DINING 을 건너뛰고 SETTLED 로 직접 전이.
+//     라벨은 dineIn 과 동일하게 "전달 완료" — 운영자 인지 부담 최소화.
+//   - 그 외 상태/형태는 ACTION_BY_STATUS 표 그대로.
+function getActionsForOrder(order) {
+  if (order.status === 'READY' && order.delivery_type === 'takeout') {
+    return [{ label: '전달 완료', to: 'SETTLED', variant: 'primary' }];
+  }
+  return ACTION_BY_STATUS[order.status] ?? [];
+}
 
 // items 미리보기 — 최대 3개를 "이름 ×수량" 으로 반환, 초과 시 surplus 카운트.
 function previewItems(items) {
@@ -136,7 +147,7 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
   const tone = order.status === 'DINING' ? diningElapsedTone(elapsedMin) : elapsedTone(elapsedMin);
   const displayName = pickName(order);
   const priceText = formatPrice(order.total_price);
-  const actions = ACTION_BY_STATUS[order.status] ?? [];
+  const actions = getActionsForOrder(order);
   const itemsPreview = previewItems(order.items);
   const locationLabel = formatLocationLabel(order);
   const bankLabel = order.status === 'TRANSFER_REPORTED' ? formatBankLabel(order) : null;

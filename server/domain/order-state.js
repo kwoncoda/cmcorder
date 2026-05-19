@@ -57,17 +57,39 @@ export class StateTransitionError extends Error {
 
 /**
  * 합법 여부만 반환 — throw하지 않는 가드.
+ *
+ * design_fix_v4 (2026-05-19): takeout 주문은 READY → SETTLED 직접 전이 허용
+ *   (DINING 건너뜀). 반대로 takeout 의 READY → DINING 은 차단 (테이블 점유
+ *   의미가 없어 방어선으로 명시 거부). LEGAL_TRANSITIONS 표 자체는 변경하지
+ *   않는다 — dineIn 기본 흐름은 그대로, DONE dead-status 회귀 보호.
+ *
+ * @param {string} from
+ * @param {string} to
+ * @param {{ deliveryType?: 'dineIn'|'takeout' }} [opts]
  */
-export function canTransition(from, to) {
+export function canTransition(from, to, opts = {}) {
+  const { deliveryType } = opts;
+  // takeout 특수 케이스 (design_fix_v4):
+  //   READY → SETTLED 합법 (DINING 건너뜀)
+  //   READY → DINING 불법 (포장은 테이블 점유 의미 없음 — 방어선)
+  if (deliveryType === 'takeout' && from === 'READY') {
+    if (to === 'SETTLED') return true;
+    if (to === 'DINING') return false;
+  }
+  // 기본: LEGAL_TRANSITIONS 표 — dineIn 흐름 (또는 deliveryType 미지정).
   return LEGAL_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 /**
  * 전이 검증 — 불법이면 StateTransitionError throw.
  * (상태 변경 자체는 호출부에서 SQL UPDATE — 본 함수는 검증만)
+ *
+ * @param {string} from
+ * @param {string} to
+ * @param {{ deliveryType?: 'dineIn'|'takeout' }} [opts]
  */
-export function transition(from, to) {
-  if (!canTransition(from, to)) {
+export function transition(from, to, opts = {}) {
+  if (!canTransition(from, to, opts)) {
     throw new StateTransitionError(from, to);
   }
 }
