@@ -236,6 +236,7 @@ describe('GET /admin/api/orders', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/orders');
@@ -254,6 +255,7 @@ describe('GET /admin/api/orders', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/orders?status=ORDERED');
@@ -274,6 +276,7 @@ describe('GET /admin/api/orders/:id', () => {
         items: [{ menu_id: 1, quantity: 2 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
@@ -296,7 +299,7 @@ describe('GET /admin/api/orders/:id', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     expect(res.status).toBe(200);
@@ -304,12 +307,38 @@ describe('GET /admin/api/orders/:id', () => {
     expect(res.body.is_external).toBe(false);
   });
 
+  // ── P2-#3 (Codex 재리뷰 2026-05-19) — dining_at/settled_at ISO 변환 ────
+  it('★ P2-#3 — admin serializer가 dining_at/settled_at을 ISO Z 형식으로 변환', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        delivery_type: 'dineIn',
+        table_no: 5,
+      });
+    // SQLite 'YYYY-MM-DD HH:MM:SS' 직접 주입 → ISO 변환 회귀.
+    db.prepare(
+      "UPDATE orders SET dining_at='2026-05-20 07:30:00', settled_at='2026-05-20 08:00:00' WHERE id = ?",
+    ).run(create.body.id);
+
+    const { agent } = await loginAgent(app);
+    const res = await agent.get(`/admin/api/orders/${create.body.id}`);
+    expect(res.status).toBe(200);
+    // 다른 timestamp 필드(created_at)와 같은 형식: 'YYYY-MM-DDTHH:MM:SSZ'.
+    expect(res.body.dining_at).toBe('2026-05-20T07:30:00Z');
+    expect(res.body.settled_at).toBe('2026-05-20T08:00:00Z');
+  });
+
   it('★ Bug 8 회귀 — 외부인 주문 is_external=true', async () => {
     const db = freshDb();
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '외부인', is_external: true });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '외부인', is_external: true, delivery_type: 'takeout' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     expect(res.status).toBe(200);
@@ -321,7 +350,7 @@ describe('GET /admin/api/orders/:id', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     // 동적 import로 OrderSchema 검증 — server 측 테스트가 client 스키마와 정합 확인.
@@ -334,7 +363,7 @@ describe('GET /admin/api/orders/:id', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent } = await loginAgent(app);
     const res = await agent.get(`/admin/api/orders/${create.body.id}`);
     expect(res.status).toBe(200);
@@ -353,6 +382,7 @@ describe('POST /admin/api/orders/:id/transition', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const { agent, csrfToken } = await loginAgent(app);
     const res = await withCsrf(
@@ -372,6 +402,7 @@ describe('POST /admin/api/orders/:id/transition', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const { agent, csrfToken } = await loginAgent(app);
     const res = await withCsrf(
@@ -404,6 +435,7 @@ describe('GET /admin/api/transfers', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     // P0-B (Codex v2): transfer-report에 token 필수.
     await request(app)
@@ -457,6 +489,7 @@ describe('POST /admin/api/settlement/close (ADR-012 + G13)', () => {
         items: [{ menu_id: 1, quantity: 1 }],
         name: '홍길동',
         student_id: '202637001',
+        delivery_type: 'takeout',
       });
     const { agent, csrfToken } = await loginAgent(app);
     const res = await withCsrf(agent.post('/admin/api/settlement/close'), csrfToken).send({});
@@ -518,7 +551,7 @@ describe('GET /admin/api/history', () => {
     const app = createApp({ db });
     await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/history?type=orders');
     expect(res.status).toBe(200);
@@ -538,7 +571,7 @@ describe('GET /admin/api/history', () => {
     const app = createApp({ db });
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent, csrfToken } = await loginAgent(app);
     await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
       .send({ to: 'CANCELED' });
@@ -560,7 +593,7 @@ describe('GET /admin/api/history', () => {
     // 기본 operating_date 2026-05-20에 주문.
     await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent } = await loginAgent(app);
     // type=orders 명시: ADMIN_LOGIN(system, operating_date=2026-05-20) 영향 분리.
     const wrongDate = await agent.get('/admin/api/history?type=orders&date=2026-01-01');
@@ -577,7 +610,7 @@ describe('GET /admin/api/history — find_error_v3 type 필터 + admin_events �
     const app = createApp({ db });
     await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent, csrfToken } = await loginAgent(app);
     // 메뉴 변경 → admin_events 행 생성
     await withCsrf(agent.post('/admin/api/menus/2/toggle'), csrfToken).send({ soldOut: true });
@@ -602,7 +635,7 @@ describe('GET /admin/api/history — find_error_v3 type 필터 + admin_events �
     const app = createApp({ db });
     await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent, csrfToken } = await loginAgent(app);
     await withCsrf(agent.post('/admin/api/menus/2/toggle'), csrfToken).send({ soldOut: true });
     const res = await agent.get('/admin/api/history?type=orders');
@@ -618,7 +651,7 @@ describe('GET /admin/api/history — find_error_v3 type 필터 + admin_events �
     const app = createApp({ db });
     await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const { agent, csrfToken } = await loginAgent(app);
     await withCsrf(agent.post('/admin/api/menus/3/toggle'), csrfToken).send({ recommended: false });
     const res = await agent.get('/admin/api/history?type=menus');
@@ -904,6 +937,184 @@ describe('POST /admin/login — admin_events 기록', () => {
   });
 });
 
+// ── Subagent 4 — GET/POST /admin/api/tables ────────────────────
+describe('GET /admin/api/tables', () => {
+  it('★ 200 + 15개 row — 빈 DB', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/tables');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(15);
+    expect(res.body[0].status).toBe('available');
+    expect(res.body[0].table_no).toBe(1);
+  });
+
+  it('★ 5번 PAID 주문 → 5번 occupied + order_no 포함', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const o = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001',
+        delivery_type: 'dineIn', table_no: 5 });
+    const orderId = o.body.id;
+    const { agent, csrfToken } = await loginAgent(app);
+    // ORDERED → TRANSFER_REPORTED → PAID
+    await request(app)
+      .post(`/api/orders/${orderId}/transfer-report?token=${o.body.access_token}`)
+      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+    await withCsrf(agent.post(`/admin/api/orders/${orderId}/transition`), csrfToken).send({ to: 'PAID' });
+    const res = await agent.get('/admin/api/tables');
+    expect(res.status).toBe(200);
+    const row5 = res.body.find((r) => r.table_no === 5);
+    expect(row5.status).toBe('occupied');
+    expect(typeof row5.order_no).toBe('number');
+  });
+
+  it('★ 7번 잠금 → 7번 locked + locked_at 존재', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const { agent, csrfToken } = await loginAgent(app);
+    await withCsrf(agent.post('/admin/api/tables/7/lock'), csrfToken).send({});
+    const res = await agent.get('/admin/api/tables');
+    expect(res.status).toBe(200);
+    const row7 = res.body.find((r) => r.table_no === 7);
+    expect(row7.status).toBe('locked');
+    expect(row7.locked_at).toBeTruthy();
+  });
+
+  it('★ 401 미인증', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/admin/api/tables');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /admin/api/tables/:tableNo/lock', () => {
+  it('★ 7번 잠금 → 200 + locked=true + admin_events row', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/tables/7/lock'), csrfToken).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(true);
+    const row = db.prepare(`SELECT * FROM admin_events WHERE event_type = 'TABLE_LOCK'`).get();
+    expect(row).toBeDefined();
+    expect(row.category).toBe('system');
+    expect(row.event_type).toBe('TABLE_LOCK');
+    expect(row.target_id).toBe(7);
+    expect(row.target_name).toBe('테이블 7번');
+    expect(row.operating_date).toBe('2026-05-20');
+    expect(row.action_name).toBe('테이블 잠금');
+  });
+
+  it('★ 범위 0 → 400', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/tables/0/lock'), csrfToken).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('★ 범위 16 → 400', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/tables/16/lock'), csrfToken).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('★ abc → 400 (parse 불가)', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/tables/abc/lock'), csrfToken).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('★ CSRF 없으면 403', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.post('/admin/api/tables/7/lock').send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('CSRF_INVALID');
+  });
+
+  it('★ 미인증 → 401', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app)
+      .post('/admin/api/tables/7/lock')
+      .set('X-CSRF-Token', 'any')
+      .send({});
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /admin/api/tables/:tableNo/unlock', () => {
+  it('★ 7번 해제 → 200 + locked=false + admin_events TABLE_UNLOCK row', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const { agent, csrfToken } = await loginAgent(app);
+    await withCsrf(agent.post('/admin/api/tables/7/lock'), csrfToken).send({});
+    const res = await withCsrf(agent.post('/admin/api/tables/7/unlock'), csrfToken).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.locked).toBe(false);
+    const row = db.prepare(`SELECT * FROM admin_events WHERE event_type = 'TABLE_UNLOCK'`).get();
+    expect(row).toBeDefined();
+    expect(row.category).toBe('system');
+    expect(row.target_id).toBe(7);
+    expect(row.target_name).toBe('테이블 7번');
+    expect(row.operating_date).toBe('2026-05-20');
+    expect(row.action_name).toBe('테이블 잠금 해제');
+  });
+
+  it('★ 범위 16 → 400', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent, csrfToken } = await loginAgent(app);
+    const res = await withCsrf(agent.post('/admin/api/tables/16/unlock'), csrfToken).send({});
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('테이블 잠금 회귀 — POST /api/orders', () => {
+  it('★ 잠금 7번 + POST /api/orders {table_no:7} → 409', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const { agent, csrfToken } = await loginAgent(app);
+    await withCsrf(agent.post('/admin/api/tables/7/lock'), csrfToken).send({});
+    const res = await request(app).post('/api/orders').send({
+      items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001',
+      delivery_type: 'dineIn', table_no: 7,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('TABLE_NOT_AVAILABLE');
+  });
+
+  it('★ 5번 점유 + POST /api/orders {table_no:5} → 409', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const o = await request(app).post('/api/orders').send({
+      items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001',
+      delivery_type: 'dineIn', table_no: 5,
+    });
+    const res = await request(app).post('/api/orders').send({
+      items: [{ menu_id: 2, quantity: 1 }], name: '박서연', student_id: '202637002',
+      delivery_type: 'dineIn', table_no: 5,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('TABLE_NOT_AVAILABLE');
+  });
+
+  it('★ history?type=system 에서 TABLE_LOCK / TABLE_UNLOCK 노출', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const { agent, csrfToken } = await loginAgent(app);
+    await withCsrf(agent.post('/admin/api/tables/3/lock'), csrfToken).send({});
+    await withCsrf(agent.post('/admin/api/tables/3/unlock'), csrfToken).send({});
+    const res = await agent.get('/admin/api/history?type=system&date=2026-05-20');
+    expect(res.status).toBe(200);
+    const types = res.body.map((r) => r.event_type);
+    expect(types).toContain('TABLE_LOCK');
+    expect(types).toContain('TABLE_UNLOCK');
+  });
+});
+
 // ── find_error_v2 — GET /admin/api/coupons/usage (쿠폰 사용 내역) ────────────
 describe('GET /admin/api/coupons/usage', () => {
   it('★ 인증 없으면 401', async () => {
@@ -931,6 +1142,7 @@ describe('GET /admin/api/coupons/usage', () => {
         student_id: '202637001',
         is_external: false,
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/coupons/usage');
@@ -955,11 +1167,85 @@ describe('GET /admin/api/coupons/usage', () => {
         name: '홍길동',
         student_id: '202637001',
         coupon: { used: true },
+        delivery_type: 'takeout',
       });
     const { agent } = await loginAgent(app);
     const wrongDate = await agent.get('/admin/api/coupons/usage?date=2026-01-01');
     expect(wrongDate.body).toHaveLength(0);
     const rightDate = await agent.get('/admin/api/coupons/usage?date=2026-05-20');
     expect(rightDate.body).toHaveLength(1);
+  });
+});
+
+// ── table_lock 라운드 — READY→DINING→SETTLED 전이 로깅 회귀 ─────────────────
+describe('READY → DINING → SETTLED 전이 이벤트 로깅 (table_lock)', () => {
+  // 헬퍼: ORDERED → TRANSFER_REPORTED → PAID → COOKING → READY (전체 경로 준비)
+  async function advanceToReady(agent, csrfToken, orderId) {
+    for (const to of ['TRANSFER_REPORTED', 'PAID', 'COOKING', 'READY']) {
+      await withCsrf(agent.post(`/admin/api/orders/${orderId}/transition`), csrfToken)
+        .send({ to });
+    }
+  }
+
+  it('★ READY→DINING 전이 → order_events에 DINING 행 + actor=admin', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    const res = await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
+      .send({ to: 'DINING' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('DINING');
+    // order_events에 DINING 행 확인
+    const row = db.prepare(`SELECT * FROM order_events WHERE event_type = 'DINING'`).get();
+    expect(row).toBeDefined();
+    expect(row.actor).toBe('admin');
+    expect(row.from_status).toBe('READY');
+    expect(row.to_status).toBe('DINING');
+    expect(row.action_name).toBe('전달 완료');
+  });
+
+  it('★ DINING→SETTLED 전이 → order_events에 SETTLED 행 + actor=admin', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '박서연', student_id: '202637002', delivery_type: 'takeout' });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
+      .send({ to: 'DINING' });
+    const res = await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
+      .send({ to: 'SETTLED' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('SETTLED');
+    const row = db.prepare(`SELECT * FROM order_events WHERE event_type = 'SETTLED'`).get();
+    expect(row).toBeDefined();
+    expect(row.actor).toBe('admin');
+    expect(row.from_status).toBe('DINING');
+    expect(row.to_status).toBe('SETTLED');
+    expect(row.action_name).toBe('테이블 준비 완료');
+  });
+
+  it('★ DINING/SETTLED 이벤트가 history?type=orders 에 노출됨', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '김민준', student_id: '202637003', delivery_type: 'takeout' });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    for (const to of ['DINING', 'SETTLED']) {
+      await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
+        .send({ to });
+    }
+    const res = await agent.get('/admin/api/history?type=orders&date=2026-05-20');
+    expect(res.status).toBe(200);
+    const types = res.body.map((r) => r.event_type);
+    expect(types).toContain('DINING');
+    expect(types).toContain('SETTLED');
   });
 });

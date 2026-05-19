@@ -1,11 +1,12 @@
 // C-3 주문 정보 — design-bundle ScreenCheckout (screens-customer.jsx:211-381). 6-col 테이블 grid + 쿠폰 eligibility + receipt + sticky discount.
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useCartStore, { cartSelectors } from '../../store/cart.js';
 import { apiFetch, BusinessClosedError, ApiError } from '../../api/client.js';
 import { API } from '../../api/routes.js';
 import { storeOrderToken } from '../../hooks/useOrderToken.js';
 import useRecentOrdersStore from '../../store/recentOrders.js';
+import { useTablesAvailability } from '../../hooks/useTablesAvailability.js';
 import Label from '../../components/atoms/Label.jsx';
 import Input from '../../components/atoms/Input.jsx';
 import Checkbox from '../../components/atoms/Checkbox.jsx';
@@ -16,6 +17,8 @@ import DeliveryTypeSelector from '../../components/organisms/DeliveryTypeSelecto
 const ORDER_SID = /^\d{9}$/; const COUPON_SID = /^\d{2}\d{2}37\d{3}$/;
 const fmt = (n) => n.toLocaleString('ko-KR');
 const TABLES = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15];
+export const TABLE_NOT_AVAILABLE_MESSAGE = '현재 선택하신 테이블은 이용 중이거나 준비 중입니다. 번거로우시겠지만 다른 테이블로 이동해 주세요.';
+const unavailSet = (arr) => new Set(Array.isArray(arr) ? arr.filter((t) => t.status !== 'available').map((t) => t.table_no) : []);
 
 export default function CheckoutPage() {
   const items = useCartStore((s) => s.items);
@@ -27,29 +30,36 @@ export default function CheckoutPage() {
   const [tableNo, setTableNo] = useState(''); const [coupon, setCoupon] = useState(false);
   const [touched, setTouched] = useState({}); const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+  const { availability, refresh } = useTablesAvailability();
+  const unavailableTables = useMemo(() => unavailSet(availability), [availability]);
 
   const sidOrderOK = ORDER_SID.test(sid); const sidCouponOK = COUPON_SID.test(sid); const nameValid = name.trim().length >= 1;
   const couponEligible = !external && sidOrderOK && sidCouponOK && nameValid;
-  const useCoupon = coupon && couponEligible;
-  const discount = useCoupon ? 1000 : 0;
-  const total = Math.max(0, subtotal - discount);
-
+  const useCoupon = coupon && couponEligible; const discount = useCoupon ? 1000 : 0; const total = Math.max(0, subtotal - discount);
   const errors = { sid: !external && !sidOrderOK ? '학번은 숫자 9자리로 입력해주세요.' : '',
     name: !nameValid ? '이름을 입력하세요' : '', tableNo: delivery === 'dineIn' && !tableNo ? '테이블 번호를 선택해 주세요' : '' };
   const valid = !errors.sid && !errors.name && !errors.tableNo && items.length > 0;
+
+  const handleTableClick = (n) => {
+    if (unavailableTables.has(n)) { setSubmitError(TABLE_NOT_AVAILABLE_MESSAGE); return; }
+    setSubmitError(null); setTableNo(String(n)); setTouched((t) => ({ ...t, tableNo: true }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault(); setTouched({ sid: true, name: true, tableNo: true });
     if (!valid) return; setBusy(true); setSubmitError(null);
     try {
+      const fresh = await refresh();
+      if (fresh && delivery === 'dineIn' && tableNo && unavailSet(fresh).has(Number(tableNo))) {
+        setSubmitError(TABLE_NOT_AVAILABLE_MESSAGE); setBusy(false); return;
+      }
       const order = await apiFetch(API.ORDERS, { method: 'POST', body: {
         items: items.map((i) => ({ menu_id: i.menuId, quantity: i.quantity })),
         student_id: external ? null : sid, name, is_external: external, delivery_type: delivery,
-        table_no: delivery === 'dineIn' ? Number(tableNo) : null,
-        coupon: useCoupon ? { used: true } : null,
+        table_no: delivery === 'dineIn' ? Number(tableNo) : null, coupon: useCoupon ? { used: true } : null,
       } });
       storeOrderToken(order.id, order.access_token);
-      useRecentOrdersStore.getState().addOrder({ id: order.id, no: order.no, token: order.access_token, operating_date: order.operating_date }); // Bug 13 — 메뉴 페이지 진행 중 주문 카드 노출용 영속화.
+      useRecentOrdersStore.getState().addOrder({ id: order.id, no: order.no, token: order.access_token, operating_date: order.operating_date }); // Bug 13
       clearCart();
       navigate(`/orders/${order.id}/complete${order.access_token ? `?token=${encodeURIComponent(order.access_token)}` : ''}`);
     } catch (err) {
@@ -66,20 +76,14 @@ export default function CheckoutPage() {
       <div className="section">
         <div className="section-label">① 신원 확인</div>
         <Checkbox id="isExternal" checked={external} onChange={(e) => { setExternal(e.target.checked); if (e.target.checked) setCoupon(false); }} label="학번 없음 (외부인)" />
-        {!external && (<div className="field">
-          <Label htmlFor="studentId" required>학번</Label>
+        {!external && (<div className="field"><Label htmlFor="studentId" required>학번</Label>
           <Input id="studentId" type="text" inputMode="numeric" placeholder="예: 202637042" value={sid}
             onChange={(e) => setSid(e.target.value.replace(/\D/g, ''))} onBlur={() => setTouched((t) => ({ ...t, sid: true }))}
-            invalid={touched.sid && !!errors.sid} errorMessage={touched.sid ? errors.sid : ''} />
-        </div>)}
-        <div className="field">
-          <Label htmlFor="name" required>이름</Label>
+            invalid={touched.sid && !!errors.sid} errorMessage={touched.sid ? errors.sid : ''} /></div>)}
+        <div className="field"><Label htmlFor="name" required>이름</Label>
           <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-            invalid={touched.name && !!errors.name} errorMessage={touched.name ? errors.name : ''} />
-        </div>
-        <p style={{ fontSize: '12px', color: '#000', marginTop: '4px' }}>
-          주문 확인을 위한 개인정보 수집입니다
-        </p>
+            invalid={touched.name && !!errors.name} errorMessage={touched.name ? errors.name : ''} /></div>
+        <p style={{ fontSize: '12px', color: '#000', marginTop: '4px' }}>주문 확인을 위한 개인정보 수집입니다</p>
       </div>
       <div className="section">
         <div className="section-label">② 수령 방법</div>
@@ -87,26 +91,23 @@ export default function CheckoutPage() {
         {delivery === 'dineIn' && (<div className="field" style={{ marginTop: 12 }}>
           <Label htmlFor="tableNo" required>테이블 번호 (1~15)</Label>
           <div role="radiogroup" aria-label="좌석 번호" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
-            {TABLES.map((n) => (<button key={n} type="button" role="radio" aria-checked={String(n) === tableNo}
-              tabIndex={String(n) === tableNo || (!tableNo && n === 1) ? 0 : -1}
-              className={`radio-cell ${String(n) === tableNo ? 'active' : ''}`} style={{ padding: '10px 0', fontSize: 14 }}
-              onClick={() => { setTableNo(String(n)); setTouched((t) => ({ ...t, tableNo: true })); }}>{n}</button>))}
+            {TABLES.map((n) => { const d = unavailableTables.has(n); return (
+              <button key={n} type="button" role="radio" aria-checked={String(n) === tableNo}
+                aria-disabled={d ? 'true' : undefined} tabIndex={d ? -1 : (String(n) === tableNo || (!tableNo && n === 1) ? 0 : -1)}
+                className={`radio-cell${String(n) === tableNo ? ' active' : ''}${d ? ' disabled' : ''}`}
+                style={{ padding: '10px 0', fontSize: 14 }} onClick={() => handleTableClick(n)}>{n}</button>); })}
           </div>
           <Input id="tableNo" type="text" inputMode="numeric" value={tableNo} onChange={(e) => setTableNo(e.target.value.replace(/\D/g, ''))}
             style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}
             tabIndex={-1} invalid={touched.tableNo && !!errors.tableNo} errorMessage={touched.tableNo ? errors.tableNo : ''} />
         </div>)}
       </div>
-      {!external && (<div className="section">
-        <div className="section-label">③ 쿠폰</div>
+      {!external && (<div className="section"><div className="section-label">③ 쿠폰</div>
         <div style={{ opacity: couponEligible ? 1 : 0.55, pointerEvents: couponEligible ? 'auto' : 'none' }}>
           <Checkbox id="useCoupon" checked={coupon} onChange={(e) => setCoupon(e.target.checked)} label="컴모융 학생 1,000원 할인" disabled={!couponEligible} />
-        </div>
-      </div>)}
+        </div></div>)}
       <div className="receipt">
-        {items.map((it) => (
-          <div key={it.menuId} className="line"><span className="label">{it.name} × {it.quantity}</span><span className="price">{fmt(it.basePrice * it.quantity)}원</span></div>
-        ))}
+        {items.map((it) => (<div key={it.menuId} className="line"><span className="label">{it.name} × {it.quantity}</span><span className="price">{fmt(it.basePrice * it.quantity)}원</span></div>))}
         {discount > 0 && (<div className="line"><span className="label">쿠폰 할인</span><span className="price price-discount">−{fmt(discount)}원</span></div>)}
         <div className="line total"><span className="label">합계</span><span className="price price-lg" style={{ color: 'var(--color-accent)' }}>{fmt(total)}원</span></div>
       </div>

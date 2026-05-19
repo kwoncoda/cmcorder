@@ -155,8 +155,34 @@ describe('order-repo — updateOrderStatus', () => {
     expect(cooking.cooking_at).toBeTruthy();
     const ready = updateOrderStatus(db, o.id, 'READY');
     expect(ready.ready_at).toBeTruthy();
+    // DONE은 repo 레벨에서 여전히 직접 UPDATE 가능 (라우트가 전이 검증).
     const done = updateOrderStatus(db, o.id, 'DONE');
     expect(done.done_at).toBeTruthy();
+  });
+
+  it('DINING 전이 시 dining_at 자동 기록', () => {
+    const db = freshDb();
+    const o = createOrder(db, sampleMeta());
+    updateOrderStatus(db, o.id, 'TRANSFER_REPORTED');
+    updateOrderStatus(db, o.id, 'PAID');
+    updateOrderStatus(db, o.id, 'COOKING');
+    updateOrderStatus(db, o.id, 'READY');
+    const dining = updateOrderStatus(db, o.id, 'DINING');
+    expect(dining.status).toBe('DINING');
+    expect(dining.dining_at).toBeTruthy();
+  });
+
+  it('SETTLED 전이 시 settled_at 자동 기록', () => {
+    const db = freshDb();
+    const o = createOrder(db, sampleMeta());
+    updateOrderStatus(db, o.id, 'TRANSFER_REPORTED');
+    updateOrderStatus(db, o.id, 'PAID');
+    updateOrderStatus(db, o.id, 'COOKING');
+    updateOrderStatus(db, o.id, 'READY');
+    updateOrderStatus(db, o.id, 'DINING');
+    const settled = updateOrderStatus(db, o.id, 'SETTLED');
+    expect(settled.status).toBe('SETTLED');
+    expect(settled.settled_at).toBeTruthy();
   });
 
   it('extraFields 전달 시 같이 UPDATE', () => {

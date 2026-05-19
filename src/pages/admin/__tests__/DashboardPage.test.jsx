@@ -80,25 +80,25 @@ afterEach(() => {
 });
 
 describe('DashboardPage', () => {
-  it('★ CLOSED 시 BusinessStateBadge + StartBusinessCTA + 6컬럼 Kanban 동시 렌더 (find_error_v3)', () => {
+  it('★ CLOSED 시 BusinessStateBadge + StartBusinessCTA + 7컬럼 Kanban 동시 렌더 (find_error_v3)', () => {
     useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
     renderPage();
     expect(screen.getByTestId('business-state-badge')).toBeInTheDocument();
     expect(screen.getByTestId('start-business-cta')).toBeInTheDocument();
-    // find_error_v3: CLOSED 상태에서도 6컬럼 admin-board 가 유지된다.
+    // find_error_v3: CLOSED 상태에서도 7컬럼 admin-board 가 유지된다.
     expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
     for (const col of ADMIN_COLUMNS) {
       expect(screen.getByTestId(`admin-column-${col.status}`)).toBeInTheDocument();
     }
   });
 
-  it('★ find_error_v3 — CLOSED 시 6컬럼 모두 "해당 상태 주문 없음" (orders=[])', () => {
+  it('★ find_error_v3 — CLOSED 시 7컬럼 모두 "해당 상태 주문 없음" (orders=[])', () => {
     useBusinessStateStore.setState({ status: 'CLOSED', operating_date: '2026-05-20' });
     useApi.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
     renderPage();
     expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
     const emptyTextNodes = screen.getAllByText('해당 상태 주문 없음');
-    expect(emptyTextNodes.length).toBe(6);
+    expect(emptyTextNodes.length).toBe(7);
   });
 
   it('★ find_error_v3 — CLOSED 시 .start-cta 카드 안에 start-business-cta 버튼 위치', () => {
@@ -142,7 +142,7 @@ describe('DashboardPage', () => {
     expect(useBusinessStateStore.getState().status).toBe('CLOSED');
   });
 
-  it('OPEN 시 BusinessStateBadge OPEN + Kanban 6 컬럼 모두 렌더', () => {
+  it('OPEN 시 BusinessStateBadge OPEN + Kanban 7 컬럼 모두 렌더', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({ data: SAMPLE_ORDERS, isLoading: false, error: null, refetch: vi.fn() });
     renderPage();
@@ -175,7 +175,7 @@ describe('DashboardPage', () => {
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('★ orders=[] 일 때도 6 컬럼 모두 렌더 (EmptyState 단독 banner 제거)', () => {
+  it('★ orders=[] 일 때도 7 컬럼 모두 렌더 (EmptyState 단독 banner 제거)', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
     renderPage();
@@ -187,7 +187,7 @@ describe('DashboardPage', () => {
     }
   });
 
-  it('★ orders=1 일 때 매칭 컬럼만 카드 1개 + 나머지 5 컬럼은 "해당 상태 주문 없음"', () => {
+  it('★ orders=1 일 때 매칭 컬럼만 카드 1개 + 나머지 6 컬럼은 "해당 상태 주문 없음"', () => {
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
     useApi.mockReturnValue({
       data: [SAMPLE_ORDERS[0]], // ORDERED 1건
@@ -197,9 +197,9 @@ describe('DashboardPage', () => {
     });
     renderPage();
     expect(screen.getByTestId('admin-order-card-1')).toBeInTheDocument();
-    // 나머지 5개 컬럼은 "해당 상태 주문 없음".
+    // 나머지 6개 컬럼은 "해당 상태 주문 없음".
     const emptyTextNodes = screen.getAllByText('해당 상태 주문 없음');
-    expect(emptyTextNodes.length).toBe(5);
+    expect(emptyTextNodes.length).toBe(6);
   });
 
   it('401 시 /admin/login 으로 redirect', async () => {
@@ -479,6 +479,29 @@ describe('DashboardPage', () => {
     expect(apiFetch).toHaveBeenCalledTimes(1);
     // cleanup.
     resolveFn?.({ ok: true });
+  });
+
+  // ── DINING 컬럼 렌더 확인 ──
+  it('★ DINING 컬럼(식사중) 렌더 — data-testid="admin-column-DINING" + "식사중" 텍스트', () => {
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    expect(screen.getByTestId('admin-column-DINING')).toBeInTheDocument();
+    expect(screen.getByText('식사중')).toBeInTheDocument();
+  });
+
+  it('★ DINING 컬럼은 READY 컬럼 바로 다음, HOLD 컬럼 바로 앞에 위치', () => {
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({ data: [], isLoading: false, error: null, refetch: vi.fn() });
+    renderPage();
+    const board = screen.getByTestId('kanban-board');
+    const cols = Array.from(board.querySelectorAll('[data-testid^="admin-column-"]'));
+    const statuses = cols.map((c) => c.getAttribute('data-testid').replace('admin-column-', ''));
+    const readyIdx = statuses.indexOf('READY');
+    const diningIdx = statuses.indexOf('DINING');
+    const holdIdx = statuses.indexOf('HOLD');
+    expect(diningIdx).toBe(readyIdx + 1);
+    expect(holdIdx).toBe(diningIdx + 1);
   });
 
   it('★ 새로고침 시뮬: store=CLOSED·서버=OPEN → 마운트 후 Kanban으로 전환 (I-2)', async () => {

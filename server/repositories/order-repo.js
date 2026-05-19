@@ -21,7 +21,9 @@ const ACTION_LABEL = {
   PAID: '이체 확인',
   COOKING: '조리 시작',
   READY: '조리 완료',
-  DONE: '전달 완료',
+  DINING: '전달 완료',
+  SETTLED: '테이블 준비 완료',
+  DONE: '전달 완료 (레거시)',  // dead status — 레거시 보존. 운영자에게 새 DINING과 시각 구분.
   HOLD: '보류',
   CANCELED: '취소',
 };
@@ -159,6 +161,8 @@ const STATUS_TIME_FIELD = {
   PAID: 'paid_at',
   COOKING: 'cooking_at',
   READY: 'ready_at',
+  DINING: 'dining_at',
+  SETTLED: 'settled_at',
   DONE: 'done_at',
 };
 

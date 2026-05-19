@@ -402,6 +402,7 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     { status: 'PAID',              labels: ['조리 시작'] },
     { status: 'COOKING',           labels: ['조리 완료'] },
     { status: 'READY',             labels: ['전달 완료'] },
+    { status: 'DINING',            labels: ['테이블 준비 완료'] },
     { status: 'HOLD',              labels: ['이체 확인', '취소'] },
   ];
 
@@ -557,5 +558,104 @@ describe('OrderCard inline 액션 (Bug 9, 10)', () => {
     expect(holdBtn).not.toHaveClass('primary');
     const confirmBtn = within(card).getByRole('button', { name: '확인' });
     expect(confirmBtn).toHaveClass('primary');
+  });
+
+  // ── READY → DINING 전이 버튼 회귀 ──
+  it('★ READY 카드 버튼 라벨 "전달 완료" + to: "DINING" 호출 (DONE 아님)', () => {
+    const onAction = vi.fn();
+    const orders = [mkOrder({ id: 17, no: 17, status: 'READY' })];
+    render(
+      <AdminCardColumn title="x" status="READY" orders={orders} tick={BASE_TICK} onAction={onAction} />,
+    );
+    const card = screen.getByTestId('admin-order-card-17');
+    const btn = within(card).getByRole('button', { name: '전달 완료' });
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onAction).toHaveBeenCalledWith(17, 'DINING');
+  });
+
+  // ── DINING 컬럼 ──
+  it('★ DINING 카드 버튼 라벨 "테이블 준비 완료" + to: "SETTLED" 호출', () => {
+    const onAction = vi.fn();
+    const orders = [mkOrder({ id: 20, no: 20, status: 'DINING', dining_at: '2026-05-20T17:20:00' })];
+    render(
+      <AdminCardColumn title="식사중" status="DINING" orders={orders} tick={BASE_TICK} onAction={onAction} />,
+    );
+    const card = screen.getByTestId('admin-order-card-20');
+    const btn = within(card).getByRole('button', { name: '테이블 준비 완료' });
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onAction).toHaveBeenCalledWith(20, 'SETTLED');
+  });
+
+  it('★ DINING 카드 경과는 dining_at 기준으로 계산 (transferred_at 아님)', () => {
+    // tick=17:30, dining_at=17:20 → 10분, transferred_at=17:28 → 2분
+    const orders = [
+      mkOrder({ id: 21, no: 21, status: 'DINING',
+        dining_at: '2026-05-20T17:20:00',
+        transferred_at: '2026-05-20T17:28:00' }),
+    ];
+    render(
+      <AdminCardColumn title="식사중" status="DINING" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByText('10분 경과')).toBeInTheDocument();
+  });
+
+  it('★ DINING 카드 29분 미만 → border-divider (기본)', () => {
+    // tick=17:30, dining_at=17:05 → 25분
+    const orders = [
+      mkOrder({ id: 22, no: 22, status: 'DINING', dining_at: '2026-05-20T17:05:00' }),
+    ];
+    render(
+      <AdminCardColumn title="식사중" status="DINING" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-22').className).toMatch(/border-divider/);
+  });
+
+  it('★ DINING 카드 30분 이상 59분 미만 → border-warning', () => {
+    // tick=17:30, dining_at=16:55 → 35분
+    const orders = [
+      mkOrder({ id: 23, no: 23, status: 'DINING', dining_at: '2026-05-20T16:55:00' }),
+    ];
+    render(
+      <AdminCardColumn title="식사중" status="DINING" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-23').className).toMatch(/border-warning/);
+  });
+
+  it('★ DINING 카드 60분 이상 → border-danger', () => {
+    // tick=17:30, dining_at=16:25 → 65분
+    const orders = [
+      mkOrder({ id: 24, no: 24, status: 'DINING', dining_at: '2026-05-20T16:25:00' }),
+    ];
+    render(
+      <AdminCardColumn title="식사중" status="DINING" orders={orders} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-24').className).toMatch(/border-danger/);
+  });
+
+  it('★ READY 카드 (대조) — 기존 5/10분 톤 유지 (회귀)', () => {
+    // 5분 미만: border-divider
+    const ordersDefault = [mkOrder({ id: 30, no: 30, status: 'READY', transferred_at: '2026-05-20T17:28:00' })];
+    const { unmount } = render(
+      <AdminCardColumn title="수령대기" status="READY" orders={ordersDefault} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-30').className).toMatch(/border-divider/);
+    unmount();
+
+    // 5분 이상: border-warning
+    const ordersWarn = [mkOrder({ id: 31, no: 31, status: 'READY', transferred_at: '2026-05-20T17:24:00' })];
+    const { unmount: unmount2 } = render(
+      <AdminCardColumn title="수령대기" status="READY" orders={ordersWarn} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-31').className).toMatch(/border-warning/);
+    unmount2();
+
+    // 10분 이상: border-danger
+    const ordersDanger = [mkOrder({ id: 32, no: 32, status: 'READY', transferred_at: '2026-05-20T17:19:00' })];
+    render(
+      <AdminCardColumn title="수령대기" status="READY" orders={ordersDanger} tick={BASE_TICK} />,
+    );
+    expect(screen.getByTestId('admin-order-card-32').className).toMatch(/border-danger/);
   });
 });

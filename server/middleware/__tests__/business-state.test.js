@@ -146,6 +146,17 @@ describe('businessStateGuard', () => {
     expect(res.status).toBe(200);
   });
 
+  // ── table_lock 브랜치 Subagent 1 — /api/tables/availability 화이트리스트 회귀 ──
+  it('★ CLOSED — GET /api/tables/availability → 200 (체크아웃 진입 시 availability 조회 허용)', async () => {
+    // makeApp에 라우트 추가 필요: 이 테스트는 미들웨어 통과 여부만 확인.
+    const freshApp = express();
+    freshApp.use(express.json());
+    freshApp.use(businessStateGuard(db));
+    freshApp.get('/api/tables/availability', (_req, res) => res.json([]));
+    const res = await request(freshApp).get('/api/tables/availability');
+    expect(res.status).toBe(200);
+  });
+
   it('OPEN → CLOSED 후 사용자 POST 차단', async () => {
     openBusinessDay(db, { operating_date: '2026-05-20' });
     const app = makeApp(db);

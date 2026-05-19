@@ -12,13 +12,15 @@ import { createRef } from 'react';
 import StatusChip from '../StatusChip.jsx';
 
 describe('StatusChip', () => {
-  // ── 8 status 각 라벨 + 이모지 매핑 ──
+  // ── 10 status 각 라벨 + 이모지 매핑 (table_lock: DINING/SETTLED 추가) ──
   it.each([
     ['ORDERED',           '주문 접수',     '⏳'],
     ['TRANSFER_REPORTED', '입금 확인 중',  '💸'],
     ['PAID',              '조리 시작',     '✓'],
     ['COOKING',           '조리 중',       '🔥'],
     ['READY',             '수령 대기',     '✅'],
+    ['DINING',            '식사 중',       '🍽️'],
+    ['SETTLED',           '정리 완료',     '🎉'],
     ['DONE',              '수령 완료',     '🎉'],
     ['HOLD',              '보류',          '⚠️'],
     ['CANCELED',          '취소',          '❌'],
@@ -26,6 +28,19 @@ describe('StatusChip', () => {
     render(<StatusChip status={status} />);
     expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.getByText(icon)).toBeInTheDocument();
+  });
+
+  // ── table_lock 라운드 (2026-05-19) — 신규 상태 회귀 ──
+  it('★ table_lock — status=DINING 시 "식사 중" 라벨 (P1-1 회귀)', () => {
+    render(<StatusChip status="DINING" />);
+    expect(screen.getByText('식사 중')).toBeInTheDocument();
+    expect(screen.queryByText('주문 접수')).not.toBeInTheDocument();
+  });
+
+  it('★ table_lock — status=SETTLED 시 "정리 완료" 라벨 (P1-1 회귀)', () => {
+    render(<StatusChip status="SETTLED" />);
+    expect(screen.getByText('정리 완료')).toBeInTheDocument();
+    expect(screen.queryByText('주문 접수')).not.toBeInTheDocument();
   });
 
   // ── 알 수 없는 status fallback ──

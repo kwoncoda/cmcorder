@@ -38,6 +38,8 @@ const AdminSettlementPage = lazy(() =>
 // find_error_v2 — 내역(history) + 쿠폰(coupons) 탭 복원.
 const AdminHistoryPage = lazy(() => import('./pages/admin/HistoryPage.jsx'));
 const AdminCouponsPage = lazy(() => import('./pages/admin/CouponsPage.jsx'));
+// Subagent 4 — 테이블 잠금 페이지.
+const AdminTablesPage = lazy(() => import('./pages/admin/TablesPage.jsx'));
 
 // Suspense fallback — Task 2.11 LoadingState 위임 래퍼.
 // minimumDelay=0 — Suspense fallback 은 시점이 명확하므로 깜박 회피 지연 불필요.
@@ -91,6 +93,8 @@ export function AppRoutes() {
             {/* find_error_v2 — 내역/쿠폰 라우트 복원 */}
             <Route path="/admin/history" element={<AdminHistoryPage />} />
             <Route path="/admin/coupons" element={<AdminCouponsPage />} />
+            {/* Subagent 4 — 테이블 잠금 */}
+            <Route path="/admin/tables" element={<AdminTablesPage />} />
           </Route>
 
           {/* 404 catch-all */}

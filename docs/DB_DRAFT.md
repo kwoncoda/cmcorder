@@ -870,3 +870,37 @@ if (result !== 'ok') {
 - **PII purge 자동화:** 일회성 운영 — Phase 2 가정상 X. 운영자 수동 폐기 확정 (ADR-027).
 - **`order_events` 채택 여부:** MVP 부담이면 Phase 2로 미룸. *추천: MVP 포함* (인수인계 가치 큼, 비용 INSERT 1건/상태변경).
 - **`settlement_snapshots.summary_json` 스키마:** 변경 가능성 있음. JSON 안에 schema_version 필드 권장.
+
+---
+
+## §11. table_lock 라운드 스키마 변경 (2026-05-19)
+
+### §11.1 orders 테이블 컬럼 추가
+
+- `dining_at TEXT` — READY→DINING 전이 시 자동 기록 (`datetime('now')`). 식사 시작 시각.
+- `settled_at TEXT` — DINING→SETTLED 전이 시 자동 기록. 테이블 정리 완료 시각.
+
+orders.status CHECK enum에 `DINING`·`SETTLED` 추가; `DONE`은 레거시 보존 (dead status — 합법 전이 진입 없음).
+
+### §11.2 table_locks 테이블 (신규)
+
+```sql
+CREATE TABLE table_locks (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  table_no   INTEGER NOT NULL UNIQUE CHECK(table_no BETWEEN 1 AND 15),
+  locked     INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0, 1)),
+  locked_at  TEXT,
+  unlocked_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE UNIQUE INDEX uidx_table_locks_table_no ON table_locks(table_no);
+CREATE INDEX idx_table_locks_locked ON table_locks(locked);
+```
+
+용도: 어드민이 특정 테이블을 수동 잠금(예: 청소 중, 예약). `locked=1`이면 주문 불가.
+
+### §11.3 마이그레이션 정책
+
+- 마이그레이션 X (init.sql 단일 갱신 방식). DB 초기화 후 재부팅 시 적용.
+- 기존 운영 DB 업그레이드: `bootstrap.js` `applyPostInitMigrations()` 내 `006-table-lock` 마이그레이션이 idempotent ALTER TABLE + CREATE IF NOT EXISTS로 처리.

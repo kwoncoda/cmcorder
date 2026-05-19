@@ -198,6 +198,146 @@ function applyPostInitMigrations(db) {
     tx();
     logger.info('[bootstrap] 마이그레이션 005-admin-events 적용');
   }
+
+  // 006-table-lock (table_lock 라운드 2026-05-19, P1-3 Codex 갱신 + P2 재리뷰 보완):
+  //   - orders.dining_at, orders.settled_at 컬럼 추가
+  //   - orders.status CHECK enum에 DINING·SETTLED 포함되게 *table rebuild*
+  //     (SQLite는 ALTER로 CHECK 변경 불가 → 새 테이블 생성 + INSERT SELECT + 교체).
+  //     기존 DB의 CHECK에 DINING/SETTLED가 없으면 READY → DINING UPDATE가 실패한다.
+  //   - table_locks 테이블 + 인덱스 신설
+  //   - idempotent: rebuild는 sqlite_master에서 기존 CHECK 문자열을 점검 후 *필요할 때만* 실행.
+  //
+  // ★ P2 재리뷰 보완 (Codex 2026-05-19) — 단순 _migrations skip 금지.
+  //   예전 *불완전* 006-table-lock이 이미 _migrations에 기록된 DB는
+  //   orders.status CHECK가 여전히 옛 enum일 수 있다.
+  //   → _migrations 마크와 *별개로* 실제 schema 상태를 매번 확인하고,
+  //     enum이 불완전하면 rebuild를 *항상* 실행한다.
+  //   → _migrations 마크는 *최초 1회만* INSERT (이미 있으면 skip).
+  {
+    const has006Mark = applied('006-table-lock');
+    const ordersDdl = db
+      .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'")
+      .get()?.sql ?? '';
+    const checkAcceptsNewStates =
+      ordersDdl.includes("'DINING'") && ordersDdl.includes("'SETTLED'");
+
+    // 둘 다 OK면 fast skip (정상 신규 DB 또는 이미 rebuild 완료된 기존 DB).
+    if (has006Mark && checkAcceptsNewStates) {
+      // no-op — 다음 마이그레이션으로.
+    } else {
+      const tx = db.transaction(() => {
+
+      if (!checkAcceptsNewStates) {
+        // 기존 DB에 CHECK가 오래된 enum만 허용 → orders 테이블 rebuild.
+        // SQLite 권장 패턴: foreign_keys 임시 비활성화는 우리 스키마에서는 불필요
+        // (order_items가 orders.id FK이지만 INSERT 순서를 유지하고 row id 보존).
+        // PRAGMA defer_foreign_keys: tx 안 활성화로 안전.
+        db.exec('PRAGMA defer_foreign_keys = ON');
+
+        // 기존 컬럼 목록(미마이그레이션 dining_at/settled_at 누락 가능 → COALESCE NULL).
+        const existingCols = db
+          .prepare('PRAGMA table_info(orders)')
+          .all()
+          .map((c) => c.name);
+
+        // 새 테이블 정의 — init.sql 최신 형태와 동일.
+        db.exec(`
+          CREATE TABLE orders_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            no INTEGER NOT NULL,
+            operating_date TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'ORDERED' CHECK(status IN (
+              'ORDERED','TRANSFER_REPORTED','PAID','COOKING','READY',
+              'DINING','DONE','SETTLED','HOLD','CANCELED'
+            )),
+            student_id TEXT,
+            name TEXT NOT NULL,
+            is_external INTEGER NOT NULL DEFAULT 0 CHECK(is_external IN (0,1)),
+            external_token TEXT,
+            access_token TEXT,
+            delivery_type TEXT NOT NULL DEFAULT 'dineIn' CHECK(delivery_type IN ('dineIn','takeout')),
+            table_no INTEGER,
+            total_price INTEGER NOT NULL CHECK(total_price >= 0),
+            depositor_name TEXT,
+            bank TEXT,
+            custom_bank TEXT,
+            use_other_name INTEGER DEFAULT 0,
+            other_name TEXT,
+            amount INTEGER,
+            transferred_at TEXT,
+            paid_at TEXT,
+            cooking_at TEXT,
+            ready_at TEXT,
+            dining_at TEXT,
+            settled_at TEXT,
+            done_at TEXT,
+            hold_reason TEXT,
+            canceled_reason TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT,
+            UNIQUE(operating_date, no)
+          )
+        `);
+
+        // INSERT SELECT — 기존 컬럼만 복사. 누락된 dining_at/settled_at은 NULL로.
+        // access_token 같은 옛 마이그레이션 컬럼도 있을 수 있으므로 동적 컬럼 목록 사용.
+        const transferableCols = [
+          'id','no','operating_date','status','student_id','name','is_external',
+          'external_token','access_token','delivery_type','table_no','total_price',
+          'depositor_name','bank','custom_bank','use_other_name','other_name','amount',
+          'transferred_at','paid_at','cooking_at','ready_at','dining_at','settled_at',
+          'done_at','hold_reason','canceled_reason','created_at','updated_at',
+        ].filter((c) => existingCols.includes(c));
+        const colList = transferableCols.join(', ');
+        db.exec(`INSERT INTO orders_new (${colList}) SELECT ${colList} FROM orders`);
+
+        // 교체.
+        db.exec('DROP TABLE orders');
+        db.exec('ALTER TABLE orders_new RENAME TO orders');
+
+        // 인덱스 재생성 — init.sql 정의와 동일.
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+          CREATE INDEX IF NOT EXISTS idx_orders_operating_date ON orders(operating_date);
+          CREATE INDEX IF NOT EXISTS idx_orders_no_date ON orders(operating_date, no);
+        `);
+      } else {
+        // 신규 DB(init.sql 적용 완료) — 컬럼만 idempotent 추가.
+        const cols = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+        if (!cols.includes('dining_at')) {
+          db.exec('ALTER TABLE orders ADD COLUMN dining_at TEXT');
+        }
+        if (!cols.includes('settled_at')) {
+          db.exec('ALTER TABLE orders ADD COLUMN settled_at TEXT');
+        }
+      }
+
+      // table_locks 테이블 — 잠금 상태 영구 저장 (idempotent).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS table_locks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_no INTEGER NOT NULL UNIQUE CHECK(table_no BETWEEN 1 AND 15),
+          locked INTEGER NOT NULL DEFAULT 0 CHECK(locked IN (0, 1)),
+          locked_at TEXT,
+          unlocked_at TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS uidx_table_locks_table_no ON table_locks(table_no);
+        CREATE INDEX IF NOT EXISTS idx_table_locks_locked ON table_locks(locked);
+      `);
+      // _migrations 마크는 최초 1회만 — 이미 있으면 skip (보정 재실행이라도 중복 INSERT X).
+      if (!has006Mark) {
+        db.prepare('INSERT INTO _migrations (name) VALUES (?)').run('006-table-lock');
+      }
+      });
+      tx();
+      logger.info(
+        { repaired: !checkAcceptsNewStates && has006Mark },
+        '[bootstrap] 마이그레이션 006-table-lock 적용',
+      );
+    }
+  }
 }
 
 function runInitSql(db) {

@@ -18,7 +18,7 @@
 // SPA layout(P0-5)는 *이중 가드*로 유지 — 서버 redirect + SPA store sync.
 import { getBusinessState } from '../domain/business-state.js';
 
-const GET_PASSTHROUGH_PATHS = new Set(['/closed', '/healthz', '/api/business-state']);
+const GET_PASSTHROUGH_PATHS = new Set(['/closed', '/healthz', '/api/business-state', '/api/tables/availability']);
 const GET_PASSTHROUGH_PREFIXES = ['/assets/'];
 const GET_PASSTHROUGH_EXACTS = new Set(['/favicon.ico', '/robots.txt']);
 const STATIC_ASSET_EXT = /\.(png|jpe?g|webp|gif|svg|ico|css|js|map|woff2?|ttf|eot|webmanifest)$/i;

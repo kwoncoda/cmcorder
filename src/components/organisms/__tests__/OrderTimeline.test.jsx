@@ -32,6 +32,9 @@ describe('OrderTimeline', () => {
     ['COOKING', 3],
     ['READY', 4],
     ['DONE', 5],
+    // table_lock — READY 이후 후속 상태도 5단계 종료로 본다.
+    ['DINING', 5],
+    ['SETTLED', 5],
   ])('current=%s 시 aria-valuenow=%i', (current, expected) => {
     render(<OrderTimeline current={current} />);
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
@@ -42,6 +45,18 @@ describe('OrderTimeline', () => {
   it('알 수 없는 current 시 0 단계로 fallback', () => {
     render(<OrderTimeline current="WEIRD_STATE" />);
     expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0');
+  });
+
+  it('★ table_lock — current=DINING 시 5단계 모두 done (P1-1 회귀)', () => {
+    render(<OrderTimeline current="DINING" showMiniview={false} />);
+    const bar = screen.getByRole('progressbar');
+    expect(bar.getAttribute('aria-valuenow')).toBe('5');
+  });
+
+  it('★ table_lock — current=SETTLED 시 5단계 모두 done (P1-1 회귀)', () => {
+    render(<OrderTimeline current="SETTLED" showMiniview={false} />);
+    const bar = screen.getByRole('progressbar');
+    expect(bar.getAttribute('aria-valuenow')).toBe('5');
   });
 
   it('5 단계 라벨 (접수·입금·확인·조리·수령) 모두 렌더', () => {
