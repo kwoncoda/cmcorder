@@ -43,6 +43,5 @@ sessions.sqlite
 .agents/
 skills-lock.json
 
-# 원본 zip (이미 docs/design-bundle/에 풀려 있음)
-comorder.zip
-comorder_v2.zip
+docs/
+codereview/

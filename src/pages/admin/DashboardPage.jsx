@@ -96,7 +96,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (ordersQuery.isLoading) return <LoadingState variant="page" label="주문 목록 로딩 중…" minimumDelay={0} />;
+  if (ordersQuery.isLoading && !ordersQuery.data) return <LoadingState variant="page" label="주문 목록 로딩 중…" minimumDelay={0} />;
   if (ordersQuery.error) { if (ordersQuery.error.status === 401) return null;
     return <ErrorState variant="page" title="주문을 불러올 수 없어요" actionLabel="다시 시도" onAction={refetch} />; }
 
