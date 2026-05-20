@@ -518,6 +518,12 @@ export function adminRoutes(db) {
   // ── GET /admin/api/coupons/usage (find_error_v2 — 쿠폰 사용 내역) ──
   // 응답: used_coupons JOIN orders (operating_date 필터). coupon_name·discount_amount는
   // ADR-019 상수 ('컴모융 1,000원 할인' / 1000) — DB 스키마 변경 없음.
+  //
+  // 2026-05-21 (coupon-tab-scope-toggle):
+  //   - ?date=all 허용 — 어드민 "전체 누적" 모드. 정산 ZIP은 ?date=all을 INVALID_DATE
+  //     로 거부(Codex P2 ⑥)하지만 그건 *산출물* 정책이고 본 라우트는 *조회 view* 라
+  //     의미가 다르다. 의도적 차이.
+  //   - 응답 행에 operating_date 추가 — UI가 "전체" 모드에서 행별 영업일 표시에 사용.
   router.get('/admin/api/coupons/usage', (req, res) => {
     const operating_date =
       typeof req.query.date === 'string' && req.query.date.length > 0
@@ -534,6 +540,7 @@ export function adminRoutes(db) {
         coupon_name: '컴모융 1,000원 할인',
         discount_amount: 1000,
         used_at: toIsoUtc(r.used_at),
+        operating_date: r.operating_date,
       })),
     );
   });
