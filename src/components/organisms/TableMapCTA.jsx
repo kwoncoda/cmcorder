@@ -5,8 +5,8 @@
 // 크기 (Q2): 가로 카드, 모바일에서 너무 작지 않게 (세로 ~88px).
 // 썸네일 (Q3): public/map/table-location.webp 우측 미리보기.
 //
-// 헤더 미니맵 버튼(header-map-link)은 그대로 유지 — 동일 목적지이지만 본 CTA 는
-// 메뉴 페이지 본문에서 더 눈에 띄게 강조하기 위한 추가 진입점.
+// design_fix_v5 (2026-05-20, 사용자 요청): 헤더 미니맵 버튼(header-map-link)은 삭제됨.
+// 본 CTA 가 메뉴 페이지에서 /map 으로 가는 *단일 진입점*.
 import { forwardRef } from 'react';
 import { Link } from 'react-router-dom';
 
