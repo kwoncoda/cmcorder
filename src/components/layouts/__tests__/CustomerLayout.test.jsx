@@ -3,7 +3,7 @@
 // USER_FLOW §4.6 + §3.5 3조 (API 호출 단일 reactive) / 결정 i / G13.
 //
 // 핵심 회귀:
-//  - 헤더 로고 + 지도 아이콘 렌더 + a11y 통과
+//  - 헤더 로고 + 인벤토리 버튼 렌더 + a11y 통과 (design_fix_v5: 헤더 미니맵 버튼 삭제)
 //  - <Outlet/>로 자식 라우트 렌더
 //  - BusinessClosedError (HTTP 423) catch → /closed redirect
 //  - 진행 중 주문 페이지(/orders/:id/{complete,transfer,status})에서는 redirect X
@@ -67,10 +67,10 @@ describe('CustomerLayout', () => {
     mockBusinessStateResponse({ status: 'OPEN', operating_date: '2026-05-20' });
   });
 
-  it('헤더 로고 + 지도 아이콘이 렌더된다', () => {
+  it('헤더 로고 + 인벤토리 버튼이 렌더된다', () => {
     renderWithLayout('/menu');
     expect(screen.getByText('🍗 치킨이닭')).toBeInTheDocument();
-    expect(screen.getByTestId('header-map-link')).toBeInTheDocument();
+    expect(screen.getByTestId('header-cart-link')).toBeInTheDocument();
   });
 
   it('자식 라우트가 Outlet 으로 렌더된다', () => {
@@ -78,10 +78,11 @@ describe('CustomerLayout', () => {
     expect(screen.getByTestId('test-page')).toBeInTheDocument();
   });
 
-  it('지도 아이콘은 /map 으로 가는 링크다', () => {
+  // design_fix_v5 (2026-05-20, 사용자 요청): 헤더 미니맵 버튼 삭제 —
+  // 홈 카테고리 바 위 TableMapCTA(/map 으로 가는 Link)가 단일 진입점.
+  it('★ design_fix_v5 — 헤더 미니맵 버튼은 더 이상 존재하지 않는다', () => {
     renderWithLayout('/menu');
-    const link = screen.getByTestId('header-map-link');
-    expect(link).toHaveAttribute('href', '/map');
+    expect(screen.queryByTestId('header-map-link')).not.toBeInTheDocument();
   });
 
   it('★ BusinessClosedError unhandledrejection 시 /closed 로 redirect', () => {

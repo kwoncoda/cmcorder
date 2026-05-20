@@ -85,14 +85,8 @@ export default function CustomerLayout() {
         </Link>
         {!isClosedView && (
           <div className="head-actions">
-            <Link
-              to="/map"
-              aria-label="부스 미니맵"
-              className="icon-btn"
-              data-testid="header-map-link"
-            >
-              <img src="/pubg-map.png" alt="" width="28" height="28" style={{ display: 'block' }} />
-            </Link>
+            {/* design_fix_v5 (2026-05-20, 사용자 요청): 헤더 미니맵 버튼 삭제.
+                홈 카테고리 바 위 TableMapCTA(Link to="/map")가 단일 진입점. */}
             <Link
               to="/cart"
               aria-label="인벤토리 (장바구니)"

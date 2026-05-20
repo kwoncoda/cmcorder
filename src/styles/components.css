@@ -2445,7 +2445,8 @@ code.ammo {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 12px 16px 0;
+  /* design_fix_v5 (2026-05-20, 사용자 요청): bottom 0 → 12px — 카테고리 바와 시각적 간격 확보. */
+  margin: 12px 16px;
   padding: 12px 14px;
   min-height: 88px;
   background:
