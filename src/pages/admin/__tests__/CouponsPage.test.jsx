@@ -1,6 +1,7 @@
 // find_error_v2 — CouponsPage 단위 테스트.
+// coupon-tab-scope-toggle (2026-05-21): 전체 누적 / 오늘 토글 케이스 4건 추가.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../../api/client.js', async () => {
@@ -27,6 +28,7 @@ const SAMPLE = [
     coupon_name: '컴모융 1,000원 할인',
     discount_amount: 1000,
     used_at: '2026-05-20T17:30:00Z',
+    operating_date: '2026-05-20',
   },
   {
     id: 2,
@@ -37,6 +39,7 @@ const SAMPLE = [
     coupon_name: '컴모융 1,000원 할인',
     discount_amount: 1000,
     used_at: '2026-05-20T17:32:00Z',
+    operating_date: '2026-05-21',
   },
 ];
 
@@ -114,5 +117,68 @@ describe('CouponsPage', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n').length;
     expect(lines).toBeLessThanOrEqual(120);
+  });
+
+  // ── coupon-tab-scope-toggle (2026-05-21) — 전체/오늘 토글 ──────────────────
+  it('★ 기본 진입 — apiFetch가 ?date=all 경로로 호출됨 (기본 모드 = 전체 누적)', async () => {
+    apiFetch.mockResolvedValue(SAMPLE);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('coupon-row-1')).toBeInTheDocument();
+    });
+    expect(apiFetch).toHaveBeenCalled();
+    const firstCallPath = apiFetch.mock.calls[0][0];
+    expect(firstCallPath).toContain('date=all');
+  });
+
+  it('★ "전체" 모드 — 헤더에 "영업일" 셀 + 행별 operating_date 노출 (MM-DD)', async () => {
+    apiFetch.mockResolvedValue(SAMPLE);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('coupon-row-1')).toBeInTheDocument();
+    });
+    // 헤더에 "영업일" 라벨 존재
+    expect(screen.getByText('영업일')).toBeInTheDocument();
+    // 행에 MM-DD 표시 (SAMPLE의 operating_date '2026-05-20' / '2026-05-21' → '05-20' / '05-21')
+    expect(screen.getByText('05-20')).toBeInTheDocument();
+    expect(screen.getByText('05-21')).toBeInTheDocument();
+    // 행 className에 .scope-all 적용
+    expect(screen.getByTestId('coupon-row-1')).toHaveClass('scope-all');
+    expect(screen.getByTestId('coupon-usage-head')).toHaveClass('scope-all');
+  });
+
+  it('★ "오늘" 토글 클릭 — apiFetch 재호출 (?date=all 미포함) + 영업일 셀 미노출', async () => {
+    apiFetch.mockResolvedValue(SAMPLE);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('coupon-row-1')).toBeInTheDocument();
+    });
+    apiFetch.mockClear();
+    fireEvent.click(screen.getByRole('tab', { name: '오늘' }));
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalled();
+    });
+    // 재호출 경로에 ?date=all 미포함
+    const secondCallPath = apiFetch.mock.calls[0][0];
+    expect(secondCallPath).not.toContain('date=all');
+    // 영업일 헤더 셀 미노출
+    expect(screen.queryByText('영업일')).not.toBeInTheDocument();
+    // 행 className에 .scope-all 미적용
+    expect(screen.getByTestId('coupon-row-1')).not.toHaveClass('scope-all');
+  });
+
+  it('★ 토글 aria-selected — "전체" 기본 active, "오늘" 클릭 후 active 전환', async () => {
+    apiFetch.mockResolvedValue(SAMPLE);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getByTestId('coupon-row-1')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('tab', { name: '전체' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '오늘' })).toHaveAttribute('aria-selected', 'false');
+    fireEvent.click(screen.getByRole('tab', { name: '오늘' }));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: '오늘' })).toHaveAttribute('aria-selected', 'true');
+    });
+    expect(screen.getByRole('tab', { name: '전체' })).toHaveAttribute('aria-selected', 'false');
   });
 });

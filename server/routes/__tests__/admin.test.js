@@ -1360,6 +1360,68 @@ describe('GET /admin/api/coupons/usage', () => {
     expect(wrongDate.body).toHaveLength(0);
     const rightDate = await agent.get('/admin/api/coupons/usage?date=2026-05-20');
     expect(rightDate.body).toHaveLength(1);
+    // coupon-tab-scope-toggle (2026-05-21): 응답 행에 operating_date 필드 포함 회귀.
+    expect(rightDate.body[0].operating_date).toBe('2026-05-20');
+  });
+
+  // ── coupon-tab-scope-toggle (2026-05-21) — ?date=all 전체 누적 모드 ────────
+  it('★ ?date=all — 다른 영업일(5/20+5/21) 쿠폰 모두 응답 + operating_date 형식', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    // 1) 기본 영업일(2026-05-20)에 첫 쿠폰 주문
+    await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        coupon: { used: true },
+        delivery_type: 'takeout',
+      });
+    // 2) 영업일을 2026-05-21로 갈아끼움 (운영자가 SQL UPDATE 한 시나리오와 동일)
+    db.prepare("UPDATE business_state SET operating_date='2026-05-21' WHERE id=1").run();
+    // 3) 새 영업일에 두 번째 쿠폰 주문
+    await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '김철수',
+        student_id: '202637002',
+        coupon: { used: true },
+        delivery_type: 'takeout',
+      });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/coupons/usage?date=all');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    const dates = res.body.map((r) => r.operating_date).sort();
+    expect(dates).toEqual(['2026-05-20', '2026-05-21']);
+    for (const row of res.body) {
+      expect(row.operating_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    }
+  });
+
+  it('★ ?date=all — 오늘만(?date 생략) 결과보다 행 수 ≥ (양일 합산 동작)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    // 어제 영업일(2026-05-20)에 1건
+    await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        coupon: { used: true },
+        delivery_type: 'takeout',
+      });
+    // 오늘로 영업일 전환 (5/21) — 운영자 SQL UPDATE 시나리오
+    db.prepare("UPDATE business_state SET operating_date='2026-05-21' WHERE id=1").run();
+    const { agent } = await loginAgent(app);
+    const today = await agent.get('/admin/api/coupons/usage'); // 현재 영업일(5/21) — 0건
+    const all = await agent.get('/admin/api/coupons/usage?date=all'); // 양일 합산 — 1건
+    expect(today.body).toHaveLength(0);
+    expect(all.body).toHaveLength(1);
+    expect(all.body[0].operating_date).toBe('2026-05-20');
   });
 });
 

@@ -40,19 +40,27 @@ export function countUsedCoupons(db) {
  * order_no(일자별 시퀀스 표시번호) 동봉이 가능. 쿠폰명/할인 금액은 ADR-019 상수
  * (재구현 없음) — 라우트에서 일정한 상수를 응답에 덧붙인다.
  *
+ * 2026-05-21 (coupon-tab-scope-toggle):
+ *   - SELECT에 o.operating_date 추가 — 어드민 "전체 누적" 모드에서 행별 영업일 표시용.
+ *   - operating_date === 'all' 분기 — WHERE 절 제거하여 양일 합산. 기존 호출자
+ *     (auto-snapshot ZIP, server/jobs/auto-snapshot.js:476)는 항상 구체 일자만
+ *     넘기므로 영향 0.
+ *
  * @param {import('better-sqlite3').Database} db
- * @param {{ operating_date: string }} params
- * @returns {Array<{ id, order_id, order_no, student_id, name, used_at }>}
+ * @param {{ operating_date: 'all' | string }} params
+ * @returns {Array<{ id, order_id, order_no, student_id, name, used_at, operating_date }>}
  */
 export function listCouponUsage(db, { operating_date }) {
+  const select = `SELECT uc.id, uc.order_id, o.no AS order_no,
+                         uc.student_id, uc.name, uc.used_at,
+                         o.operating_date AS operating_date
+                    FROM used_coupons uc
+                    JOIN orders o ON o.id = uc.order_id`;
+  const order = `ORDER BY uc.used_at DESC, uc.id DESC`;
+  if (operating_date === 'all') {
+    return db.prepare(`${select} ${order}`).all();
+  }
   return db
-    .prepare(
-      `SELECT uc.id, uc.order_id, o.no AS order_no,
-              uc.student_id, uc.name, uc.used_at
-         FROM used_coupons uc
-         JOIN orders o ON o.id = uc.order_id
-        WHERE o.operating_date = ?
-        ORDER BY uc.used_at DESC, uc.id DESC`,
-    )
+    .prepare(`${select} WHERE o.operating_date = ? ${order}`)
     .all(operating_date);
 }

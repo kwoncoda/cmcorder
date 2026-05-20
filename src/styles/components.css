@@ -2019,12 +2019,16 @@ code.ammo {
 
 /* find_error_v2 P2-3 (Codex 리뷰) — 쿠폰 사용 내역 반응형. */
 /* 데스크톱: 5열 grid. 모바일(<640px): 2열 스택 + 이름·쿠폰 행 전체 폭. */
+/* coupon-tab-scope-toggle (2026-05-21): "전체 누적" 모드는 .scope-all 6열 grid. */
 .coupon-usage-row {
   display: grid;
   grid-template-columns: 100px 120px minmax(0, 1fr) 100px 100px;
   gap: 12px;
   align-items: center;
   padding: 6px 0;
+}
+.coupon-usage-row.scope-all {
+  grid-template-columns: 100px 80px 120px minmax(0, 1fr) 100px 100px;
 }
 @media (max-width: 640px) {
   .coupon-usage-row {
@@ -2036,6 +2040,31 @@ code.ammo {
   .coupon-usage-row .cu-cell-name-coupon { grid-column: 1 / -1; }
   .coupon-usage-row .cu-cell-discount { text-align: right; }
   .coupon-usage-row .cu-cell-order { text-align: right; }
+  /* 모바일은 토글 라벨로 영업일 식별 — 셀 hide */
+  .coupon-usage-row.scope-all .cu-cell-business-day { display: none; }
+}
+
+/* coupon-tab-scope-toggle (2026-05-21) — 어드민 쿠폰 탭 "전체/오늘" 토글. */
+.coupon-scope-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.coupon-scope-toggle button {
+  padding: 6px 14px;
+  border: 1px solid var(--color-divider);
+  background: var(--color-surface, #fff);
+  color: var(--color-muted);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.coupon-scope-toggle button:hover { background: var(--color-bg); }
+.coupon-scope-toggle button[aria-selected="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
 }
 .bar-name {
   display: flex;
