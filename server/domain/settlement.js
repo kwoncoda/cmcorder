@@ -79,25 +79,71 @@ export function getSettlementSummary(db, operating_date) {
     .prepare('SELECT id FROM settlements WHERE operating_date = ?')
     .get(operating_date);
 
-  // P1-3: 해당 일자 쿠폰 사용 건수 — used_coupons.order_id를 orders.operating_date로 JOIN.
+  // P1-3 + adjustment Codex P2-3: 해당 일자 쿠폰 사용 건수.
+  //   - JOIN orders로 operating_date 필터 + COMPLETED_STATES(SETTLED + 레거시 DONE) 필터.
+  //   - CANCELED/DINING/진행 중 주문의 쿠폰은 정산 ZIP/요약 기준에서 제외 (Codex P2-3 2026-05-20).
   const coupon = db
     .prepare(
       `SELECT COUNT(*) AS c FROM used_coupons uc
        JOIN orders o ON o.id = uc.order_id
-       WHERE o.operating_date = ?`,
+       WHERE o.operating_date = ?
+         AND o.status IN (${completedPlaceholders})`,
     )
-    .get(operating_date);
+    .get(operating_date, ...COMPLETED_STATES);
   const couponCount = coupon?.c ?? 0;
+  const couponDiscountTotal = couponCount * COUPON_DISCOUNT_PER;
 
   return {
     operating_date,
     total_orders: totals.total_orders,
+    // total_amount = SUM(orders.total_price) = NET (쿠폰 할인 후 최종 결제금액).
+    //   pricing.js calculatePrice가 (subtotal - discount)로 저장하기 때문 (ADR-020).
     total_amount: totals.total_amount,
+    // gross_amount = NET + 쿠폰 할인 = 주문항목 단가 합계 (할인 전).
+    //   adjustment Codex P1-1/P1-2 (2026-05-20): 메뉴별 판매 revenue(=gross)와의 정합성
+    //   대조 기준. 정산서 TXT [1] 「총 상품금액」, UI 「총 상품금액」, CSV 「주문금액」.
+    gross_amount: totals.total_amount + couponDiscountTotal,
     in_progress_count: inProgress.c,
     is_closed: !!closed,
     coupon_count: couponCount,
-    coupon_discount_total: couponCount * COUPON_DISCOUNT_PER,
+    coupon_discount_total: couponDiscountTotal,
   };
+}
+
+/**
+ * 메뉴별 판매 집계 — adjustment 라운드 (Subagent 1, 2026-05-20).
+ *
+ * 메뉴 8행 고정(LEFT JOIN) + ORDER BY m.id ASC. 매출 집계 상태는
+ * COMPLETED_STATES(SETTLED + 레거시 DONE). order_items.base_price는
+ * 주문 시점 스냅샷이라 정합성 회귀 보장(= getSettlementSummary.total_amount).
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} operating_date
+ * @returns {Array<{menu_id:number, code:string, name:string, category:string,
+ *   base_price:number, quantity:number, revenue:number}>}
+ */
+export function getMenuSales(db, operating_date) {
+  // SUM은 LEFT JOIN한 orders가 매칭되지 않은 경우(operating_date·status 필터 불일치)에도
+  // oi 행이 그대로 살아 합쳐지므로, CASE로 o.id NOT NULL일 때만 합산한다.
+  // (예: CANCELED 주문, 다른 일자 주문, in-progress 주문은 o.id가 NULL → 0으로 처리)
+  const placeholders = COMPLETED_STATES.map(() => '?').join(',');
+  return db
+    .prepare(
+      `SELECT m.id AS menu_id, m.code, m.name, m.category, m.base_price,
+              COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity END), 0)
+                AS quantity,
+              COALESCE(SUM(CASE WHEN o.id IS NOT NULL THEN oi.quantity * oi.base_price END), 0)
+                AS revenue
+         FROM menus m
+         LEFT JOIN order_items oi ON oi.menu_id = m.id
+         LEFT JOIN orders o
+              ON o.id = oi.order_id
+             AND o.operating_date = ?
+             AND o.status IN (${placeholders})
+        GROUP BY m.id
+        ORDER BY m.id ASC`,
+    )
+    .all(operating_date, ...COMPLETED_STATES);
 }
 
 /**

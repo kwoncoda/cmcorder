@@ -46,3 +46,48 @@ export async function fetchAggregateSettlement(signal) {
   );
   return aggregateSettlements(results);
 }
+
+// ── adjustment 라운드 Subagent 4 — 메뉴별 판매 합산 ─────────────
+// 합산 모드 menu-sales: 같은 menu_id 끼리 quantity + revenue 합산.
+// name/code/category/base_price 는 첫 번째 등장 row 기준 보존.
+// 응답 길이 8 보장(LEFT JOIN 회귀: 0건 메뉴 row 도 합산 후 유지).
+
+export function aggregateMenuSales(list) {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  const merged = new Map();
+  for (const day of list) {
+    if (!Array.isArray(day)) continue;
+    for (const row of day) {
+      if (!row || row.menu_id == null) continue;
+      const cur = merged.get(row.menu_id);
+      if (!cur) {
+        merged.set(row.menu_id, {
+          menu_id: row.menu_id,
+          code: row.code,
+          name: row.name,
+          category: row.category,
+          base_price: row.base_price,
+          quantity: Number(row.quantity || 0),
+          revenue: Number(row.revenue || 0),
+        });
+      } else {
+        cur.quantity += Number(row.quantity || 0);
+        cur.revenue += Number(row.revenue || 0);
+      }
+    }
+  }
+  return Array.from(merged.values()).sort((a, b) => a.menu_id - b.menu_id);
+}
+
+/**
+ * 합산 모드 fetch — 메뉴별 판매. 모든 운영 일자에 대해 호출 후 합산.
+ * @param {AbortSignal} [signal]
+ */
+export async function fetchAggregateMenuSales(signal) {
+  const results = await Promise.all(
+    OPERATING_DATES.map((d) =>
+      apiFetch(`${API.ADMIN_SETTLEMENT_MENU_SALES}?date=${encodeURIComponent(d)}`, { signal }),
+    ),
+  );
+  return aggregateMenuSales(results);
+}

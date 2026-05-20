@@ -7,6 +7,15 @@
 //   - G13 settlement/close 자동 business_state CLOSED (settlement 도메인 트랜잭션)
 import { Router } from 'express';
 import { z } from 'zod';
+import {
+  createReadStream,
+  existsSync,
+  lstatSync,
+  readdirSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
+import path from 'node:path';
 import { requireAdmin, loginAdmin } from '../middleware/admin-auth.js';
 import { requireCsrf, csrfTokenHandler } from '../middleware/csrf.js';
 import {
@@ -29,6 +38,7 @@ import {
 import {
   getSettlementSummary,
   closeSettlement,
+  getMenuSales,
 } from '../domain/settlement.js';
 import { transition } from '../domain/order-state.js';
 import { createSettlementZip } from '../jobs/auto-snapshot.js';
@@ -56,6 +66,21 @@ const TransitionSchema = z.object({
 const CloseSettlementSchema = z.object({
   operating_date: z.string().optional(),
 });
+
+// adjustment 라운드 Codex P2-1 (2026-05-20) — date query 검증.
+//   settlement/menu-sales/zip route는 ?date=를 응답·파일명·헤더에 사용하므로 strict 검증.
+//   허용 형식: YYYY-MM-DD (4자리 연도 + 2자리 월 + 2자리 일).
+//   잘못된 값은 400 INVALID_DATE — UI는 고정값을 보내므로 정상 사용에 영향 X.
+//   zip route는 추가로 `date=all` 명시 거부 (Q8 — 합산 ZIP 미지원).
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+function parseDateQuery(req) {
+  const raw = req.query?.date;
+  if (typeof raw !== 'string' || raw.length === 0) return { ok: true, date: null };
+  if (!DATE_PATTERN.test(raw)) {
+    return { ok: false, error: 'INVALID_DATE', message: 'date 형식은 YYYY-MM-DD 여야 합니다.' };
+  }
+  return { ok: true, date: raw };
+}
 
 /**
  * 메뉴 직렬화 — basePrice / soldOut / recommended boolean.
@@ -172,6 +197,18 @@ function logMenuPatchEvents(db, before, after, patch, operating_date) {
 
 // find_error_v3 P2 (Codex 리뷰 2026-05-18) — history type allowlist.
 const HISTORY_TYPE_ALLOWLIST = new Set(['all', 'orders', 'menus', 'system']);
+
+// adjustment 라운드 Subagent 2 — 백업 파일명 화이트리스트(자동 백업만 다운로드 허용).
+// 패턴: auto-{ISO}.zip — 영문/숫자/하이픈/콜론/마침표만 허용.
+// 경로 traversal 방지 + 화이트리스트 외 파일 차단 (path traversal P1).
+const BACKUP_NAME_PATTERN = /^auto-[A-Za-z0-9\-:.]+\.zip$/;
+// 목록 limit 기본 6 (자동 회전 상한과 동일) / 상한 20.
+const BACKUP_LIST_DEFAULT_LIMIT = 6;
+const BACKUP_LIST_MAX_LIMIT = 20;
+// BACKUP_DIR resolve — 요청 시점에 env 평가 (테스트가 per-case 디렉터리를 주입).
+function resolveBackupDir() {
+  return path.resolve(process.env.BACKUP_DIR ?? './backups');
+}
 
 // find_error_v3 — 주문 상태 → 한국어 액션 라벨 (order-repo와 정합).
 const ORDER_ACTION_LABEL = {
@@ -366,11 +403,20 @@ export function adminRoutes(db) {
 
   // ── GET /admin/api/settlement (요약) ──
   router.get('/admin/api/settlement', (req, res) => {
-    const operating_date =
-      typeof req.query.date === 'string' && req.query.date.length > 0
-        ? req.query.date
-        : getBusinessState(db).operating_date;
+    const parsed = parseDateQuery(req);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error, message: parsed.message });
+    const operating_date = parsed.date ?? getBusinessState(db).operating_date;
     res.json(getSettlementSummary(db, operating_date));
+  });
+
+  // ── GET /admin/api/settlement/menu-sales (메뉴별 판매 — adjustment 라운드 Subagent 1) ──
+  // 메뉴 8행 고정 (LEFT JOIN). 매출 집계 상태는 SETTLED + 레거시 DONE.
+  // 응답 row: { menu_id, code, name, category, base_price, quantity, revenue }
+  router.get('/admin/api/settlement/menu-sales', (req, res) => {
+    const parsed = parseDateQuery(req);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error, message: parsed.message });
+    const operating_date = parsed.date ?? getBusinessState(db).operating_date;
+    res.json(getMenuSales(db, operating_date));
   });
 
   // ── POST /admin/api/settlement/close (ADR-012 + G13) ──
@@ -492,19 +538,170 @@ export function adminRoutes(db) {
     );
   });
 
-  // ── GET /admin/api/settlement/zip ──
-  router.get('/admin/api/settlement/zip', async (_req, res, next) => {
+  // ── GET /admin/api/settlement/zip (adjustment 라운드 Subagent 3) ──
+  // ?date=YYYY-MM-DD — 미지정 시 business_state.operating_date.
+  // ?bank=NNNNN — 통장 입금 합계 (정수). 누락/유효하지 않음 → 정산서 [2] 섹션 "미입력".
+  // Content-Disposition: RFC 5987 filename* (UTF-8 percent-encode) + ASCII filename fallback.
+  router.get('/admin/api/settlement/zip', async (req, res, next) => {
     try {
-      const buffer = await createSettlementZip(db);
-      const today = new Date().toISOString().slice(0, 10);
+      // adjustment Codex P2-1 (2026-05-20): date 검증. date=all 명시 거부 (Q8 합산 ZIP 미지원).
+      const parsed = parseDateQuery(req);
+      if (!parsed.ok) {
+        return res.status(400).json({ error: parsed.error, message: parsed.message });
+      }
+      const operating_date = parsed.date ?? getBusinessState(db).operating_date;
+      // ?bank — 통장 합계 (수동 입력). 정책:
+      //   - 미지정/빈 → undefined (정산서 [2] "미입력")
+      //   - 0 이상 정수 → 허용
+      //   - 음수/소수/문자/NaN → 400 VALIDATION_ERROR (Codex P2 후속 2026-05-20)
+      //
+      // 통장 합계는 음수가 될 수 없으므로 명시 거부. 이전엔 음수/소수가 silently
+      // 미입력 처리되어 운영자가 잘못된 입력을 알아채지 못했다.
+      let bank_total;
+      if (typeof req.query.bank === 'string' && req.query.bank.length > 0) {
+        const raw = req.query.bank;
+        const n = Number(raw);
+        if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) {
+          return res.status(400).json({
+            error: 'VALIDATION_ERROR',
+            message: '통장 합계(bank)는 0 이상 정수여야 합니다.',
+          });
+        }
+        bank_total = n;
+      }
+      const buffer = await createSettlementZip(db, { operating_date, bank_total });
+
+      // 파일명 — ASCII path-safe + RFC 5987 한국어 병기.
+      const asciiName = `settlement-${operating_date}.zip`;
+      const koreanName = `정산서-${operating_date}.zip`;
+      const encoded = encodeURIComponent(koreanName);
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="settlement-${today}.zip"`,
+        `attachment; filename="${asciiName}"; filename*=UTF-8''${encoded}`,
       );
       res.send(buffer);
     } catch (err) {
       next(err);
+    }
+  });
+
+  // ── GET /admin/api/backups (adjustment 라운드 Subagent 2) ──
+  // 최근 auto-*.zip 자동 백업 목록 — mtime 내림차순.
+  // ?limit=N (default 6, max 20). 디렉터리 부재 시 [] 반환.
+  // 응답 row: { name, size_bytes, mtime(ISO) }
+  router.get('/admin/api/backups', (req, res) => {
+    const rawLimit = Number(req.query.limit);
+    let limit = Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.floor(rawLimit)
+      : BACKUP_LIST_DEFAULT_LIMIT;
+    if (limit > BACKUP_LIST_MAX_LIMIT) limit = BACKUP_LIST_MAX_LIMIT;
+
+    const root = resolveBackupDir();
+    if (!existsSync(root)) {
+      return res.json([]);
+    }
+    const entries = readdirSync(root)
+      .filter((f) => BACKUP_NAME_PATTERN.test(f))
+      .map((name) => {
+        const full = path.join(root, name);
+        // adjustment Codex P1-3 (2026-05-20): lstatSync로 symlink 자체 검출.
+        //   statSync는 symlink를 따라가므로 외부 파일을 가리키는 auto-*.zip symlink가
+        //   목록에 노출될 수 있었다. lstatSync로 symbolic link · 디렉터리 · 그 외 일반
+        //   파일이 아닌 항목 모두 제외.
+        let st;
+        try {
+          st = lstatSync(full);
+        } catch {
+          return null;
+        }
+        if (st.isSymbolicLink() || !st.isFile()) return null;
+        return {
+          name,
+          size_bytes: st.size,
+          mtime: new Date(st.mtimeMs).toISOString(),
+          _ms: st.mtimeMs,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b._ms - a._ms)
+      .slice(0, limit)
+      .map(({ _ms: _omit, ...rest }) => rest);
+    return res.json(entries);
+  });
+
+  // ── GET /admin/api/backups/:name (adjustment 라운드 Subagent 2) ──
+  // 보안 가드 5종 (개발기획서 §6.1 P1):
+  //   1. 파일명 패턴 화이트리스트 (BACKUP_NAME_PATTERN)
+  //   2. 경로 traversal 차단 (path.resolve + startsWith)
+  //   3. 파일 존재 검증 (existsSync)
+  //   4. 파일 종류 검증 (statSync(...).isFile())
+  //   5. GET 전용 (router.get만 등록)
+  router.get('/admin/api/backups/:name', (req, res, next) => {
+    try {
+      const name = req.params.name;
+      // 1. 화이트리스트
+      if (!BACKUP_NAME_PATTERN.test(name)) {
+        return res.status(400).json({
+          error: 'INVALID_BACKUP_NAME',
+          message: '백업 파일명 형식이 올바르지 않습니다.',
+        });
+      }
+      // 2. 경로 traversal — path.resolve 후 root prefix 검증.
+      const root = resolveBackupDir();
+      const safe = path.resolve(root, name);
+      if (!safe.startsWith(root + path.sep)) {
+        return res.status(400).json({
+          error: 'INVALID_BACKUP_NAME',
+          message: '백업 파일 경로가 올바르지 않습니다.',
+        });
+      }
+      // 3. 파일 존재 (lstatSync로 symlink 자체도 검출 — symlink 깨진 경우 ENOENT).
+      let lst;
+      try {
+        lst = lstatSync(safe);
+      } catch {
+        return res.status(404).json({
+          error: 'BACKUP_NOT_FOUND',
+          message: '요청한 백업 파일을 찾을 수 없습니다.',
+        });
+      }
+      // 4. adjustment Codex P1-3 (2026-05-20): symlink·디렉터리 등 일반 파일이 아닌 항목 거부.
+      //   statSync는 symlink를 따라가서 외부 파일을 정상 다운로드 가능했던 결함을 차단.
+      if (lst.isSymbolicLink() || !lst.isFile()) {
+        return res.status(400).json({
+          error: 'INVALID_BACKUP_NAME',
+          message: '백업 대상은 일반 파일이어야 합니다 (symlink/디렉터리 불가).',
+        });
+      }
+      // 5. defense in depth — realpath가 root 안에 머무는지 한 번 더 확인.
+      //   1~4를 모두 통과한 시점에도, 별도 마운트/네임스페이스 등 예상 외 경로 이탈을 가드.
+      let rootReal;
+      let safeReal;
+      try {
+        rootReal = realpathSync(root);
+        safeReal = realpathSync(safe);
+      } catch {
+        return res.status(404).json({
+          error: 'BACKUP_NOT_FOUND',
+          message: '요청한 백업 파일을 찾을 수 없습니다.',
+        });
+      }
+      if (!safeReal.startsWith(rootReal + path.sep) && safeReal !== rootReal) {
+        return res.status(400).json({
+          error: 'INVALID_BACKUP_NAME',
+          message: '백업 파일 경로가 올바르지 않습니다.',
+        });
+      }
+      // 응답 — stream으로 memory-safe pipe.
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      res.setHeader('Content-Length', String(lst.size));
+      const stream = createReadStream(safe);
+      stream.on('error', next);
+      return stream.pipe(res);
+    } catch (err) {
+      return next(err);
     }
   });
 
