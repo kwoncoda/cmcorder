@@ -160,6 +160,22 @@ describe('DashboardPage', () => {
     expect(screen.getByTestId('loading-state')).toBeInTheDocument();
   });
 
+  it('★ dashboard_flicker — 폴링 중 isLoading=true 여도 data 가 있으면 LoadingState 풀스크린 미표시', () => {
+    // refetch 진행 중 시뮬: useApi 가 isLoading=true 로 reset 했지만
+    // 이전 응답 data 는 그대로 살아 있는 상태. 옵션 A 조건 (`isLoading && !data`)
+    // 으로 풀스크린 LoadingState 가 칸반 보드를 덮지 않아야 한다.
+    useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
+    useApi.mockReturnValue({
+      data: SAMPLE_ORDERS,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    });
+    renderPage();
+    expect(screen.queryByTestId('loading-state')).not.toBeInTheDocument();
+    expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
+  });
+
   it('★ Error 분기 — 5xx 시 ErrorState + 다시 시도 버튼', () => {
     const refetch = vi.fn();
     useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
