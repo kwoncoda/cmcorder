@@ -185,6 +185,24 @@ describe('order-repo — updateOrderStatus', () => {
     expect(settled.settled_at).toBeTruthy();
   });
 
+  // design_fix_v4: 포장(takeout) 주문은 DINING 단계를 건너뛰고 READY → SETTLED.
+  // repo 자체는 상태 머신 검증을 하지 않으므로(라우트 책임) 직접 UPDATE 가능 —
+  // 본 회귀는 settled_at 컬럼이 정상 기록되는지를 확인.
+  it('★ design_fix_v4 — takeout READY → SETTLED 직접 전이 시 settled_at 기록', () => {
+    const db = freshDb();
+    const o = createOrder(db, sampleMeta({ delivery_type: 'takeout', table_no: null }));
+    updateOrderStatus(db, o.id, 'TRANSFER_REPORTED');
+    updateOrderStatus(db, o.id, 'PAID');
+    updateOrderStatus(db, o.id, 'COOKING');
+    updateOrderStatus(db, o.id, 'READY');
+    // DINING 건너뛰고 SETTLED 직접.
+    const settled = updateOrderStatus(db, o.id, 'SETTLED');
+    expect(settled.status).toBe('SETTLED');
+    expect(settled.settled_at).toBeTruthy();
+    // dining_at 은 거치지 않았으므로 비어 있어야 한다.
+    expect(settled.dining_at).toBeFalsy();
+  });
+
   it('extraFields 전달 시 같이 UPDATE', () => {
     const db = freshDb();
     const o = createOrder(db, sampleMeta());

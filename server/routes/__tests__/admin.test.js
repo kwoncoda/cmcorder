@@ -422,6 +422,102 @@ describe('POST /admin/api/orders/:id/transition', () => {
     ).send({ to: 'CANCELED' });
     expect(res.status).toBe(404);
   });
+
+  // ── design_fix_v4 — takeout READY → SETTLED 직접 (DINING 건너뜀) ──────────────
+  // 매장 식사(dineIn)는 READY → DINING → SETTLED 흐름 유지.
+  // 포장(takeout)은 DINING 단계를 건너뛰고 READY → SETTLED 직접 전이.
+  async function advanceToReady(agent, csrfToken, orderId) {
+    for (const to of ['TRANSFER_REPORTED', 'PAID', 'COOKING', 'READY']) {
+      await withCsrf(agent.post(`/admin/api/orders/${orderId}/transition`), csrfToken)
+        .send({ to });
+    }
+  }
+
+  it('★ design_fix_v4 — takeout READY → SETTLED 200 (DINING 건너뜀)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        delivery_type: 'takeout',
+      });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    const res = await withCsrf(
+      agent.post(`/admin/api/orders/${create.body.id}/transition`),
+      csrfToken,
+    ).send({ to: 'SETTLED' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('SETTLED');
+  });
+
+  it('★ design_fix_v4 — takeout READY → DINING 409 ILLEGAL_TRANSITION (방어선)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        delivery_type: 'takeout',
+      });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    const res = await withCsrf(
+      agent.post(`/admin/api/orders/${create.body.id}/transition`),
+      csrfToken,
+    ).send({ to: 'DINING' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('ILLEGAL_TRANSITION');
+  });
+
+  it('★ design_fix_v4 — dineIn READY → DINING 200 (회귀)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        delivery_type: 'dineIn',
+        table_no: 5,
+      });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    const res = await withCsrf(
+      agent.post(`/admin/api/orders/${create.body.id}/transition`),
+      csrfToken,
+    ).send({ to: 'DINING' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('DINING');
+  });
+
+  it('★ design_fix_v4 — dineIn READY → SETTLED 409 (DINING 우회 차단 회귀)', async () => {
+    const db = freshDb();
+    const app = createApp({ db });
+    const create = await request(app)
+      .post('/api/orders')
+      .send({
+        items: [{ menu_id: 1, quantity: 1 }],
+        name: '홍길동',
+        student_id: '202637001',
+        delivery_type: 'dineIn',
+        table_no: 5,
+      });
+    const { agent, csrfToken } = await loginAgent(app);
+    await advanceToReady(agent, csrfToken, create.body.id);
+    const res = await withCsrf(
+      agent.post(`/admin/api/orders/${create.body.id}/transition`),
+      csrfToken,
+    ).send({ to: 'SETTLED' });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('ILLEGAL_TRANSITION');
+  });
 });
 
 describe('GET /admin/api/transfers', () => {
@@ -1190,9 +1286,11 @@ describe('READY → DINING → SETTLED 전이 이벤트 로깅 (table_lock)', ()
   it('★ READY→DINING 전이 → order_events에 DINING 행 + actor=admin', async () => {
     const db = freshDb();
     const app = createApp({ db });
+    // design_fix_v4 (2026-05-19): DINING은 매장 식사(dineIn) 전용. takeout은
+    // READY → SETTLED 직접이므로 본 시나리오는 dineIn 픽스처로 검증한다.
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'dineIn', table_no: 5 });
     const { agent, csrfToken } = await loginAgent(app);
     await advanceToReady(agent, csrfToken, create.body.id);
     const res = await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
@@ -1211,9 +1309,10 @@ describe('READY → DINING → SETTLED 전이 이벤트 로깅 (table_lock)', ()
   it('★ DINING→SETTLED 전이 → order_events에 SETTLED 행 + actor=admin', async () => {
     const db = freshDb();
     const app = createApp({ db });
+    // design_fix_v4: DINING 경유는 dineIn 만.
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '박서연', student_id: '202637002', delivery_type: 'takeout' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '박서연', student_id: '202637002', delivery_type: 'dineIn', table_no: 6 });
     const { agent, csrfToken } = await loginAgent(app);
     await advanceToReady(agent, csrfToken, create.body.id);
     await withCsrf(agent.post(`/admin/api/orders/${create.body.id}/transition`), csrfToken)
@@ -1233,9 +1332,10 @@ describe('READY → DINING → SETTLED 전이 이벤트 로깅 (table_lock)', ()
   it('★ DINING/SETTLED 이벤트가 history?type=orders 에 노출됨', async () => {
     const db = freshDb();
     const app = createApp({ db });
+    // design_fix_v4: DINING 경유는 dineIn 만.
     const create = await request(app)
       .post('/api/orders')
-      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '김민준', student_id: '202637003', delivery_type: 'takeout' });
+      .send({ items: [{ menu_id: 1, quantity: 1 }], name: '김민준', student_id: '202637003', delivery_type: 'dineIn', table_no: 7 });
     const { agent, csrfToken } = await loginAgent(app);
     await advanceToReady(agent, csrfToken, create.body.id);
     for (const to of ['DINING', 'SETTLED']) {

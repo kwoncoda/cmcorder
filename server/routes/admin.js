@@ -329,8 +329,10 @@ export function adminRoutes(db) {
       if (!order) {
         return res.status(404).json({ error: 'ORDER_NOT_FOUND', message: '주문을 찾을 수 없습니다.' });
       }
-      // 불법 전이면 StateTransitionError throw → errorHandler 409
-      transition(order.status, to);
+      // design_fix_v4 (2026-05-19): takeout 주문은 READY → SETTLED 직접 전이 허용
+      //   (DINING 건너뜀). takeout READY → DINING 은 거부. dineIn 흐름은 LEGAL_TRANSITIONS
+      //   표 그대로. 불법 전이면 StateTransitionError throw → errorHandler 409.
+      transition(order.status, to, { deliveryType: order.delivery_type });
       // find_error_v2 — admin 전이 이벤트 INSERT (트랜잭션 안).
       const updated = updateOrderStatus(db, order.id, to, {}, { actor: 'admin' });
       // Bug 8 — transition 응답도 동일 shape 유지.
