@@ -179,12 +179,12 @@ describe('POST /admin/api/business/open', () => {
 });
 
 describe('GET /admin/api/menus', () => {
-  it('메뉴 8개 (basePrice / soldOut / recommended 노출)', async () => {
+  it('메뉴 10개 (basePrice / soldOut / recommended 노출 — menu_update 라운드)', async () => {
     const app = createApp({ db: freshDb() });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/menus');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(8);
+    expect(res.body).toHaveLength(10);
     expect(typeof res.body[0].basePrice).toBe('number');
     expect(typeof res.body[0].soldOut).toBe('boolean');
     expect(typeof res.body[0].recommended).toBe('boolean');
@@ -247,7 +247,8 @@ describe('GET /admin/api/orders', () => {
     expect(res.status).toBe(200);
     expect(res.body).toHaveLength(1);
     expect(res.body[0].name).toBe('홍길동');
-    expect(res.body[0].total_price).toBe(18000);
+    // menu_update 라운드 (2026-05-20): 후라이드 시드 가격 18000 → 8000.
+    expect(res.body[0].total_price).toBe(8000);
   });
 
   it('status 필터 (ORDERED만)', async () => {
@@ -909,10 +910,13 @@ describe('POST /admin/api/menus/:id/toggle — admin_events 기록', () => {
     expect(row.after_value).toBe('true');
   });
 
-  it('★ soldOut: false → SOLDOUT_OFF 이벤트 (메뉴5는 시드가 sold_out=1)', async () => {
+  it('★ soldOut: false → SOLDOUT_OFF 이벤트 (menu_update 라운드: 메뉴 5는 기본 0 → 먼저 ON 후 OFF)', async () => {
+    // menu_update 라운드 (2026-05-20): 시드 기본 sold_out=0 정책으로 변경.
+    // SOLDOUT_OFF 회귀 보호를 위해 메뉴 5를 먼저 ON으로 토글한 뒤 OFF 토글하여 회귀 의도 유지.
     const db = freshDb();
     const app = createApp({ db });
     const { agent, csrfToken } = await loginAgent(app);
+    await withCsrf(agent.post('/admin/api/menus/5/toggle'), csrfToken).send({ soldOut: true });
     await withCsrf(agent.post('/admin/api/menus/5/toggle'), csrfToken).send({ soldOut: false });
     const row = db.prepare(
       `SELECT * FROM admin_events WHERE event_type = 'SOLDOUT_OFF'`,
@@ -946,7 +950,8 @@ describe('POST /admin/api/menus/:id/toggle — admin_events 기록', () => {
     ).get();
     expect(row).toBeDefined();
     expect(row.action_name).toBe('가격 변경');
-    expect(row.before_value).toBe('18000');
+    // menu_update 라운드 (2026-05-20): 후라이드 시드 가격 18000 → 8000.
+    expect(row.before_value).toBe('8000');
     expect(row.after_value).toBe('20000');
   });
 
@@ -1443,16 +1448,16 @@ describe('GET /admin/api/settlement/menu-sales', () => {
     expect(res.status).toBe(401);
   });
 
-  it('★ 인증 후 200 + 메뉴 8행 배열', async () => {
+  it('★ 인증 후 200 + 메뉴 10행 배열 (menu_update 라운드)', async () => {
     const app = createApp({ db: freshDb() });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/settlement/menu-sales');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
-    expect(res.body).toHaveLength(8);
+    expect(res.body).toHaveLength(10);
   });
 
-  it('★ 응답 row 구조 — menu_id/code/name/category/base_price/quantity/revenue 모두 존재', async () => {
+  it('★ 응답 row 구조 — menu_id/code/name/category/base_price/quantity/revenue 모두 존재 (menu_update)', async () => {
     const app = createApp({ db: freshDb() });
     const { agent } = await loginAgent(app);
     const res = await agent.get('/admin/api/settlement/menu-sales');
@@ -1465,9 +1470,11 @@ describe('GET /admin/api/settlement/menu-sales', () => {
     expect(row).toHaveProperty('base_price');
     expect(row).toHaveProperty('quantity');
     expect(row).toHaveProperty('revenue');
-    // ORDER BY m.id ASC 보장
+    // ORDER BY m.id ASC 보장 — menu_update 라운드: 마지막 row는 id=10 fuel
     expect(res.body[0].menu_id).toBe(1);
-    expect(res.body[7].menu_id).toBe(8);
+    expect(res.body[9].menu_id).toBe(10);
+    expect(res.body[9].code).toBe('fuel');
+    expect(res.body[9].name).toBe('양념 소스');
   });
 });
 

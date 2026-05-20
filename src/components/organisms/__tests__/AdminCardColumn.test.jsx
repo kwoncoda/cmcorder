@@ -180,13 +180,13 @@ describe('AdminCardColumn', () => {
     expect(card.className).not.toMatch(/hover:opacity-90/);
   });
 
-  it('★ items 배열이 있으면 "이름 ×수량" 으로 최대 3개 표시', () => {
+  it('★ items 배열이 있으면 "이름 ×수량" 으로 모든 항목 표시 (menu_update — slice 폐기)', () => {
     const orders = [
       mkOrder({
         id: 17,
         no: 17,
         items: [
-          { menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 1, name: '후라이드', base_price: 8000, quantity: 1, category: 'CHICKEN' },
           { menu_id: 2, name: '콜라', base_price: 2000, quantity: 2, category: 'DRINK' },
         ],
       }),
@@ -200,21 +200,24 @@ describe('AdminCardColumn', () => {
       />,
     );
     const card = screen.getByTestId('admin-order-card-17');
-    expect(within(card).getByText(/후라이드 ×1/)).toBeInTheDocument();
-    expect(within(card).getByText(/콜라 ×2/)).toBeInTheDocument();
+    expect(within(card).getByText(/후라이드/)).toBeInTheDocument();
+    expect(within(card).getByText(/×1/)).toBeInTheDocument();
+    expect(within(card).getByText(/콜라/)).toBeInTheDocument();
+    expect(within(card).getByText(/×2/)).toBeInTheDocument();
   });
 
-  it('★ items 가 3개 초과면 처음 3개 + "외 N개" 표시', () => {
+  it('★ menu_update — items 가 4개 이상이어도 전체 항목 표시 (조리자 가시성, "외 N개" 폐기)', () => {
     const orders = [
       mkOrder({
         id: 17,
         no: 17,
         items: [
-          { menu_id: 1, name: '후라이드', base_price: 18000, quantity: 1, category: 'CHICKEN' },
-          { menu_id: 2, name: '양념', base_price: 18000, quantity: 1, category: 'CHICKEN' },
-          { menu_id: 3, name: '간장', base_price: 18000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 1, name: '후라이드', base_price: 8000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 2, name: '양념', base_price: 9000, quantity: 1, category: 'CHICKEN' },
+          { menu_id: 3, name: '뿌링클', base_price: 11000, quantity: 1, category: 'CHICKEN' },
           { menu_id: 4, name: '콜라', base_price: 2000, quantity: 2, category: 'DRINK' },
-          { menu_id: 5, name: '사이다', base_price: 2000, quantity: 1, category: 'DRINK' },
+          { menu_id: 9, name: '생수', base_price: 1000, quantity: 3, category: 'SIDE' },
+          { menu_id: 10, name: '양념 소스', base_price: 500, quantity: 4, category: 'SIDE' },
         ],
       }),
     ];
@@ -227,12 +230,14 @@ describe('AdminCardColumn', () => {
       />,
     );
     const card = screen.getByTestId('admin-order-card-17');
-    expect(within(card).getByText(/후라이드 ×1/)).toBeInTheDocument();
-    expect(within(card).getByText(/양념 ×1/)).toBeInTheDocument();
-    expect(within(card).getByText(/간장 ×1/)).toBeInTheDocument();
-    expect(within(card).getByText(/외 2개/)).toBeInTheDocument();
-    // 3번째 이후 항목은 직접 노출되지 않음.
-    expect(within(card).queryByText(/콜라 ×2/)).not.toBeInTheDocument();
+    const list = within(card).getByTestId('order-items');
+    // 6개 항목 모두 li로 노출 (조리자가 카드만 보고 전체 메뉴 인지 가능).
+    expect(list.querySelectorAll('li')).toHaveLength(6);
+    expect(within(card).getByText(/후라이드/)).toBeInTheDocument();
+    expect(within(card).getByText(/양념 소스/)).toBeInTheDocument();
+    expect(within(card).getByText(/생수/)).toBeInTheDocument();
+    // "외 N개" 요약은 폐기됨 — 어떤 형태의 surplus 라벨도 노출 X.
+    expect(within(card).queryByText(/외 \d+개/)).not.toBeInTheDocument();
   });
 
   it('★ items 가 빈 배열이거나 누락 시 깨지지 않고 항목 라인 미렌더', () => {

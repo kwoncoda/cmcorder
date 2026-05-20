@@ -21,9 +21,9 @@ beforeEach(() => {
 
 describe('pricing — ADR-020 ★★★ 4 회귀', () => {
   it('★★★ 회귀 1: 정상 — menu_id + qty만으로 total 계산', () => {
-    // 후라이드(id=1) base_price=18000 × 2 = 36000
+    // 후라이드(id=1) base_price=8000 × 2 = 16000
     const r = calculatePrice({ items: [{ menu_id: 1, quantity: 2 }] }, db);
-    expect(r.total_price).toBe(36000);
+    expect(r.total_price).toBe(16000);
   });
 
   it('★★★ 회귀 2: 클라가 다른 total 보내도 무시 (시그니처 차단 + 재계산)', () => {
@@ -33,7 +33,7 @@ describe('pricing — ADR-020 ★★★ 4 회귀', () => {
       { items: [{ menu_id: 1, quantity: 1 }], total: 99999, total_price: 99999 },
       db,
     );
-    expect(r.total_price).toBe(18000); // 클라 total/total_price 무시 — 서버 재계산
+    expect(r.total_price).toBe(8000); // 클라 total/total_price 무시 — 서버 재계산
   });
 
   it('★★★ 회귀 3: 존재하지 않는 menu_id 거부', () => {
@@ -47,8 +47,8 @@ describe('pricing — ADR-020 ★★★ 4 회귀', () => {
       { items: [{ menu_id: 1, quantity: 1 }], coupon: { used: true } },
       db,
     );
-    // 18000 − 1000 = 17000 (정액)
-    expect(r.total_price).toBe(17000);
+    // 8000 − 1000 = 7000 (정액)
+    expect(r.total_price).toBe(7000);
     expect(r.discount).toBe(1000);
   });
 
@@ -69,8 +69,8 @@ describe('pricing — 추가 케이스', () => {
       { items: [{ menu_id: 1, quantity: 1 }, { menu_id: 7, quantity: 3 }] },
       db,
     );
-    // 후라이드 18000 + 콜라 2000 * 3 = 24000
-    expect(r.total_price).toBe(24000);
+    // menu_update: 후라이드 8000 + 콜라 2000 * 3 = 14000
+    expect(r.total_price).toBe(14000);
   });
 
   it('quantity 0 거부', () => {
@@ -93,10 +93,10 @@ describe('pricing — 추가 케이스', () => {
     const r = calculatePrice({ items: [{ menu_id: 1, quantity: 1 }] }, db);
     expect(r.items_priced).toHaveLength(1);
     expect(r.items_priced[0].name).toBe('후라이드');
-    expect(r.items_priced[0].base_price).toBe(18000);
+    expect(r.items_priced[0].base_price).toBe(8000);
     expect(r.items_priced[0].quantity).toBe(1);
     expect(r.items_priced[0].menu_id).toBe(1);
-    expect(r.items_priced[0].line_total).toBe(18000);
+    expect(r.items_priced[0].line_total).toBe(8000);
   });
 
   it('품절 메뉴 거부', () => {
@@ -109,7 +109,7 @@ describe('pricing — 추가 케이스', () => {
   it('쿠폰 미사용 — 할인 0', () => {
     const r = calculatePrice({ items: [{ menu_id: 1, quantity: 1 }] }, db);
     expect(r.discount).toBe(0);
-    expect(r.total_price).toBe(18000);
+    expect(r.total_price).toBe(8000);
   });
 
   it('menu_id 정수 아님 거부', () => {

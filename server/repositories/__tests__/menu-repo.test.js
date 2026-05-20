@@ -1,5 +1,5 @@
 // Task 6.5 — menu-repo 회귀.
-// 메뉴 8개 시드 정합 + soldOut·recommended·base_price patch.
+// menu_update 라운드 (2026-05-20): 메뉴 8 → 10 + 가격 갱신 + 신규 메뉴 회귀.
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { bootstrapDatabase } from '../../db/bootstrap.js';
@@ -17,18 +17,45 @@ describe('menu-repo', () => {
     db = freshDb();
   });
 
-  it('listMenus — 시드된 메뉴 8개 반환', () => {
+  it('listMenus — 시드된 메뉴 10개 반환 (menu_update — 신규 2종 추가)', () => {
     const rows = listMenus(db);
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(10);
     expect(rows[0].code).toBe('BANDAGE');
     expect(rows[7].code).toBe('ENERGY');
+    expect(rows[8].code).toBe('bluezone');
+    expect(rows[9].code).toBe('fuel');
   });
 
-  it('getMenu — id로 단일 메뉴 조회', () => {
+  it('getMenu — id로 단일 메뉴 조회 (menu_update 가격 갱신)', () => {
     const m = getMenu(db, 1);
     expect(m).toBeDefined();
     expect(m.name).toBe('후라이드');
-    expect(m.base_price).toBe(18000);
+    expect(m.base_price).toBe(8000);
+  });
+
+  it('★ menu_update — 신규 메뉴 id=9 생수 / id=10 양념 소스', () => {
+    const m9 = getMenu(db, 9);
+    expect(m9).toBeDefined();
+    expect(m9.code).toBe('bluezone');
+    expect(m9.name).toBe('생수');
+    expect(m9.base_price).toBe(1000);
+    expect(m9.category).toBe('side');
+    expect(m9.image).toBe('/items/bluezone.webp');
+
+    const m10 = getMenu(db, 10);
+    expect(m10).toBeDefined();
+    expect(m10.code).toBe('fuel');
+    expect(m10.name).toBe('양념 소스');
+    expect(m10.base_price).toBe(500);
+    expect(m10.category).toBe('side');
+    expect(m10.image).toBe('/items/fuel.webp');
+  });
+
+  it('★ menu_update — 모든 시드 메뉴 기본 판매 가능 (sold_out=0)', () => {
+    const rows = listMenus(db);
+    for (const m of rows) {
+      expect(m.sold_out).toBe(0);
+    }
   });
 
   it('getMenu — 존재하지 않으면 undefined', () => {

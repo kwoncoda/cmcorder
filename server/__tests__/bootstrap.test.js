@@ -52,12 +52,12 @@ describe('bootstrapDatabase — 신규 DB', () => {
     expect(tables).toContain('backups');
   });
 
-  it('★ 메뉴 8개 시드 (PUBG 코드 보존 — ADR-006)', () => {
+  it('★ 메뉴 10개 시드 (PUBG 코드 보존 — ADR-006 + menu_update 라운드)', () => {
     const db = inMemoryDb();
     bootstrapDatabase(db);
 
-    const menus = db.prepare('SELECT code, name, base_price, category FROM menus ORDER BY id').all();
-    expect(menus).toHaveLength(8);
+    const menus = db.prepare('SELECT code, name, base_price, category, sold_out FROM menus ORDER BY id').all();
+    expect(menus).toHaveLength(10);
 
     const codes = menus.map((m) => m.code);
     expect(codes).toEqual([
@@ -69,24 +69,39 @@ describe('bootstrapDatabase — 신규 DB', () => {
       'ADRENALINE',
       'PAINKILLER',
       'ENERGY',
+      'bluezone',
+      'fuel',
     ]);
 
-    // src/constants/menus.js 와 가격 정합 (SoT)
+    // src/constants/menus.js 와 가격 정합 (SoT) — menu_update 라운드 (2026-05-20) 가격 갱신
     const byCode = Object.fromEntries(menus.map((m) => [m.code, m]));
-    expect(byCode.BANDAGE.base_price).toBe(18000);
+    expect(byCode.BANDAGE.base_price).toBe(8000);
     expect(byCode.BANDAGE.name).toBe('후라이드');
     expect(byCode.BANDAGE.category).toBe('chicken');
 
-    expect(byCode.FIRST_AID.base_price).toBe(19000);
-    expect(byCode.MED_KIT.base_price).toBe(21000);
-    expect(byCode.SYRINGE.base_price).toBe(5000);
-    expect(byCode.DEFIB.base_price).toBe(7000);
-    expect(byCode.ADRENALINE.base_price).toBe(6000);
+    expect(byCode.FIRST_AID.base_price).toBe(9000);
+    expect(byCode.MED_KIT.base_price).toBe(11000);
+    expect(byCode.SYRINGE.base_price).toBe(4000);
+    expect(byCode.DEFIB.base_price).toBe(5000);
+    expect(byCode.ADRENALINE.base_price).toBe(4500);
     expect(byCode.PAINKILLER.base_price).toBe(2000);
     expect(byCode.ENERGY.base_price).toBe(2000);
 
     expect(byCode.PAINKILLER.category).toBe('drink');
     expect(byCode.SYRINGE.category).toBe('side');
+
+    // ★ menu_update — 신규 메뉴 2종 시드
+    expect(byCode.bluezone.name).toBe('생수');
+    expect(byCode.bluezone.base_price).toBe(1000);
+    expect(byCode.bluezone.category).toBe('side');
+    expect(byCode.fuel.name).toBe('양념 소스');
+    expect(byCode.fuel.base_price).toBe(500);
+    expect(byCode.fuel.category).toBe('side');
+
+    // ★ menu_update — 모든 메뉴 기본 판매 가능 (sold_out=0)
+    for (const m of menus) {
+      expect(m.sold_out).toBe(0);
+    }
   });
 
   it('★ business_state CLOSED 시드 + operating_date (G13)', () => {

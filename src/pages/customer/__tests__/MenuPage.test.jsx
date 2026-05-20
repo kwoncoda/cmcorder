@@ -20,12 +20,15 @@ vi.mock('../../../hooks/useMenuData.js', () => ({
 import { useMenuData } from '../../../hooks/useMenuData.js';
 
 const SAMPLE_MENUS = [
-  { id: 1, code: 'BANDAGE',    name: '후라이드',   category: 'chicken', basePrice: 18000 },
-  { id: 2, code: 'FIRST_AID',  name: '양념',       category: 'chicken', basePrice: 19000 },
-  { id: 3, code: 'MED_KIT',    name: '뿌링클',     category: 'chicken', basePrice: 20000 },
+  { id: 1, code: 'BANDAGE',    name: '후라이드',   category: 'chicken', basePrice: 8000 },
+  { id: 2, code: 'FIRST_AID',  name: '양념',       category: 'chicken', basePrice: 9000 },
+  { id: 3, code: 'MED_KIT',    name: '뿌링클',     category: 'chicken', basePrice: 11000 },
   { id: 6, code: 'ADRENALINE', name: '감자튀김',   category: 'side',    basePrice: 4000 },
   { id: 7, code: 'PAINKILLER', name: '치즈볼',     category: 'side',    basePrice: 5000 },
   { id: 8, code: 'ENERGY',     name: '콜라',       category: 'drink',   basePrice: 2000 },
+  // menu_update 라운드 (2026-05-20) — 신규 2종.
+  { id: 9, code: 'bluezone',   name: '생수',       category: 'side',    basePrice: 1000, image: '/items/bluezone.webp', sub: '목마름 -35%' },
+  { id: 10, code: 'fuel',      name: '양념 소스',  category: 'side',    basePrice: 500,  image: '/items/fuel.webp',     sub: '연료 +35%' },
 ];
 
 function renderPage() {
@@ -192,6 +195,46 @@ describe('MenuPage', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n').length;
     expect(lines).toBeLessThanOrEqual(120);
+  });
+
+  // ── menu_update 라운드 (2026-05-20) — 신규 메뉴 표시 회귀 ───────
+  describe('menu_update — 신규 메뉴 (생수/양념 소스)', () => {
+    it('★ 전체 탭에 생수/양념 소스 표시', () => {
+      useMenuData.mockReturnValue({
+        menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+      });
+      renderPage();
+      expect(screen.getByRole('heading', { name: '생수' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '양념 소스' })).toBeInTheDocument();
+    });
+
+    it('★ 사이드 탭에 생수/양념 소스 표시', () => {
+      useMenuData.mockReturnValue({
+        menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+      });
+      renderPage();
+      fireEvent.click(screen.getByTestId('category-tab-side'));
+      expect(screen.getByRole('heading', { name: '생수' })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: '양념 소스' })).toBeInTheDocument();
+      // chicken 메뉴는 안 보임
+      expect(screen.queryByRole('heading', { name: '후라이드' })).not.toBeInTheDocument();
+    });
+
+    it('★ 생수 줍기 클릭 → 카트에 추가', () => {
+      useMenuData.mockReturnValue({
+        menus: SAMPLE_MENUS, popular: [], isLoading: false, error: null, refetch: vi.fn(),
+      });
+      renderPage();
+      // 사이드 탭으로 좁힌 뒤 줍기 버튼 클릭 (생수가 첫 카드).
+      fireEvent.click(screen.getByTestId('category-tab-side'));
+      const buttons = screen.getAllByRole('button', { name: /줍기/ });
+      // 생수 카드의 줍기 버튼 클릭
+      const sosuButton = buttons.find((b) => b.getAttribute('aria-label')?.includes('생수'));
+      expect(sosuButton).toBeDefined();
+      fireEvent.click(sosuButton);
+      const items = useCartStore.getState().items;
+      expect(items.some((i) => i.menuId === 9)).toBe(true);
+    });
   });
 
   // design_fix_v4 Task 1 — 홈 카테고리 바 위 TableMapCTA 삽입 검증.

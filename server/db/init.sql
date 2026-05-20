@@ -5,7 +5,9 @@
 -- 본 파일을 단일 트랜잭션으로 exec — 부분 적용으로 인한 깨진 스키마 방지.
 --
 -- 가드:
---   - 메뉴 8개는 src/constants/menus.js (SoT)와 정합 (PUBG 매핑 ADR-006).
+--   - 메뉴 10개는 src/constants/menus.js (SoT)와 정합 (PUBG 매핑 ADR-006).
+--     menu_update 라운드 (2026-05-20): 신규 2종(생수/양념 소스) 추가, 기존 6종 가격 갱신,
+--     id=5 sold_out 기본값 false (전체 메뉴 기본 판매 가능).
 --   - business_state 단일 행 강제 (CHECK id=1, G13).
 --   - 외부인 토큰 보존을 위해 student_id NULL 허용 + is_external 플래그.
 --   - 가격은 정수 원 단위 (Float X — ADR-020).
@@ -216,20 +218,25 @@ CREATE INDEX IF NOT EXISTS idx_admin_events_operating_date ON admin_events(opera
 -- 시드 데이터
 -- ============================================================
 
--- 메뉴 8개 — src/constants/menus.js (SoT)와 정합.
--- 가격: MED_KIT 21000 / SYRINGE 5000 / DEFIB 7000 (회귀 보호).
+-- 메뉴 10개 — src/constants/menus.js (SoT)와 정합.
+-- menu_update 라운드 (2026-05-20):
+--   기존 6종 가격 갱신 (후라이드 8000 / 양념 9000 / 뿌링클 11000 / 감자튀김 4000 / 뿌링감자튀김 5000 / 칠리스 4500).
+--   id=5 DEFIB sold_out 1 → 0 (기본 판매 가능).
+--   신규 2종 추가: id=9 bluezone 생수 1000 / id=10 fuel 양념 소스 500 (둘 다 side, lowercase code).
 -- PUBG 매핑: BANDAGE 후라이드 / FIRST_AID 양념 / MED_KIT 뿌링클 /
 --           SYRINGE 감자튀김 / DEFIB 뿌링감자튀김 / ADRENALINE 칠리스 /
---           PAINKILLER 콜라 / ENERGY 사이다 (ADR-006)
+--           PAINKILLER 콜라 / ENERGY 사이다 (ADR-006) + bluezone/fuel 신규.
 INSERT OR IGNORE INTO menus (id, code, name, category, base_price, image, sold_out, recommended) VALUES
-  (1, 'BANDAGE',    '후라이드',       'chicken', 18000, '/items/bandage.webp',    0, 1),
-  (2, 'FIRST_AID',  '양념',           'chicken', 19000, '/items/first-aid.webp',  0, 0),
-  (3, 'MED_KIT',    '뿌링클',         'chicken', 21000, '/items/med-kit.webp',    0, 1),
-  (4, 'SYRINGE',    '감자튀김',       'side',     5000, '/items/syringe.webp',    0, 0),
-  (5, 'DEFIB',      '뿌링감자튀김',   'side',     7000, '/items/defib.webp',      1, 0),
-  (6, 'ADRENALINE', '칠리스',         'side',     6000, '/items/adrenaline.webp', 0, 0),
-  (7, 'PAINKILLER', '콜라',           'drink',    2000, '/items/painkiller.webp', 0, 0),
-  (8, 'ENERGY',     '사이다',         'drink',    2000, '/items/energy.webp',     0, 0);
+  ( 1, 'BANDAGE',    '후라이드',       'chicken',  8000, '/items/bandage.webp',    0, 1),
+  ( 2, 'FIRST_AID',  '양념',           'chicken',  9000, '/items/first-aid.webp',  0, 0),
+  ( 3, 'MED_KIT',    '뿌링클',         'chicken', 11000, '/items/med-kit.webp',    0, 1),
+  ( 4, 'SYRINGE',    '감자튀김',       'side',     4000, '/items/syringe.webp',    0, 0),
+  ( 5, 'DEFIB',      '뿌링감자튀김',   'side',     5000, '/items/defib.webp',      0, 0),
+  ( 6, 'ADRENALINE', '칠리스',         'side',     4500, '/items/adrenaline.webp', 0, 0),
+  ( 7, 'PAINKILLER', '콜라',           'drink',    2000, '/items/painkiller.webp', 0, 0),
+  ( 8, 'ENERGY',     '사이다',         'drink',    2000, '/items/energy.webp',     0, 0),
+  ( 9, 'bluezone',   '생수',           'side',     1000, '/items/bluezone.webp',   0, 0),
+  (10, 'fuel',       '양념 소스',      'side',      500, '/items/fuel.webp',       0, 0);
 
 -- 영업 상태 — 첫 부팅은 CLOSED. operating_date는 일회성 운영 시작일.
 INSERT OR IGNORE INTO business_state (id, status, operating_date) VALUES

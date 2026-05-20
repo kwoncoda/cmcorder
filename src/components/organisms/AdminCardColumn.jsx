@@ -18,6 +18,10 @@
 //   상호작용 가능. cursor-pointer / hover:opacity-90 제거.
 // - **find_error_v2 (2026-05-18): items 미리보기.** 카드에 order.items 최대 3개를
 //   "이름 ×수량" 으로 노출. 초과 시 "외 N개".
+// - **menu_update (2026-05-20): 항목 전체 노출.** 조리자가 어떤 메뉴를 조리해야
+//   하는지 카드만으로 판단할 수 있어야 한다는 운영 요구로, "외 N개" 요약을 폐기하고
+//   주문의 모든 항목을 노출. 항목이 많아도 카드가 과도하게 길어지지 않도록 컴팩트
+//   line-height + 작은 폰트로 디자인 조정 (×수량은 굵게 강조해 가독성 보호).
 import { forwardRef, useMemo } from 'react';
 import { elapsedMinutes as elapsedMinutesUtil } from '../../utils/time.js';
 
@@ -120,12 +124,11 @@ function getActionsForOrder(order) {
   return ACTION_BY_STATUS[order.status] ?? [];
 }
 
-// items 미리보기 — 최대 3개를 "이름 ×수량" 으로 반환, 초과 시 surplus 카운트.
+// items 노출 — menu_update (2026-05-20): 조리자 가시성을 위해 모든 항목을
+// "이름 ×수량" 으로 반환. slice/surplus 폐기. 빈 배열·누락은 null로 가드.
 function previewItems(items) {
   if (!Array.isArray(items) || items.length === 0) return null;
-  const head = items.slice(0, 3);
-  const surplus = items.length - head.length;
-  return { head, surplus };
+  return items;
 }
 
 // OrderCard — 단순 함수 컴포넌트 (P2-3 Codex v3 — memo 제거, A 방향).
@@ -169,10 +172,28 @@ function OrderCard({ order, tick, onAction, isPending = false }) {
         <div className="meta">
           {locationLabel && <div data-testid="order-location">{locationLabel}</div>}
           {bankLabel && <div data-testid="order-bank">은행: {bankLabel}</div>}
-          {itemsPreview && itemsPreview.head.map((it, idx) => (
-            <div key={`${it.menu_id ?? it.name}-${idx}`}>{it.name} ×{it.quantity}</div>
-          ))}
-          {itemsPreview && itemsPreview.surplus > 0 && <div>외 {itemsPreview.surplus}개</div>}
+          {itemsPreview && (
+            <ul
+              data-testid="order-items"
+              style={{
+                listStyle: 'none',
+                margin: 0,
+                padding: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                // menu_update — 항목이 많아도 카드가 무리하게 길어지지 않도록 컴팩트.
+                fontSize: '0.9em',
+                lineHeight: 1.25,
+              }}
+            >
+              {itemsPreview.map((it, idx) => (
+                <li key={`${it.menu_id ?? it.name}-${idx}`}>
+                  {it.name} <strong>×{it.quantity}</strong>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
       {priceText && (

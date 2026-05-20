@@ -26,10 +26,10 @@ describe('사용자 API — GET /api/menus', () => {
     app = createApp({ db: freshDb() });
   });
 
-  it('200 — 메뉴 8개 반환', async () => {
+  it('200 — 메뉴 10개 반환 (menu_update — 신규 2종 포함)', async () => {
     const res = await request(app).get('/api/menus');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(8);
+    expect(res.body).toHaveLength(10);
     expect(res.body[0]).toHaveProperty('id');
     expect(res.body[0]).toHaveProperty('basePrice');
     expect(typeof res.body[0].soldOut).toBe('boolean');
@@ -71,7 +71,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
       });
     expect(res.status).toBe(200);
     expect(res.body.no).toBe(1);
-    expect(res.body.total_price).toBe(36000); // 18000 × 2
+    expect(res.body.total_price).toBe(16000); // 8000 × 2
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].name).toBe('후라이드');
     expect(res.body.status).toBe('ORDERED');
@@ -90,7 +90,7 @@ describe('사용자 API — POST /api/orders (정상)', () => {
         delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
-    expect(res.body.total_price).toBe(18000);
+    expect(res.body.total_price).toBe(8000);
   });
 
   it('외부인 + 토큰 생성 (P0-4: external_token 응답 미노출, access_token만 노출)', async () => {
@@ -152,7 +152,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
     const res = await request(app)
       .post('/api/orders')
       .send({
-        items: [{ menu_id: 1, quantity: 1 }], // 18000
+        items: [{ menu_id: 1, quantity: 1 }], // 8000
         name: '홍길동',
         student_id: '202637001',
         is_external: false,
@@ -160,8 +160,8 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
-    // 18000 - 1000 = 17000 (정액 ADR-019)
-    expect(res.body.total_price).toBe(17000);
+    // 8000 - 1000 = 7000 (정액 ADR-019)
+    expect(res.body.total_price).toBe(7000);
 
     // used_coupons 확인
     const used = db
@@ -245,7 +245,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         delivery_type: 'takeout',
       });
     expect(couponOrder.status).toBe(200);
-    expect(couponOrder.body.total_price).toBe(17000); // 1,000원 할인
+    expect(couponOrder.body.total_price).toBe(7000); // 1,000원 할인
 
     // 2. 같은 학번 + 다른 이름 + coupon 없음 → 정상 (할인 X)
     const plain = await request(app)
@@ -258,7 +258,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         delivery_type: 'takeout',
       });
     expect(plain.status).toBe(200);
-    expect(plain.body.total_price).toBe(18000); // 할인 없음
+    expect(plain.body.total_price).toBe(8000); // 할인 없음
 
     // 3. 같은 학번 + 동일 이름 + coupon.used=false → 정상
     const plainSameName = await request(app)
@@ -272,7 +272,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         delivery_type: 'takeout',
       });
     expect(plainSameName.status).toBe(200);
-    expect(plainSameName.body.total_price).toBe(18000);
+    expect(plainSameName.body.total_price).toBe(8000);
   });
 
   it('★ find_error_v3 — 같은 학번 다른 이름 쿠폰 시도 실패 후 DB는 첫 쿠폰만 보존', async () => {
@@ -397,7 +397,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
-    expect(res.body.total_price).toBe(18000); // 할인 X
+    expect(res.body.total_price).toBe(8000); // 할인 X
   });
 
   // ── find_error_v2 — 주문 자격(9자리) / 쿠폰 자격(37) 분리 ───────────────
@@ -414,7 +414,7 @@ describe('사용자 API — POST /api/orders + 쿠폰', () => {
         delivery_type: 'takeout',
       });
     expect(res.status).toBe(200);
-    expect(res.body.total_price).toBe(18000);
+    expect(res.body.total_price).toBe(8000);
   });
 
   it('★ find_error_v2 — 9자리 비-37 학번 + coupon.used=true → 400 INVALID_FORMAT (쿠폰만 거부)', async () => {
@@ -887,7 +887,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
       .send({
         bank: '국민',
         depositorName: '김철수',
-        amount: 18000,
+        amount: 8000,
       });
     expect(report.status).toBe(200);
     expect(report.body.status).toBe('TRANSFER_REPORTED');
@@ -920,7 +920,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
 
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report`)
-      .send({ bank: '국민', depositorName: '김철수', amount: 18000 });
+      .send({ bank: '국민', depositorName: '김철수', amount: 8000 });
     expect(report.status).toBe(401);
     expect(report.body.error).toBe('UNAUTHORIZED');
   });
@@ -933,7 +933,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
 
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=wrong-token`)
-      .send({ bank: '국민', depositorName: '김철수', amount: 18000 });
+      .send({ bank: '국민', depositorName: '김철수', amount: 8000 });
     expect(report.status).toBe(403);
     expect(report.body.error).toBe('FORBIDDEN');
   });
@@ -950,7 +950,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     // A의 token으로 B 주문에 transfer-report 시도 → 403, B 주문 상태 변경 X
     const cross = await request(app)
       .post(`/api/orders/${b.body.id}/transfer-report?token=${a.body.access_token}`)
-      .send({ bank: '국민', depositorName: 'A가 B 주문에 이체 보고 시도', amount: 18000 });
+      .send({ bank: '국민', depositorName: 'A가 B 주문에 이체 보고 시도', amount: 8000 });
     expect(cross.status).toBe(403);
 
     // B 주문은 여전히 ORDERED (상태 변경 X)
@@ -978,7 +978,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
       .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+      .send({ bank: '국민', depositorName: '홍길동', amount: 8000 });
     expect(report.status).toBe(200);
     expect(report.body.status).toBe('TRANSFER_REPORTED');
   });
@@ -996,14 +996,14 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
     // 첫 신고 — 정상 200
     const first = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+      .send({ bank: '국민', depositorName: '홍길동', amount: 8000 });
     expect(first.status).toBe(200);
     expect(first.body.status).toBe('TRANSFER_REPORTED');
 
     // 두번째 신고 (중복) — 친절한 안내. 내부 문구 "불법 상태 전이" 노출 X.
     const dup = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '신한', depositorName: '다른이름', amount: 17000 });
+      .send({ bank: '신한', depositorName: '다른이름', amount: 7000 });
     expect(dup.status).toBe(409);
     expect(dup.body.error).toBe('TRANSFER_ALREADY_REPORTED');
     expect(dup.body.message).toBeDefined();
@@ -1020,7 +1020,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
 
     await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+      .send({ bank: '국민', depositorName: '홍길동', amount: 8000 });
 
     const before = db
       .prepare('SELECT status, depositor_name, bank, amount, transferred_at FROM orders WHERE id = ?')
@@ -1056,7 +1056,7 @@ describe('사용자 API — POST /api/orders/:id/transfer-report', () => {
 
     const report = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+      .send({ bank: '국민', depositorName: '홍길동', amount: 8000 });
     expect(report.status).toBe(409);
     expect(report.body.error).toBe('TRANSFER_NOT_ALLOWED');
     expect(report.body.message).toBeDefined();
@@ -1115,7 +1115,7 @@ describe('order_events 자동 로깅 — POST /api/orders/:id/transfer-report', 
       .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+      .send({ bank: '국민', depositorName: '홍길동', amount: 8000 });
     const events = db
       .prepare('SELECT * FROM order_events WHERE order_id = ? ORDER BY id')
       .all(create.body.id);
@@ -1137,11 +1137,11 @@ describe('order_events 자동 로깅 — POST /api/orders/:id/transfer-report', 
       .send({ items: [{ menu_id: 1, quantity: 1 }], name: '홍길동', student_id: '202637001', delivery_type: 'takeout' });
     await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '국민', depositorName: '홍길동', amount: 18000 });
+      .send({ bank: '국민', depositorName: '홍길동', amount: 8000 });
     // 두번째(중복) — 409로 단락되어 이벤트 INSERT 안 됨.
     const dup = await request(app)
       .post(`/api/orders/${create.body.id}/transfer-report?token=${create.body.access_token}`)
-      .send({ bank: '신한', depositorName: '다른이름', amount: 17000 });
+      .send({ bank: '신한', depositorName: '다른이름', amount: 7000 });
     expect(dup.status).toBe(409);
     const trCount = db
       .prepare("SELECT COUNT(*) AS c FROM order_events WHERE order_id = ? AND event_type = 'TRANSFER_REPORTED'")
@@ -1155,7 +1155,7 @@ describe('사용자 API — POST /api/orders 테이블 availability 가드', () 
   function insertPaidOrder(db, table_no) {
     db.prepare(
       `INSERT INTO orders (no, operating_date, status, name, student_id, delivery_type, table_no, total_price)
-       VALUES (1, '2026-05-20', 'PAID', '먼저온손님', '202637001', 'dineIn', ?, 18000)`,
+       VALUES (1, '2026-05-20', 'PAID', '먼저온손님', '202637001', 'dineIn', ?, 8000)`,
     ).run(table_no);
   }
 
@@ -1200,7 +1200,7 @@ describe('사용자 API — POST /api/orders 테이블 availability 가드', () 
     // SETTLED 주문 삽입
     db.prepare(
       `INSERT INTO orders (no, operating_date, status, name, student_id, delivery_type, table_no, total_price)
-       VALUES (1, '2026-05-20', 'SETTLED', '먼저온손님', '202637001', 'dineIn', 5, 18000)`,
+       VALUES (1, '2026-05-20', 'SETTLED', '먼저온손님', '202637001', 'dineIn', 5, 8000)`,
     ).run();
     const app = createApp({ db });
     const res = await request(app).post('/api/orders').send(orderFor(5));
@@ -1250,7 +1250,7 @@ describe('사용자 API — GET /api/tables/availability', () => {
     const db = freshDb();
     db.prepare(
       `INSERT INTO orders (no, operating_date, status, name, student_id, delivery_type, table_no, total_price)
-       VALUES (1, '2026-05-20', 'PAID', '손님', '202637001', 'dineIn', 5, 18000)`,
+       VALUES (1, '2026-05-20', 'PAID', '손님', '202637001', 'dineIn', 5, 8000)`,
     ).run();
     const app = createApp({ db });
     const res = await request(app).get('/api/tables/availability');
