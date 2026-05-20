@@ -151,6 +151,78 @@ describe('getSettlementSummary', () => {
     expect(s.coupon_count).toBe(0);
     expect(s.coupon_discount_total).toBe(0);
   });
+
+  // ── adjustment 라운드 Codex P1-1 — 이중 차감 방어를 위한 gross/net 분리 ──
+  // 전제: orders.total_price는 calculatePrice()가 (subtotal - discount)로 저장하므로
+  // 이미 NET(쿠폰 할인 후 최종 결제금액). summary.total_amount는 SUM(total_price)이므로 NET.
+  // 정산서 TXT/UI/CSV에서 또 쿠폰을 빼지 않도록 gross_amount(=NET + 쿠폰 할인) 노출 필요.
+  it('★ Codex P1-1 — gross_amount = total_amount + coupon_discount_total', () => {
+    // 쿠폰 사용 SETTLED 1건 (gross 18000, NET 17000) + 일반 SETTLED 1건 (gross/NET 5000)
+    insertOrder({ status: 'SETTLED', total: 17000, no: 1 });
+    insertOrder({ status: 'SETTLED', total: 5000, no: 2 });
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637001', 'A', 1)",
+    ).run();
+
+    const s = getSettlementSummary(db, DATE);
+    expect(s.total_amount).toBe(22000); // NET 합 (17000 + 5000)
+    expect(s.coupon_count).toBe(1);
+    expect(s.coupon_discount_total).toBe(1000);
+    expect(s.gross_amount).toBe(23000); // = NET + 쿠폰 할인 (= 주문항목 단가 합계)
+  });
+
+  it('★ Codex P1-1 — 쿠폰 0건 시 gross_amount === total_amount', () => {
+    insertOrder({ status: 'SETTLED', total: 18000, no: 1 });
+    const s = getSettlementSummary(db, DATE);
+    expect(s.gross_amount).toBe(s.total_amount);
+    expect(s.gross_amount).toBe(18000);
+  });
+
+  // ── adjustment 라운드 Codex P2-3 — 쿠폰 집계는 SETTLED+DONE 주문에 한정 ──
+  // CANCELED/DINING/READY 주문의 쿠폰은 정산 ZIP 기준에서 제외.
+  it('★ Codex P2-3 — CANCELED 주문의 쿠폰은 정산 coupon_count 제외', () => {
+    insertOrder({ status: 'SETTLED', total: 17000, no: 1 });
+    insertOrder({ status: 'CANCELED', total: 17000, no: 2 });
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637001', 'A', 1)",
+    ).run();
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637002', 'B', 2)",
+    ).run();
+
+    const s = getSettlementSummary(db, DATE);
+    expect(s.coupon_count).toBe(1); // SETTLED만, CANCELED 제외
+    expect(s.coupon_discount_total).toBe(1000);
+  });
+
+  it('★ Codex P2-3 — DINING/READY 주문의 쿠폰도 정산 coupon_count 제외', () => {
+    insertOrder({ status: 'DINING', total: 17000, no: 1 });
+    insertOrder({ status: 'READY', total: 17000, no: 2 });
+    insertOrder({ status: 'SETTLED', total: 17000, no: 3 });
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637001', 'A', 1)",
+    ).run();
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637002', 'B', 2)",
+    ).run();
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637003', 'C', 3)",
+    ).run();
+
+    const s = getSettlementSummary(db, DATE);
+    expect(s.coupon_count).toBe(1); // SETTLED 1건만 인정
+    expect(s.coupon_discount_total).toBe(1000);
+  });
+
+  it('★ Codex P2-3 — 레거시 DONE 주문의 쿠폰은 호환 포함', () => {
+    insertOrder({ status: 'DONE', total: 17000, no: 1 });
+    db.prepare(
+      "INSERT INTO used_coupons (student_id, name, order_id) VALUES ('202637001', 'A', 1)",
+    ).run();
+    const s = getSettlementSummary(db, DATE);
+    expect(s.coupon_count).toBe(1);
+    expect(s.coupon_discount_total).toBe(1000);
+  });
 });
 
 describe('closeSettlement — G13 자동 트랜잭션', () => {

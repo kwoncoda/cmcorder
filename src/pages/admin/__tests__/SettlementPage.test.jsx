@@ -1,4 +1,4 @@
-// Task 5.5 — SettlementPage 단위 테스트 (12 케이스).
+// Task 5.5 — SettlementPage 단위 테스트.
 //
 // 회귀 보호:
 //  - Loading / Error 분기 + 재시도
@@ -9,9 +9,14 @@
 //  - ★ 마감 클릭 시 API 호출 + businessState 'CLOSED' 전이 (G13)
 //  - 마감 실패 시 에러 메시지
 //  - is_closed=true 시 버튼 라벨 변경
-//  - ZIP 버튼 클릭 시 window.open 호출
+//  - ZIP 버튼 클릭 시 window.open 호출 (?date= ?bank= 포함)
 //  - a11y (axe)
 //  - 페이지 ≤120줄 (§3.5 1조)
+//
+// adjustment 라운드 (Subagent 4) 추가:
+//  - 3-box 카드 모두 렌더 (settlement-summary, settlement-backup-card, settlement-menu-sales-card)
+//  - 합산 모드(`all`) → 백업 카드 다운로드 버튼 disabled
+//  - useApi 두 번 호출 (settlement summary + menu-sales)
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -30,6 +35,24 @@ import { apiFetch, ApiError } from '../../../api/client.js';
 
 import SettlementPage from '../SettlementPage.jsx';
 import useBusinessStateStore from '../../../store/businessState.js';
+
+// adjustment 라운드 (Subagent 4) — 메뉴별 판매 8행 픽스처.
+const MENU_SALES_8 = [
+  { menu_id: 1, code: 'BANDAGE',    name: '후라이드',     category: 'chicken', base_price: 18000, quantity: 42, revenue: 756000 },
+  { menu_id: 2, code: 'FIRST_AID',  name: '양념',         category: 'chicken', base_price: 19000, quantity: 38, revenue: 722000 },
+  { menu_id: 3, code: 'MED_KIT',    name: '뿌링클',       category: 'chicken', base_price: 21000, quantity: 51, revenue: 1071000 },
+  { menu_id: 4, code: 'SYRINGE',    name: '감자튀김',     category: 'side',    base_price:  5000, quantity: 28, revenue:  140000 },
+  { menu_id: 5, code: 'DEFIB',      name: '뿌링감자튀김', category: 'side',    base_price:  7000, quantity:  0, revenue:       0 },
+  { menu_id: 6, code: 'ADRENALINE', name: '칠리스',       category: 'side',    base_price:  6000, quantity: 14, revenue:   84000 },
+  { menu_id: 7, code: 'PAINKILLER', name: '콜라',         category: 'drink',   base_price:  2000, quantity: 33, revenue:   66000 },
+  { menu_id: 8, code: 'ENERGY',     name: '사이다',       category: 'drink',   base_price:  2000, quantity: 28, revenue:   56000 },
+];
+
+const SAMPLE_BACKUPS = [
+  { name: 'auto-2026-05-20T08-30-00-000Z.zip', size_bytes: 2_100_000, mtime: '2026-05-20T08:30:00.000Z' },
+  { name: 'auto-2026-05-20T06-30-00-000Z.zip', size_bytes: 1_800_000, mtime: '2026-05-20T06:30:00.000Z' },
+  { name: 'auto-2026-05-20T04-30-00-000Z.zip', size_bytes: 1_400_000, mtime: '2026-05-20T04:30:00.000Z' },
+];
 
 const SAMPLE_SETTLEMENT = {
   operating_date: '2026-05-20',
@@ -75,11 +98,17 @@ function renderPage(initialPath = '/admin/settlement') {
 beforeEach(() => {
   vi.clearAllMocks();
   useBusinessStateStore.setState({ status: 'OPEN', operating_date: '2026-05-20' });
-  useApi.mockReturnValue({
-    data: SAMPLE_SETTLEMENT,
-    isLoading: false,
-    error: null,
-    refetch: vi.fn(),
+  // adjustment 라운드 — useApi는 페이지(2건 — settlement + menu-sales) + 백업카드(1건) 총 3회 호출.
+  // 호출 순서에 의존하지 않도록 fetcher 함수 inspect 후 매칭.
+  useApi.mockImplementation((fetcher) => {
+    const src = String(fetcher);
+    if (src.includes('menu-sales') || src.includes('MENU_SALES') || src.includes('fetchAggregateMenuSales')) {
+      return { data: MENU_SALES_8, isLoading: false, error: null, refetch: vi.fn() };
+    }
+    if (src.includes('backups') || src.includes('BACKUPS')) {
+      return { data: SAMPLE_BACKUPS, isLoading: false, error: null, refetch: vi.fn() };
+    }
+    return { data: SAMPLE_SETTLEMENT, isLoading: false, error: null, refetch: vi.fn() };
   });
 });
 
@@ -87,16 +116,31 @@ afterEach(() => {
   cleanup();
 });
 
+// 헬퍼 — 페이지의 settlement useApi 호출만 특정 결과로 덮는다.
+// menu-sales / backups 는 기본 mockImplementation 유지.
+function overrideSettlementApi(result) {
+  useApi.mockImplementation((fetcher) => {
+    const src = String(fetcher);
+    if (src.includes('menu-sales') || src.includes('MENU_SALES') || src.includes('fetchAggregateMenuSales')) {
+      return { data: MENU_SALES_8, isLoading: false, error: null, refetch: vi.fn() };
+    }
+    if (src.includes('backups') || src.includes('BACKUPS')) {
+      return { data: SAMPLE_BACKUPS, isLoading: false, error: null, refetch: vi.fn() };
+    }
+    return result;
+  });
+}
+
 describe('SettlementPage', () => {
   it('★ Loading 분기', () => {
-    useApi.mockReturnValue({ data: null, isLoading: true, error: null, refetch: vi.fn() });
+    overrideSettlementApi({ data: null, isLoading: true, error: null, refetch: vi.fn() });
     renderPage();
     expect(screen.getByTestId('loading-state')).toBeInTheDocument();
   });
 
   it('★ Error 분기 + 다시 시도', () => {
     const refetch = vi.fn();
-    useApi.mockReturnValue({
+    overrideSettlementApi({
       data: null,
       isLoading: false,
       error: new ApiError('서버 오류', { status: 500 }),
@@ -109,7 +153,7 @@ describe('SettlementPage', () => {
   });
 
   it('★ 401 응답 시 /admin/login redirect', async () => {
-    useApi.mockReturnValue({
+    overrideSettlementApi({
       data: null,
       isLoading: false,
       error: new ApiError('인증 필요', { status: 401 }),
@@ -131,7 +175,7 @@ describe('SettlementPage', () => {
   });
 
   it('★ in_progress_count > 0 시 close-guard 표시 + 마감 버튼 disabled (ADR-012)', () => {
-    useApi.mockReturnValue({ data: IN_PROGRESS_SETTLEMENT, isLoading: false, error: null, refetch: vi.fn() });
+    overrideSettlementApi({ data: IN_PROGRESS_SETTLEMENT, isLoading: false, error: null, refetch: vi.fn() });
     renderPage();
     expect(screen.getByTestId('close-guard')).toBeInTheDocument();
     expect(screen.getByTestId('close-guard')).toHaveTextContent(/3건/);
@@ -168,7 +212,7 @@ describe('SettlementPage', () => {
   });
 
   it('★ is_closed=true 시 버튼 라벨 변경 + 비활성', () => {
-    useApi.mockReturnValue({ data: CLOSED_SETTLEMENT, isLoading: false, error: null, refetch: vi.fn() });
+    overrideSettlementApi({ data: CLOSED_SETTLEMENT, isLoading: false, error: null, refetch: vi.fn() });
     renderPage();
     const btn = screen.getByTestId('close-settlement-btn');
     expect(btn).toHaveTextContent(/마감 완료/);
@@ -212,9 +256,14 @@ describe('SettlementPage', () => {
     fireEvent.change(screen.getByTestId('settlement-date-select'), {
       target: { value: '2026-05-21' },
     });
-    // useApi mock의 마지막 호출 fn을 재실행하면 그 URL 안에 2026-05-21이 포함되어야 함
-    const lastCall = useApi.mock.calls[useApi.mock.calls.length - 1];
-    const fetchFn = lastCall[0];
+    // adjustment 라운드 — useApi가 3번(settlement + menu-sales + backups) 호출되므로
+    // settlement fetcher를 식별하기 위해 source에 settlementUrl 패턴이 들어간 호출만 선택.
+    // (settlement fetcher 는 selectedDate 가 'all' 이 아니면 settlementUrl(selectedDate) 사용)
+    const settlementCalls = useApi.mock.calls.filter(([fn]) => {
+      const s = String(fn);
+      return !s.includes('menu-sales') && !s.includes('MENU_SALES') && !s.includes('backups') && !s.includes('BACKUPS');
+    });
+    const fetchFn = settlementCalls[settlementCalls.length - 1][0];
     apiFetch.mockResolvedValueOnce({});
     fetchFn({ signal: new AbortController().signal });
     const calledPath = apiFetch.mock.calls[0]?.[0] ?? '';
@@ -233,11 +282,28 @@ describe('SettlementPage', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/합산/);
   });
 
-  it('★ ZIP 버튼 클릭 시 window.open 호출', () => {
+  it('★ ZIP 버튼 클릭 시 window.open 호출 (?date= + ?bank=)', () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     renderPage();
+    // ZIP 다운로드 버튼은 백업 카드로 이동 — testid 'download-zip-btn' 유지.
     fireEvent.click(screen.getByTestId('download-zip-btn'));
-    expect(openSpy).toHaveBeenCalledWith('/admin/api/settlement/zip', '_blank');
+    expect(openSpy).toHaveBeenCalledTimes(1);
+    const url = openSpy.mock.calls[0][0];
+    expect(url).toContain('/admin/api/settlement/zip');
+    expect(url).toContain('date=2026-05-20');
+    // bank 미입력 시 빈 문자열 — 라우트는 빈 값을 "미입력"으로 처리.
+    expect(url).toContain('bank=');
+    expect(openSpy.mock.calls[0][1]).toBe('_blank');
+    openSpy.mockRestore();
+  });
+
+  it('★ ZIP 버튼 — bank 입력 시 ?bank=N 반영', () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    renderPage();
+    fireEvent.change(screen.getByTestId('bank-total-input'), { target: { value: '700000' } });
+    fireEvent.click(screen.getByTestId('download-zip-btn'));
+    const url = openSpy.mock.calls[0][0];
+    expect(url).toContain('bank=700000');
     openSpy.mockRestore();
   });
 
@@ -254,5 +320,29 @@ describe('SettlementPage', () => {
     const content = fs.readFileSync(filePath, 'utf-8');
     const lines = content.split('\n').length;
     expect(lines).toBeLessThanOrEqual(120);
+  });
+
+  // ── adjustment 라운드 (Subagent 4) — 3-box 그리드 ─────────────
+  it('★ adjustment — 3-box 카드 모두 렌더 (summary, backup, menu-sales)', () => {
+    renderPage();
+    expect(screen.getByTestId('settlement-summary')).toBeInTheDocument();
+    expect(screen.getByTestId('settlement-backup-card')).toBeInTheDocument();
+    expect(screen.getByTestId('settlement-menu-sales-card')).toBeInTheDocument();
+  });
+
+  it('★ adjustment — 합산(all) 모드 시 백업 카드 다운로드 버튼 disabled', () => {
+    renderPage();
+    fireEvent.change(screen.getByTestId('settlement-date-select'), { target: { value: 'all' } });
+    expect(screen.getByTestId('download-zip-btn')).toBeDisabled();
+  });
+
+  it('★ adjustment — 메뉴별 판매 8행 + ID 순 + 0건 메뉴 표시', () => {
+    renderPage();
+    const bars = screen.getAllByTestId(/^menu-sales-bar-/);
+    expect(bars).toHaveLength(8);
+    expect(bars[0]).toHaveTextContent('후라이드');
+    expect(bars[7]).toHaveTextContent('사이다');
+    const zero = screen.getByTestId('menu-sales-bar-5');
+    expect(zero).toHaveTextContent('0건');
   });
 });

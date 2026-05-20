@@ -14,9 +14,13 @@
 //   - ADR-012 정산 마감 가드 (in_progress 0건만)
 //   - ADR-025 13 합법 전이만 (불법 409)
 //   - G13 settlement/close 시 business_state 자동 CLOSED
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import Database from 'better-sqlite3';
+import { mkdtempSync, writeFileSync, rmSync, statSync, readFileSync, utimesSync, symlinkSync, mkdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import nodePath from 'node:path';
+import yauzl from 'yauzl';
 import { bootstrapDatabase, seedAdmin, hashPin } from '../../db/bootstrap.js';
 import { createApp } from '../../app.js';
 import { openBusinessDay } from '../../repositories/business-state-repo.js';
@@ -606,6 +610,31 @@ function binaryParser(res, callback) {
   });
 }
 
+// adjustment 라운드 Subagent 3 — ZIP buffer → { [name]: Buffer } 맵 (yauzl 기반).
+function unzipBuffer(buf) {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(buf, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+      const out = {};
+      zipfile.readEntry();
+      zipfile.on('entry', (entry) => {
+        zipfile.openReadStream(entry, (err2, stream) => {
+          if (err2) return reject(err2);
+          const chunks = [];
+          stream.on('data', (c) => chunks.push(c));
+          stream.on('end', () => {
+            out[entry.fileName] = Buffer.concat(chunks);
+            zipfile.readEntry();
+          });
+          stream.on('error', reject);
+        });
+      });
+      zipfile.on('end', () => resolve(out));
+      zipfile.on('error', reject);
+    });
+  });
+}
+
 describe('GET /admin/api/settlement/zip', () => {
   it('ZIP buffer 응답 + Content-Type/Disposition', async () => {
     const app = createApp({ db: freshDb() });
@@ -620,6 +649,62 @@ describe('GET /admin/api/settlement/zip', () => {
     // ZIP magic bytes (PK)
     expect(res.body[0]).toBe(0x50);
     expect(res.body[1]).toBe(0x4b);
+  });
+
+  // ── adjustment 라운드 Subagent 3 — RFC 5987 + ?date= + ?bank= ──
+  it('★ adjustment Sub3 — Content-Disposition에 RFC 5987 filename*=UTF-8\'\' + 한국어 percent-encode', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/settlement/zip').buffer(true).parse(binaryParser);
+    expect(res.status).toBe(200);
+    const cd = res.headers['content-disposition'];
+    // ASCII filename fallback + RFC 5987 filename*.
+    expect(cd).toContain('filename="settlement-2026-05-20.zip"');
+    expect(cd).toContain("filename*=UTF-8''");
+    // "정산서" percent-encode prefix.
+    expect(cd).toContain(encodeURIComponent('정산서'));
+    expect(cd).toContain('2026-05-20.zip');
+  });
+
+  it('★ adjustment Sub3 — ?date=2026-05-21 query 전달 시 ZIP 파일명에 5/21 반영', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent
+      .get('/admin/api/settlement/zip?date=2026-05-21')
+      .buffer(true)
+      .parse(binaryParser);
+    expect(res.status).toBe(200);
+    const cd = res.headers['content-disposition'];
+    expect(cd).toContain('settlement-2026-05-21.zip');
+    expect(cd).toContain(encodeURIComponent('정산서-2026-05-21.zip'));
+  });
+
+  it('★ adjustment Sub3 — ?bank=700000 query 전달 시 정산서 [2] 섹션에 통장 합계 반영', async () => {
+    // 5/20 OPEN에서 SETTLED 1건 시드 → bank=700000으로 ZIP 다운로드.
+    const db = freshDb();
+    db.prepare(
+      `INSERT INTO orders (no, operating_date, name, total_price, status)
+       VALUES (1, '2026-05-20', 'A', 600000, 'SETTLED')`,
+    ).run();
+    const app = createApp({ db });
+    const { agent } = await loginAgent(app);
+    const res = await agent
+      .get('/admin/api/settlement/zip?date=2026-05-20&bank=700000')
+      .buffer(true)
+      .parse(binaryParser);
+    expect(res.status).toBe(200);
+    // yauzl로 ZIP 본문을 풀어 정산서.txt에 통장 합계가 반영됐는지 확인.
+    const files = await unzipBuffer(res.body);
+    const txt = files['정산서-2026-05-20.txt'].toString('utf8');
+    expect(txt).toMatch(/통장 입금 합계.*700,000원/);
+    expect(txt).toContain('통장 차이');
+    expect(txt).not.toContain('미입력');
+  });
+
+  it('★ adjustment Sub3 — 인증 없이 GET → 401 (기존 보호 회귀)', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/admin/api/settlement/zip');
+    expect(res.status).toBe(401);
   });
 });
 
@@ -1347,5 +1432,499 @@ describe('READY → DINING → SETTLED 전이 이벤트 로깅 (table_lock)', ()
     const types = res.body.map((r) => r.event_type);
     expect(types).toContain('DINING');
     expect(types).toContain('SETTLED');
+  });
+});
+
+// ── adjustment 라운드 — Subagent 1: 메뉴별 판매 API ─────────────────
+describe('GET /admin/api/settlement/menu-sales', () => {
+  it('★ 인증 없으면 401', async () => {
+    const app = createApp({ db: freshDb() });
+    const res = await request(app).get('/admin/api/settlement/menu-sales');
+    expect(res.status).toBe(401);
+  });
+
+  it('★ 인증 후 200 + 메뉴 8행 배열', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/settlement/menu-sales');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(8);
+  });
+
+  it('★ 응답 row 구조 — menu_id/code/name/category/base_price/quantity/revenue 모두 존재', async () => {
+    const app = createApp({ db: freshDb() });
+    const { agent } = await loginAgent(app);
+    const res = await agent.get('/admin/api/settlement/menu-sales');
+    expect(res.status).toBe(200);
+    const row = res.body[0];
+    expect(row).toHaveProperty('menu_id');
+    expect(row).toHaveProperty('code');
+    expect(row).toHaveProperty('name');
+    expect(row).toHaveProperty('category');
+    expect(row).toHaveProperty('base_price');
+    expect(row).toHaveProperty('quantity');
+    expect(row).toHaveProperty('revenue');
+    // ORDER BY m.id ASC 보장
+    expect(res.body[0].menu_id).toBe(1);
+    expect(res.body[7].menu_id).toBe(8);
+  });
+});
+
+// ── adjustment 라운드 — Subagent 2: Backup List/Download API ─────────
+// 두 라우트:
+//   - GET /admin/api/backups (목록, ?limit=N default 6 max 20)
+//   - GET /admin/api/backups/:name (개별 ZIP 다운로드)
+//
+// 보안 가드 5종 (개발기획서 §6.1 P1):
+//   1. 파일명 패턴 화이트리스트 — /^auto-[A-Za-z0-9\-:.]+\.zip$/
+//   2. 경로 traversal 차단 — path.resolve(root, name).startsWith(root + sep)
+//   3. 파일 존재 검증 — existsSync
+//   4. 파일 종류 검증 — statSync(...).isFile()
+//   5. GET 전용 — router.get만 등록
+describe('adjustment Subagent 2 — Backup API (GET /admin/api/backups*)', () => {
+  // 각 테스트마다 별도 임시 디렉터리를 만들어 BACKUP_DIR로 주입. afterEach에서 복원/정리.
+  let tmpBackupDir;
+  let prevBackupDir;
+
+  beforeEach(() => {
+    tmpBackupDir = mkdtempSync(nodePath.join(tmpdir(), 'sub2-backups-'));
+    prevBackupDir = process.env.BACKUP_DIR;
+    process.env.BACKUP_DIR = tmpBackupDir;
+  });
+
+  afterEach(() => {
+    if (prevBackupDir === undefined) {
+      delete process.env.BACKUP_DIR;
+    } else {
+      process.env.BACKUP_DIR = prevBackupDir;
+    }
+    try {
+      rmSync(tmpBackupDir, { recursive: true, force: true });
+    } catch {
+      /* ignore */
+    }
+  });
+
+  // 가짜 auto-*.zip 파일 시드 헬퍼 — content는 ZIP magic + payload, mtime은 인자.
+  function seedBackup(name, mtimeMs, payload = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xde, 0xad, 0xbe, 0xef])) {
+    const full = nodePath.join(tmpBackupDir, name);
+    writeFileSync(full, payload);
+    // utimesSync로 mtime 강제 지정 (다른 파일들과 mtime 차이 확보)
+    const sec = mtimeMs / 1000;
+    utimesSync(full, sec, sec);
+    return full;
+  }
+
+  // ── GET /admin/api/backups (목록) ─────────────────────────────
+  describe('GET /admin/api/backups', () => {
+    it('★ 인증 없이 → 401', async () => {
+      const app = createApp({ db: freshDb() });
+      const res = await request(app).get('/admin/api/backups');
+      expect(res.status).toBe(401);
+    });
+
+    it('★ 빈 디렉토리 → 빈 배열 []', async () => {
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body).toHaveLength(0);
+    });
+
+    it('★ 3개 파일 시드 → 3행 응답, mtime 내림차순 (최신 우선)', async () => {
+      // 가장 오래된 것 → 중간 → 최신 순서로 mtime 1시간씩 차이
+      const baseMs = Date.UTC(2026, 4, 20, 6, 30, 0); // 5/20 06:30 UTC
+      seedBackup('auto-2026-05-20T06-30-00-000Z.zip', baseMs);
+      seedBackup('auto-2026-05-20T07-30-00-000Z.zip', baseMs + 3600_000);
+      seedBackup('auto-2026-05-20T08-30-00-000Z.zip', baseMs + 7200_000);
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(3);
+      // 내림차순 — 최신 (08:30) 먼저
+      expect(res.body[0].name).toBe('auto-2026-05-20T08-30-00-000Z.zip');
+      expect(res.body[1].name).toBe('auto-2026-05-20T07-30-00-000Z.zip');
+      expect(res.body[2].name).toBe('auto-2026-05-20T06-30-00-000Z.zip');
+    });
+
+    it('★ ?limit=2 → 2행만 반환 (최신 2개)', async () => {
+      const baseMs = Date.UTC(2026, 4, 20, 6, 30, 0);
+      seedBackup('auto-2026-05-20T06-30-00-000Z.zip', baseMs);
+      seedBackup('auto-2026-05-20T07-30-00-000Z.zip', baseMs + 3600_000);
+      seedBackup('auto-2026-05-20T08-30-00-000Z.zip', baseMs + 7200_000);
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups?limit=2');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(2);
+      expect(res.body[0].name).toBe('auto-2026-05-20T08-30-00-000Z.zip');
+      expect(res.body[1].name).toBe('auto-2026-05-20T07-30-00-000Z.zip');
+    });
+
+    it('★ row 구조 — name(string)/size_bytes(number)/mtime(ISO string) 필드 존재', async () => {
+      const name = 'auto-2026-05-20T08-30-00-000Z.zip';
+      const baseMs = Date.UTC(2026, 4, 20, 8, 30, 0);
+      const payload = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03]);
+      const full = seedBackup(name, baseMs, payload);
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups');
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      const row = res.body[0];
+      expect(row.name).toBe(name);
+      expect(typeof row.size_bytes).toBe('number');
+      expect(row.size_bytes).toBe(statSync(full).size);
+      expect(typeof row.mtime).toBe('string');
+      // ISO 8601 Z 형식
+      expect(row.mtime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+  });
+
+  // ── GET /admin/api/backups/:name (개별 다운로드) ───────────────
+  describe('GET /admin/api/backups/:name', () => {
+    it('★ 인증 없이 → 401', async () => {
+      const app = createApp({ db: freshDb() });
+      const res = await request(app).get('/admin/api/backups/auto-2026-05-20T08-30-00-000Z.zip');
+      expect(res.status).toBe(401);
+    });
+
+    it('★ 정상 — 시드 파일 200 + application/zip + 파일 내용 일치', async () => {
+      const name = 'auto-2026-05-20T08-30-00-000Z.zip';
+      const baseMs = Date.UTC(2026, 4, 20, 8, 30, 0);
+      const payload = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+      const full = seedBackup(name, baseMs, payload);
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      // supertest는 binary 응답을 자동 Buffer로 누적. parser 강제.
+      const res = await agent
+        .get(`/admin/api/backups/${name}`)
+        .buffer(true)
+        .parse((stream, cb) => {
+          const chunks = [];
+          stream.on('data', (c) => chunks.push(c));
+          stream.on('end', () => cb(null, Buffer.concat(chunks)));
+          stream.on('error', (e) => cb(e));
+        });
+      expect(res.status).toBe(200);
+      expect(res.headers['content-type']).toBe('application/zip');
+      expect(res.headers['content-disposition']).toBe(`attachment; filename="${name}"`);
+      expect(Number(res.headers['content-length'])).toBe(statSync(full).size);
+      // body buffer 일치
+      const onDisk = readFileSync(full);
+      expect(Buffer.isBuffer(res.body)).toBe(true);
+      expect(res.body.equals(onDisk)).toBe(true);
+    });
+
+    // 경로 traversal 차단 — 5건 모두 200이 아니어야 함.
+    // (지시서는 4개 명시 — 각각 400 기대)
+    it('★ traversal 차단 — name=../../etc/passwd (encodeURIComponent) → 400', async () => {
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get(
+        `/admin/api/backups/${encodeURIComponent('../../etc/passwd')}`,
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+      expect(res.status).not.toBe(200);
+    });
+
+    it('★ traversal 차단 — name=..%2F..%2Fpasswd (raw URL 인코딩 슬래시) → 400', async () => {
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups/..%2F..%2Fpasswd');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+      expect(res.status).not.toBe(200);
+    });
+
+    it('★ traversal 차단 — name=random.zip (auto- prefix 미일치) → 400', async () => {
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups/random.zip');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+      expect(res.status).not.toBe(200);
+    });
+
+    it('★ traversal 차단 — name=auto-test.txt (.zip 아님) → 400', async () => {
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups/auto-test.txt');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+      expect(res.status).not.toBe(200);
+    });
+
+    it('★ 존재하지 않는 파일 → 404 BACKUP_NOT_FOUND', async () => {
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups/auto-2099-12-31T00-00-00-000Z.zip');
+      expect(res.status).toBe(404);
+      expect(res.body.error).toBe('BACKUP_NOT_FOUND');
+    });
+  });
+
+  // ── adjustment 라운드 Codex P1-3 + P2 (2026-05-20) — symlink·디렉터리 차단 ──
+  //
+  // 사실: 기존 코드는 statSync()를 사용해 symlink 대상을 따라가서 isFile() 판정.
+  //   backups/ 안에 외부 파일을 가리키는 auto-*.zip symlink가 있으면 다운로드 가능.
+  // 정책: lstatSync()로 symlink 자체 검출 + realpathSync로 root prefix 재확인.
+  //   - 목록 API: symlink·디렉터리·소켓 등 일반 파일이 아닌 항목은 목록에서 제외.
+  //   - 다운로드 API: symlink/디렉터리/끊어진 link 모두 400 INVALID_BACKUP_NAME 거부.
+  describe('adjustment Codex P1-3 — backup symlink 차단', () => {
+    it('★ 목록 — auto-*.zip 패턴의 symlink는 목록에 미포함', async () => {
+      // 정상 파일 1개 + symlink 1개 시드.
+      const baseMs = Date.UTC(2026, 4, 20, 8, 30, 0);
+      seedBackup('auto-2026-05-20T08-30-00-000Z.zip', baseMs);
+      // 외부 임시 파일을 가리키는 symlink — 이름은 auto-*.zip 패턴.
+      const externalDir = mkdtempSync(nodePath.join(tmpdir(), 'backup-external-'));
+      const externalFile = nodePath.join(externalDir, 'evil.zip');
+      writeFileSync(externalFile, Buffer.from('EVIL'));
+      const linkPath = nodePath.join(tmpBackupDir, 'auto-2099-99-99T99-99-99-999Z.zip');
+      try {
+        symlinkSync(externalFile, linkPath);
+      } catch (err) {
+        // Windows on non-admin shell may fail — but our docker exec target is Linux.
+        if (err.code === 'EPERM') return; // 환경 제약 — 본 케이스는 skip.
+        throw err;
+      }
+
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups');
+      expect(res.status).toBe(200);
+      const names = res.body.map((r) => r.name);
+      expect(names).toContain('auto-2026-05-20T08-30-00-000Z.zip');
+      expect(names).not.toContain('auto-2099-99-99T99-99-99-999Z.zip');
+
+      try { rmSync(externalDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    });
+
+    it('★ 목록 — auto-*.zip 이름의 디렉터리는 목록에 미포함', async () => {
+      mkdirSync(nodePath.join(tmpBackupDir, 'auto-2099-12-31T00-00-00-000Z.zip'));
+      seedBackup('auto-2026-05-20T08-30-00-000Z.zip', Date.UTC(2026, 4, 20, 8, 30, 0));
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get('/admin/api/backups');
+      expect(res.status).toBe(200);
+      const names = res.body.map((r) => r.name);
+      expect(names).toContain('auto-2026-05-20T08-30-00-000Z.zip');
+      expect(names).not.toContain('auto-2099-12-31T00-00-00-000Z.zip');
+    });
+
+    it('★ 다운로드 — backups 외부를 가리키는 symlink → 400 거부', async () => {
+      const externalDir = mkdtempSync(nodePath.join(tmpdir(), 'backup-external-'));
+      const externalFile = nodePath.join(externalDir, 'secret.zip');
+      writeFileSync(externalFile, Buffer.from('SECRET'));
+      const linkName = 'auto-2099-99-99T99-99-99-999Z.zip';
+      const linkPath = nodePath.join(tmpBackupDir, linkName);
+      try {
+        symlinkSync(externalFile, linkPath);
+      } catch (err) {
+        if (err.code === 'EPERM') return; // Windows host 제약 시 skip.
+        throw err;
+      }
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get(`/admin/api/backups/${linkName}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+      // 절대 SECRET 콘텐츠가 응답에 노출되면 안 됨.
+      if (Buffer.isBuffer(res.body)) {
+        expect(res.body.toString()).not.toContain('SECRET');
+      }
+      try { rmSync(externalDir, { recursive: true, force: true }); } catch { /* ignore */ }
+    });
+
+    it('★ 다운로드 — backups 내부 다른 파일을 가리키는 symlink도 거부 (보수적 정책)', async () => {
+      // backups 내부에서 내부로 가리키더라도 symlink면 거부 — 정책 단순성.
+      const realName = 'auto-2026-05-20T08-30-00-000Z.zip';
+      const linkName = 'auto-2027-01-01T00-00-00-000Z.zip';
+      seedBackup(realName, Date.UTC(2026, 4, 20, 8, 30, 0), Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x01]));
+      const realPath = nodePath.join(tmpBackupDir, realName);
+      const linkPath = nodePath.join(tmpBackupDir, linkName);
+      try {
+        symlinkSync(realPath, linkPath);
+      } catch (err) {
+        if (err.code === 'EPERM') return;
+        throw err;
+      }
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get(`/admin/api/backups/${linkName}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+    });
+
+    it('★ 다운로드 — 끊어진 symlink → 400 또는 404 (200 불가)', async () => {
+      const linkName = 'auto-2099-99-99T99-99-99-999Z.zip';
+      const linkPath = nodePath.join(tmpBackupDir, linkName);
+      try {
+        symlinkSync('/nonexistent/path/to/nothing.zip', linkPath);
+      } catch (err) {
+        if (err.code === 'EPERM') return;
+        throw err;
+      }
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get(`/admin/api/backups/${linkName}`);
+      expect(res.status).not.toBe(200);
+      expect([400, 404]).toContain(res.status);
+    });
+
+    it('★ 다운로드 — backups 내부 디렉터리(auto-*.zip 이름) → 400 거부', async () => {
+      const dirName = 'auto-2099-12-31T00-00-00-000Z.zip';
+      mkdirSync(nodePath.join(tmpBackupDir, dirName));
+      const app = createApp({ db: freshDb() });
+      const { agent } = await loginAgent(app);
+      const res = await agent.get(`/admin/api/backups/${dirName}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('INVALID_BACKUP_NAME');
+    });
+  });
+});
+
+// ── adjustment 라운드 Codex P2-1 (2026-05-20) — date query YYYY-MM-DD 검증 ──
+//
+// 사실: 정산 ZIP route는 ?date= query를 그대로 ZIP 파일명 / Content-Disposition fallback /
+//   ZIP 내부 파일명에 사용했다. UI는 고정값을 보내지만 API 직접 호출은 `date=../x`,
+//   `date=2026-05-20%0D%0AX-Header` 같은 값을 끼워 헤더 인젝션이나 ZIP entry name 오염에
+//   사용할 수 있다.
+// 정책: settlement/menu-sales/zip 모두 zod regex `^\d{4}-\d{2}-\d{2}$`로 검증.
+//   잘못된 값은 400 INVALID_DATE. zip route는 `date=all`도 400 (합산 ZIP 미지원).
+describe('adjustment Codex P2-1 — date query 검증', () => {
+  let app;
+  let agent;
+  beforeEach(async () => {
+    app = createApp({ db: freshDb() });
+    ({ agent } = await loginAgent(app));
+  });
+
+  it('★ GET /admin/api/settlement — 잘못된 date 400 INVALID_DATE', async () => {
+    const res = await agent.get('/admin/api/settlement?date=../../evil');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_DATE');
+  });
+
+  it('★ GET /admin/api/settlement/menu-sales — 잘못된 date 400 INVALID_DATE', async () => {
+    // ../로 시작하는 traversal 시도. regex `^\d{4}-\d{2}-\d{2}$` 차단.
+    const res = await agent.get(`/admin/api/settlement/menu-sales?date=${encodeURIComponent('../../evil')}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_DATE');
+  });
+
+  it('★ GET /admin/api/settlement/zip — 잘못된 date 400 INVALID_DATE', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20%0AX-Injected: 1');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_DATE');
+  });
+
+  it('★ GET /admin/api/settlement/zip — date=all → 400 (합산 ZIP 미지원, Q2/Q8)', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=all');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('INVALID_DATE');
+  });
+
+  it('★ GET /admin/api/settlement — date 미지정은 business_state 사용 (200)', async () => {
+    const res = await agent.get('/admin/api/settlement');
+    expect(res.status).toBe(200);
+    expect(res.body.operating_date).toBe('2026-05-20');
+  });
+
+  it('★ GET /admin/api/settlement/zip — 정상 date 200', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20')
+      .buffer(true)
+      .parse((stream, cb) => {
+        const chunks = [];
+        stream.on('data', (c) => chunks.push(c));
+        stream.on('end', () => cb(null, Buffer.concat(chunks)));
+        stream.on('error', (e) => cb(e));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/zip');
+  });
+});
+
+// ── adjustment 라운드 Codex P2 후속 (2026-05-20) — bank query 음수 거부 ──
+//
+// 사실: 기존 bank 파싱은 Number.isInteger만 검증해 음수도 silently 통과(bank_total 설정).
+//   통장 합계는 음수가 될 수 없으므로 명시 거부 필요.
+// 정책:
+//   - bank 미지정/빈 → "미입력" (200, 정산서 [2] 섹션 "미입력" 표기)
+//   - bank가 0 이상 정수 → 허용 (200)
+//   - bank가 음수 / 소수 / 문자 / NaN → 400 VALIDATION_ERROR
+describe('adjustment Codex P2 — bank query 음수/비정수 거부', () => {
+  let app;
+  let agent;
+  beforeEach(async () => {
+    app = createApp({ db: freshDb() });
+    ({ agent } = await loginAgent(app));
+  });
+
+  it('★ bank=0 허용 (0 이상 정수)', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20&bank=0')
+      .buffer(true)
+      .parse((stream, cb) => {
+        const chunks = [];
+        stream.on('data', (c) => chunks.push(c));
+        stream.on('end', () => cb(null, Buffer.concat(chunks)));
+        stream.on('error', (e) => cb(e));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/zip');
+  });
+
+  it('★ bank=700000 허용', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20&bank=700000')
+      .buffer(true)
+      .parse((stream, cb) => {
+        const chunks = [];
+        stream.on('data', (c) => chunks.push(c));
+        stream.on('end', () => cb(null, Buffer.concat(chunks)));
+        stream.on('error', (e) => cb(e));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/zip');
+  });
+
+  it('★ bank=-1 거부 → 400 VALIDATION_ERROR', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20&bank=-1');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ bank=-10000 거부 → 400 VALIDATION_ERROR', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20&bank=-10000');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ bank=abc 거부 → 400 VALIDATION_ERROR', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20&bank=abc');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ bank=700000.5 거부 → 400 VALIDATION_ERROR (소수)', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20&bank=700000.5');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('★ bank 미지정은 기존처럼 "미입력" (200 정상)', async () => {
+    const res = await agent.get('/admin/api/settlement/zip?date=2026-05-20')
+      .buffer(true)
+      .parse((stream, cb) => {
+        const chunks = [];
+        stream.on('data', (c) => chunks.push(c));
+        stream.on('end', () => cb(null, Buffer.concat(chunks)));
+        stream.on('error', (e) => cb(e));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toBe('application/zip');
   });
 });

@@ -28,6 +28,11 @@ export const API = {
   ADMIN_SETTLEMENT_BASE: '/admin/api/settlement',
   ADMIN_SETTLEMENT_CLOSE: '/admin/api/settlement/close',
   ADMIN_SETTLEMENT_ZIP: '/admin/api/settlement/zip',
+  // adjustment 라운드 (Subagent 1) — 메뉴별 판매 집계
+  ADMIN_SETTLEMENT_MENU_SALES: '/admin/api/settlement/menu-sales',
+  // adjustment 라운드 (Subagent 2) — 백업 목록 + 개별 다운로드
+  ADMIN_BACKUPS: '/admin/api/backups',
+  ADMIN_BACKUP: (name) => `/admin/api/backups/${encodeURIComponent(name)}`,
   // find_error_v2 — 관리자 내역(history) + 쿠폰(coupons) 탭 복원.
   ADMIN_HISTORY: '/admin/api/history',
   ADMIN_COUPONS_USAGE: '/admin/api/coupons/usage',
